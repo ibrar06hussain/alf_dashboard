@@ -1,0 +1,70 @@
+@font-face {
+	font-family: 'ElegantIcons';
+	src:url('fonts/ElegantIcons.eot');
+	src:url('fonts/ElegantIcons.eot?#iefix') format('embedded-opentype'),
+		url('fonts/ElegantIcons.woff') format('woff'),
+		url('fonts/ElegantIcons.ttf') format('truetype'),
+		url('fonts/ElegantIcons.svg#ElegantIcons') format('svg');
+	font-weight: normal;
+	font-style: normal;
+}
+
+/* Use the following CSS code if you want to use data attributes for inserting your icons */
+
+/* Use the following CSS code if you want to have a class per icon */
+/*
+Instead of a list of all class selectors,
+you can use the generic selector below, but it's slower:
+[class*="your-class-prefix"] {
+*/
+.arrow_up, .arrow_left, .arrow_right, .arrow_left-right_alt, .arrow_carrot-up, .arrow_carrot-down, .icon_close, .icon_search, .icon_mail_alt, .icon_cart_alt, .icon_pin_alt, .icon_heart_alt, .icon_phone {
+	font-family: 'ElegantIcons';
+	speak: none;
+	font-style: normal;
+	font-weight: normal;
+	font-variant: normal;
+	text-transform: none;
+	line-height: 1;
+	-webkit-font-smoothing: antialiased;
+}
+.arrow_up:before {
+	content: "\21";
+}
+.arrow_left:before {
+	content: "\23";
+}
+.arrow_right:before {
+	content: "\24";
+}
+.arrow_left-right_alt:before {
+	content: "\2b";
+}
+.arrow_carrot-up:before {
+	content: "\32";
+}
+.arrow_carrot-down:before {
+	content: "\33";
+}
+.icon_close:before {
+	content: "\4d";
+}
+.icon_search:before {
+	content: "\55";
+}
+.icon_mail_alt:before {
+	content: "\e010";
+}
+.icon_cart_alt:before {
+	content: "\e015";
+}
+.icon_pin_alt:before {
+	content: "\e01d";
+}
+.icon_heart_alt:before {
+	content: "\e030";
+}
+.icon_phone:before {
+	content: "\e090";
+}
+
+	

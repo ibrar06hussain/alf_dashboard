@@ -1,0 +1,502 @@
+/* ALF admin brand — match public Farmie portal (#77b122) */
+:root,
+[data-bs-theme=light] {
+  --alf-green: #77b122;
+  --alf-green-dark: #5f8f18;
+  --alf-green-rgb: 119, 177, 34;
+  --alf-ink: #0f1112;
+  --alf-soft: #f6f8f2;
+  --alf-line: #e5ebd8;
+  --alf-font: Karla, "Segoe UI", Tahoma, sans-serif;
+
+  --bs-primary: #77b122;
+  --bs-primary-rgb: 119, 177, 34;
+  --bs-link-color: #77b122;
+  --bs-link-hover-color: #5f8f18;
+  --bs-focus-ring-color: rgba(119, 177, 34, 0.25);
+}
+
+body {
+  font-family: var(--alf-font);
+}
+
+/* Text logo (same as public portal) */
+.alf-text-logo {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-family: var(--alf-font);
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.alf-text-logo .alf-logo-primary {
+  color: var(--alf-green);
+}
+
+.alf-text-logo .alf-logo-secondary {
+  color: var(--alf-ink);
+}
+
+.alf-text-logo--lg {
+  font-size: 1.55rem;
+}
+
+.app-header__logo .alf-text-logo,
+.app-sidebar .app-header__logo .alf-text-logo {
+  max-width: 200px;
+  font-size: 1.15rem;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+/* Hide ArchitectUI image logo when text logo is used */
+.app-header__logo .logo-src,
+.app-sidebar .logo-src {
+  display: none !important;
+}
+
+/* Primary components */
+.btn-primary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: #77b122;
+  --bs-btn-border-color: #77b122;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #5f8f18;
+  --bs-btn-hover-border-color: #5f8f18;
+  --bs-btn-focus-shadow-rgb: 119, 177, 34;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #5f8f18;
+  --bs-btn-active-border-color: #548016;
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: #77b122;
+  --bs-btn-disabled-border-color: #77b122;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #77b122;
+  --bs-btn-border-color: #77b122;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #77b122;
+  --bs-btn-hover-border-color: #77b122;
+  --bs-btn-focus-shadow-rgb: 119, 177, 34;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #77b122;
+  --bs-btn-active-border-color: #77b122;
+  --bs-btn-disabled-color: #77b122;
+  --bs-btn-disabled-border-color: #77b122;
+}
+
+.text-primary { color: #77b122 !important; }
+.bg-primary { background-color: #77b122 !important; }
+.border-primary { border-color: #77b122 !important; }
+
+.badge.bg-primary,
+.badge-primary {
+  background-color: #77b122 !important;
+}
+
+.form-check-input:checked {
+  background-color: #77b122;
+  border-color: #77b122;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #77b122;
+  box-shadow: 0 0 0 0.25rem rgba(119, 177, 34, 0.25);
+}
+
+.page-item.active .page-link,
+.page-link.active {
+  background-color: #77b122;
+  border-color: #77b122;
+}
+
+.page-link {
+  color: #77b122;
+}
+
+.page-link:hover {
+  color: #5f8f18;
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background-color: #77b122;
+}
+
+.progress-bar {
+  background-color: #77b122;
+}
+
+a {
+  color: #77b122;
+}
+
+a:hover {
+  color: #5f8f18;
+}
+
+/* Hamburger / ArchitectUI chrome */
+.hamburger-inner,
+.hamburger-inner::before,
+.hamburger-inner::after,
+.hamburger.is-active .hamburger-inner,
+.hamburger.is-active .hamburger-inner::before,
+.hamburger.is-active .hamburger-inner::after {
+  background-color: #77b122 !important;
+}
+
+/* Sidebar active states */
+.vertical-nav-menu li a:hover,
+.vertical-nav-menu li.mm-active > a {
+  color: #77b122 !important;
+}
+
+.vertical-nav-menu li.mm-active > a {
+  background: rgba(119, 177, 34, 0.08);
+}
+
+.vertical-nav-menu ul > li > a:hover,
+.vertical-nav-menu ul > li.mm-active > a {
+  color: #77b122 !important;
+}
+
+.vertical-nav-menu li a:hover .metismenu-icon,
+.vertical-nav-menu li.mm-active > a .metismenu-icon {
+  color: #77b122 !important;
+  opacity: 1;
+}
+
+.app-sidebar__heading {
+  color: #5f8f18 !important;
+}
+
+/* Soft green page chrome */
+.app-main__inner {
+  background: linear-gradient(180deg, #f6f8f2 0%, #f0f2f5 140px);
+}
+
+.card {
+  border-color: var(--alf-line);
+}
+
+.alert-success {
+  --bs-alert-color: #3d5c12;
+  --bs-alert-bg: #eef6e0;
+  --bs-alert-border-color: #d4e8b0;
+}
+
+/* Login background — green gradient instead of purple plum-plate */
+.bg-plum-plate,
+.alf-login-bg {
+  background-image: linear-gradient(135deg, #5f8f18 0%, #77b122 45%, #3d6b10 100%) !important;
+  background-color: #77b122 !important;
+}
+
+.alf-login-brand {
+  text-align: center;
+}
+
+.alf-login-brand .alf-text-logo {
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+
+/* Font Awesome icons (CDN) — ArchitectUI layout compatibility */
+.vertical-nav-menu li a .metismenu-icon.fa-solid,
+.vertical-nav-menu li a .metismenu-icon.fas {
+  width: 34px;
+  height: auto;
+  font-size: 1.05rem;
+  line-height: 1;
+  text-align: center;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.page-title-icon i.fa-solid,
+.page-title-icon i.fas {
+  font-size: 1.85rem;
+  line-height: 1;
+  display: inline-block;
+}
+
+.page-title-icon i.fa-solid.icon-gradient,
+.page-title-icon i.fas.icon-gradient {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ===== Modern admin UI ===== */
+.app-page-title { display: none !important; }
+
+.alf-page-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--alf-line);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(119,177,34,0.12), rgba(246,248,242,0.9) 45%, #fff 100%);
+  box-shadow: 0 10px 30px rgba(15, 17, 18, 0.04);
+}
+
+.alf-page-hero__main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.alf-page-hero__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border: 1px solid var(--alf-line);
+  color: var(--alf-green);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.alf-page-hero__title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--alf-ink);
+  line-height: 1.2;
+}
+
+.alf-page-hero__subtitle {
+  margin-top: .35rem;
+  color: #6c757d;
+  font-size: .95rem;
+}
+
+.alf-page-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.alf-stat-card {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  min-height: 96px;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid var(--alf-line);
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 17, 18, 0.04);
+  height: 100%;
+}
+
+.alf-stat-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.alf-stat-card__value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--alf-ink);
+  line-height: 1.1;
+}
+
+.alf-stat-card__label {
+  margin-top: .2rem;
+  font-size: .82rem;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.alf-stat-card--green .alf-stat-card__icon { background: rgba(119,177,34,.14); color: #5f8f18; }
+.alf-stat-card--blue .alf-stat-card__icon { background: rgba(22,170,255,.14); color: #0b7ab8; }
+.alf-stat-card--amber .alf-stat-card__icon { background: rgba(247,185,36,.18); color: #a87a00; }
+.alf-stat-card--slate .alf-stat-card__icon { background: rgba(15,17,18,.08); color: #334155; }
+.alf-stat-card--rose .alf-stat-card__icon { background: rgba(217,37,80,.12); color: #b3123a; }
+.alf-stat-card--teal .alf-stat-card__icon { background: rgba(22,224,189,.16); color: #0b8f78; }
+
+.alf-panel {
+  border: 1px solid var(--alf-line) !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(15, 17, 18, 0.04);
+  background: #fff;
+}
+
+.alf-panel > .card-header,
+.alf-panel .alf-panel__header {
+  background: #fbfcf8;
+  border-bottom: 1px solid var(--alf-line);
+  font-weight: 700;
+  color: var(--alf-ink);
+  padding: 1rem 1.25rem;
+}
+
+.alf-panel .card-body,
+.alf-panel .alf-panel__body {
+  padding: 1.25rem 1.35rem;
+}
+
+.alf-filters {
+  background: #fbfcf8;
+  border: 1px solid var(--alf-line);
+  border-radius: 14px;
+  padding: 1rem;
+  margin-bottom: 1.15rem;
+}
+
+.alf-table {
+  margin-bottom: 0;
+}
+
+.alf-table thead th {
+  background: #f6f8f2;
+  border-bottom: 1px solid var(--alf-line) !important;
+  color: #44503a;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.alf-table tbody td {
+  vertical-align: middle;
+  border-color: #eef2e6 !important;
+  padding-top: .85rem;
+  padding-bottom: .85rem;
+}
+
+.alf-table tbody tr:hover {
+  background: rgba(119, 177, 34, 0.04);
+}
+
+.alf-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.alf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  border-radius: 999px;
+  padding: .28rem .65rem;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.alf-badge--green { background: #eef6e0; color: #3d5c12; }
+.alf-badge--blue { background: #e7f6ff; color: #0b5f8a; }
+.alf-badge--amber { background: #fff4d6; color: #8a6400; }
+.alf-badge--slate { background: #eef1f4; color: #334155; }
+.alf-badge--rose { background: #fde7ee; color: #9f1239; }
+
+.alf-form-grid .form-label {
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: .35rem;
+}
+
+.alf-form-grid .form-control,
+.alf-form-grid .form-select,
+.alf-form-grid textarea.form-control {
+  border-radius: 12px;
+  border-color: #d9e2cb;
+  min-height: 44px;
+}
+
+.alf-form-grid textarea.form-control {
+  min-height: 110px;
+}
+
+.alf-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--alf-line);
+}
+
+.alf-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .85rem 1rem;
+}
+
+@media (max-width: 767.98px) {
+  .alf-meta-grid { grid-template-columns: 1fr; }
+}
+
+.alf-meta-item {
+  padding: .85rem 1rem;
+  border-radius: 12px;
+  background: #fbfcf8;
+  border: 1px solid var(--alf-line);
+}
+
+.alf-meta-item__label {
+  display: block;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #6c757d;
+  font-weight: 700;
+  margin-bottom: .25rem;
+}
+
+.alf-meta-item__value {
+  color: var(--alf-ink);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.alf-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #6c757d;
+}
+
+.btn {
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.btn-sm {
+  border-radius: 8px;
+}
+
+.main-card.card {
+  border: 1px solid var(--alf-line);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 17, 18, 0.04);
+}
+
+.widget-content.card {
+  border: 0;
+  border-radius: 16px;
+}

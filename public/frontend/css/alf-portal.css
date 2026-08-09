@@ -1,0 +1,293 @@
+﻿:root {
+  --alf-font: Karla, "Segoe UI", Tahoma, sans-serif;
+  --alf-green: #77b122;
+  --alf-green-dark: #5f8f18;
+  --alf-ink: #0f1112;
+  --alf-muted: #6c757d;
+  --alf-soft: #f6f8f2;
+  --alf-line: #e5ebd8;
+}
+
+/* Text logo — Farmie-style two-tone wordmark */
+.alf-text-logo {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-family: var(--alf-font);
+  font-weight: 800;
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-transform: none;
+  text-decoration: none !important;
+}
+
+.alf-text-logo .alf-logo-primary {
+  color: var(--alf-green);
+}
+
+.alf-text-logo .alf-logo-secondary {
+  color: var(--alf-ink);
+}
+
+.alf-text-logo--footer {
+  font-size: clamp(1.25rem, 2.4vw, 1.7rem);
+}
+
+.alf-text-logo--footer .alf-logo-secondary {
+  color: #ffffff;
+}
+
+.nav-brand.alf-text-logo {
+  max-width: min(100%, 280px);
+}
+
+@media (max-width: 991px) {
+  .nav-brand.alf-text-logo {
+    font-size: 1.1rem;
+    max-width: 200px;
+  }
+}
+
+body { font-family: var(--alf-font); }
+.preloader { pointer-events: none; }
+
+/* Keep content visible if AOS fails */
+[data-aos] { opacity: 1 !important; transform: none !important; }
+
+.skip-link { position: absolute; left: -9999px; }
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 9999;
+  background: #fff;
+  padding: .5rem;
+}
+
+/* ===== Portal stats (Farmie-aligned) ===== */
+.alf-stats-area {
+  position: relative;
+  background: var(--alf-soft);
+  padding: 80px 0 70px;
+  overflow: hidden;
+}
+
+.alf-stats-area::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(119, 177, 34, 0.12), transparent 42%),
+    radial-gradient(circle at 88% 80%, rgba(119, 177, 34, 0.1), transparent 40%);
+  pointer-events: none;
+}
+
+.alf-stats-area .section-heading { margin-bottom: 40px; }
+
+.alf-stat-tile {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--alf-line);
+  border-top: 3px solid var(--alf-green);
+  padding: 28px 22px 24px;
+  height: 100%;
+  transition: transform .35s ease, box-shadow .35s ease, border-color .35s ease;
+}
+
+.alf-stat-tile:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 35px rgba(15, 17, 18, 0.08);
+  border-color: rgba(119, 177, 34, 0.45);
+}
+
+.alf-stat-tile .icon-wrap {
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(119, 177, 34, 0.12);
+  color: var(--alf-green);
+  font-size: 1.35rem;
+  margin-bottom: 18px;
+}
+
+.alf-stat-tile .stat-value {
+  font-size: clamp(2rem, 3.2vw, 2.75rem);
+  font-weight: 700;
+  color: var(--alf-ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.alf-stat-tile .stat-label {
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--alf-muted);
+  font-weight: 700;
+  margin: 0;
+}
+
+.alf-stat-tile .stat-accent {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  width: 36px;
+  height: 3px;
+  background: var(--alf-green);
+  opacity: .55;
+}
+
+/* Department cards — cleaner metric chips */
+.alf-dept-card {
+  background: #fff;
+  border: 1px solid var(--alf-line);
+  border-left: 4px solid var(--alf-green);
+  padding: 28px 24px;
+  height: 100%;
+  transition: box-shadow .3s ease, transform .3s ease;
+}
+
+.alf-dept-card:hover {
+  box-shadow: 0 14px 28px rgba(15, 17, 18, 0.07);
+  transform: translateY(-4px);
+}
+
+.alf-dept-card h4 {
+  color: var(--alf-ink);
+  margin-bottom: 12px;
+}
+
+.alf-metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 18px 0 20px;
+}
+
+.alf-metric-chip {
+  background: var(--alf-soft);
+  border: 1px solid var(--alf-line);
+  padding: 10px 12px;
+}
+
+.alf-metric-chip .val {
+  display: block;
+  font-weight: 700;
+  color: var(--alf-green-dark);
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.alf-metric-chip .lbl {
+  display: block;
+  font-size: 11px;
+  color: var(--alf-muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-top: 2px;
+}
+
+.scheme-badge-proposed {
+  background: #e9a825;
+  color: #fff;
+  padding: .2rem .55rem;
+  font-size: .75rem;
+}
+
+.scheme-badge-running {
+  background: var(--alf-green);
+  color: #fff;
+  padding: .2rem .55rem;
+  font-size: .75rem;
+}
+
+.upload-dropzone {
+  border: 2px dashed #b7c99a;
+  padding: 1.25rem;
+  text-align: center;
+  background: var(--alf-soft);
+}
+
+.upload-dropzone.dragover {
+  background: #eef6e0;
+  border-color: var(--alf-green);
+}
+
+/* ===== CM Proposed schemes ===== */
+.alf-proposed-area {
+  background: #fff;
+  border-top: 1px solid var(--alf-line);
+  border-bottom: 1px solid var(--alf-line);
+}
+
+.alf-proposed-card {
+  background: #fff;
+  border: 1px solid var(--alf-line);
+  display: flex;
+  flex-direction: column;
+  transition: transform .3s ease, box-shadow .3s ease;
+}
+
+.alf-proposed-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 32px rgba(15, 17, 18, 0.08);
+}
+
+.alf-proposed-media {
+  position: relative;
+  height: 170px;
+  background-size: cover;
+  background-position: center;
+}
+
+.alf-proposed-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(15, 17, 18, 0.55), rgba(15, 17, 18, 0.05));
+}
+
+.alf-proposed-tag {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 1;
+  background: #e9a825;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+}
+
+.alf-proposed-body { padding: 22px 20px 20px; flex: 1; display: flex; flex-direction: column; }
+
+.alf-proposed-dept {
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--alf-green-dark);
+  font-weight: 700;
+  margin: 0;
+}
+
+.alf-proposed-budget {
+  font-size: 13px;
+  color: var(--alf-ink);
+}
+
+.alf-proposed-empty {
+  border: 1px dashed var(--alf-line);
+  background: var(--alf-soft);
+  padding: 2rem;
+}
+
+@media (max-width: 767px) {
+  .alf-stats-area { padding: 55px 0 45px; }
+  .alf-metric-grid { grid-template-columns: 1fr; }
+}
