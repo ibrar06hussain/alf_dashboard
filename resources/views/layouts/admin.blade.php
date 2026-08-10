@@ -207,7 +207,7 @@
                 <div class="app-footer">
                     <div class="app-footer__inner">
                         <div class="app-footer-left">
-                            <span class="text-muted">© {{ date('Y') }} Government of Gilgit-Baltistan — ALF Secretariat</span>
+                            <span class="text-muted">{!! __('portal.powered_by', ['year' => date('Y')]) !!}</span>
                         </div>
                     </div>
                 </div>

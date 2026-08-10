@@ -10,6 +10,7 @@
     <link href="{{ asset('admin-assets/assets/styles/main.46b0e993b2652496c5e9.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="{{ asset('admin-assets/css/alf-admin.css') }}" rel="stylesheet">
+    <style>.alf-login-credit a{color:#fff;text-decoration:underline;font-weight:600}.alf-login-credit a:hover{color:#e8f5c8}</style>
     @stack('styles')
 </head>
 <body>
@@ -20,8 +21,8 @@
                 <div class="mx-auto col-sm-10 col-md-8 col-lg-6 col-xl-5">
                     @yield('content')
                     <div class="text-center mt-4">
-                        <p class="text-white mb-0" style="font-size: 0.9rem; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                            © {{ date('Y') }} Government of Gilgit-Baltistan
+                        <p class="text-white mb-0 alf-login-credit" style="font-size: 0.9rem; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                            {!! __('portal.powered_by', ['year' => date('Y')]) !!}
                         </p>
                     </div>
                 </div>
