@@ -58,6 +58,7 @@
                 <thead>
                 <tr>
                     @if($isProposed)<th>Order</th>@endif
+                    <th>Image</th>
                     <th>Title</th>
                     <th>Department</th>
                     <th>Type</th>
@@ -72,6 +73,9 @@
                 @forelse($schemes as $scheme)
                     <tr>
                         @if($isProposed)<td>{{ $scheme->display_order }}</td>@endif
+                        <td>
+                            <img src="{{ $scheme->imageUrl() }}" alt="" class="alf-table-thumb" width="64" height="44">
+                        </td>
                         <td><strong>{{ $scheme->title }}</strong></td>
                         <td>{{ $scheme->department?->name }}</td>
                         <td><span class="alf-badge alf-badge--{{ $scheme->type === 'proposed' ? 'amber' : 'green' }}">{{ $scheme->typeLabel() }}</span></td>
@@ -104,7 +108,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="9"><div class="alf-empty">No schemes found.</div></td></tr>
+                    <tr><td colspan="{{ $isProposed ? 10 : 9 }}"><div class="alf-empty">No schemes found.</div></td></tr>
                 @endforelse
                 </tbody>
             </table>

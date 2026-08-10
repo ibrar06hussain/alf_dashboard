@@ -19,8 +19,12 @@
                 <form method="POST" action="{{ route('admin.districts.store') }}">
                     @csrf
                     <div class="mb-3">
-                        <label class="form-label">Name</label>
+                        <label class="form-label">Name (English)</label>
                         <input type="text" name="name" class="form-control" value="{{ old('name') }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Name (Urdu)</label>
+                        <input type="text" name="name_ur" class="form-control" value="{{ old('name_ur') }}" dir="rtl" lang="ur">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Code</label>
@@ -46,6 +50,7 @@
                         <thead>
                         <tr>
                             <th>Name</th>
+                            <th>Urdu</th>
                             <th>Code</th>
                             <th>Apps</th>
                             <th>Status</th>
@@ -55,11 +60,14 @@
                         <tbody>
                         @forelse($districts as $district)
                             <tr>
-                                <td colspan="5" class="p-2">
+                                <td colspan="6" class="p-2">
                                     <form method="POST" action="{{ route('admin.districts.update', $district) }}" class="row g-2 align-items-center">
                                         @csrf @method('PUT')
-                                        <div class="col-md-3">
+                                        <div class="col-md-2">
                                             <input type="text" name="name" class="form-control" value="{{ old('name_'.$district->id, $district->name) }}" required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <input type="text" name="name_ur" class="form-control" value="{{ old('name_ur_'.$district->id, $district->name_ur) }}" dir="rtl" lang="ur" placeholder="اردو">
                                         </div>
                                         <div class="col-md-2">
                                             <input type="text" name="code" class="form-control" value="{{ old('code_'.$district->id, $district->code) }}" required>
@@ -74,7 +82,7 @@
                                                 <label class="form-check-label" for="active_{{ $district->id }}">Active</label>
                                             </div>
                                         </div>
-                                        <div class="col-md-3">
+                                        <div class="col-md-2">
                                             <button class="btn btn-sm btn-primary">Save</button>
                                         </div>
                                     </form>

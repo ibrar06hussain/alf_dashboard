@@ -10,8 +10,12 @@
     </select>
 </div>
 <div class="mb-3">
-    <label class="form-label">Label</label>
+    <label class="form-label">Label (English)</label>
     <input type="text" name="stat_label" class="form-control" value="{{ old('stat_label', $stat->stat_label ?? '') }}" required>
+</div>
+<div class="mb-3">
+    <label class="form-label">Label (Urdu)</label>
+    <input type="text" name="stat_label_ur" class="form-control" value="{{ old('stat_label_ur', $stat->stat_label_ur ?? '') }}" dir="rtl" lang="ur">
 </div>
 <div class="mb-3">
     <label class="form-label">Value</label>

@@ -26,6 +26,23 @@ class Application extends Model
         return ['submitted_at' => 'datetime'];
     }
 
+    public function statusLabel(): string
+    {
+        return self::translateStatus((string) $this->status);
+    }
+
+    public static function translateStatus(string $status): string
+    {
+        return match ($status) {
+            'pending' => __('portal.status_pending'),
+            'district_verified' => __('portal.status_district_verified'),
+            'directorate_approved' => __('portal.status_directorate_approved'),
+            'disbursed' => __('portal.status_disbursed'),
+            'rejected' => __('portal.status_rejected'),
+            default => ucfirst($status),
+        };
+    }
+
     public function scheme(): BelongsTo
     {
         return $this->belongsTo(Scheme::class);

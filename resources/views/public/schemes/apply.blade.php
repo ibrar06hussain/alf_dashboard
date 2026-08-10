@@ -1,19 +1,23 @@
 @extends('layouts.public')
 
-@section('title', 'Apply — '.$scheme->title)
+@section('title', __('portal.apply').' — '.$scheme->t("title"))
 
 @section('content')
-<section class="breadcrumb-area bg-img bg-overlay jarallax" style="background-image: url('{{ asset('frontend/img/bg-img/9.jpg') }}');">
+<section class="breadcrumb-area alf-media-banner bg-img bg-overlay jarallax"
+         data-alf-fit="bg"
+         data-alf-w="{{ \App\Support\ImageSlots::get('breadcrumb')['width'] }}"
+         data-alf-h="{{ \App\Support\ImageSlots::get('breadcrumb')['height'] }}"
+         style="background-image: url('{{ $scheme->bannerUrl(9) }}');">
     <div class="container h-100">
         <div class="row h-100 align-items-center">
             <div class="col-12">
                 <div class="breadcrumb-text text-center">
-                    <h2 class="text-white">Apply Online</h2>
+                    <h2 class="text-white">{{ __('portal.apply_online') }}</h2>
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb justify-content-center">
-                            <li class="breadcrumb-item"><a href="{{ route('home') }}" class="text-white">Home</a></li>
-                            <li class="breadcrumb-item"><a href="{{ route('schemes.show', $scheme->slug) }}" class="text-white">{{ \Illuminate\Support\Str::limit($scheme->title, 30) }}</a></li>
-                            <li class="breadcrumb-item active text-white" aria-current="page">Apply</li>
+                            <li class="breadcrumb-item"><a href="{{ route('home') }}" class="text-white">{{ __('portal.home') }}</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('schemes.show', $scheme->slug) }}" class="text-white">{{ \Illuminate\Support\Str::limit($scheme->t("title"), 30) }}</a></li>
+                            <li class="breadcrumb-item active text-white" aria-current="page">{{ __('portal.apply') }}</li>
                         </ol>
                     </nav>
                 </div>
@@ -27,10 +31,10 @@
         <div class="row justify-content-center">
             <div class="col-lg-10">
                 <div class="mb-4">
-                    <h3>{{ $scheme->title }}</h3>
-                    <p class="text-muted mb-1">{{ $scheme->department?->name }} · Form: {{ $form->title }} (v{{ $form->version }})</p>
+                    <h3>{{ $scheme->t("title") }}</h3>
+                    <p class="text-muted mb-1">{{ $scheme->department?->t("name") }} · {{ __('portal.form_label') }}: {{ $form->title }} (v{{ $form->version }})</p>
                     @if($scheme->last_date)
-                        <p class="small">Application deadline: <strong>{{ $scheme->last_date->format('d M Y') }}</strong></p>
+                        <p class="small">{{ __('portal.application_deadline') }}: <strong>{{ $scheme->last_date->format('d M Y') }}</strong></p>
                     @endif
                 </div>
 
@@ -46,9 +50,9 @@
 
                 @if(session('dev_otp'))
                     <div class="alert alert-warning">
-                        <strong>Dev OTP:</strong> {{ session('dev_otp') }}
+                        <strong>{{ __('portal.dev_otp') }}:</strong> {{ session('dev_otp') }}
                         @if(session('dev_otp_phone'))
-                            <span class="text-muted">(sent to {{ session('dev_otp_phone') }})</span>
+                            <span class="text-muted">({{ session('dev_otp_phone') }})</span>
                         @endif
                     </div>
                 @endif
@@ -57,7 +61,7 @@
                     @csrf
 
                     <div class="border rounded-3 p-4 mb-4 bg-white shadow-sm">
-                        <h5 class="mb-3">Applicant Details</h5>
+                        <h5 class="mb-3">{{ __('portal.applicant_details') }}</h5>
                         <div class="row g-3">
                             @foreach($form->fields as $field)
                                 @php
@@ -89,9 +93,9 @@
                                         <input type="text" id="field_{{ $name }}" name="{{ $name }}"
                                                class="form-control js-cnic @error($name) is-invalid @enderror"
                                                value="{{ $old }}" maxlength="15" inputmode="numeric"
-                                               placeholder="{{ $field->placeholder ?: '13 digits without dashes' }}"
+                                               placeholder="{{ $field->placeholder ?: __('portal.cnic_hint') }}"
                                                @if($required) required @endif>
-                                        <div class="form-text">Enter 13 digits (dashes are removed automatically).</div>
+                                        <div class="form-text">{{ __('portal.cnic_digits_hint') }}</div>
 
                                     @elseif($field->field_type === 'phone')
                                         <div class="input-group">
@@ -99,21 +103,21 @@
                                                    class="form-control js-phone @error($name) is-invalid @enderror"
                                                    value="{{ $old }}" placeholder="{{ $field->placeholder ?: '03XXXXXXXXX' }}"
                                                    @if($required) required @endif>
-                                            <button type="button" class="btn btn-outline-secondary" id="btnSendOtp">Send OTP</button>
+                                            <button type="button" class="btn btn-outline-secondary" id="btnSendOtp">{{ __('portal.send_otp') }}</button>
                                         </div>
                                         <div class="row g-2 mt-2" id="otpBox">
                                             <div class="col-sm-6">
-                                                <input type="text" id="otpCode" class="form-control" maxlength="6" placeholder="Enter 6-digit OTP" inputmode="numeric">
+                                                <input type="text" id="otpCode" class="form-control" maxlength="6" placeholder="{{ __('portal.enter_otp') }}" inputmode="numeric">
                                             </div>
                                             <div class="col-sm-6">
-                                                <button type="button" class="btn btn-success w-100" id="btnVerifyOtp">Verify OTP</button>
+                                                <button type="button" class="btn btn-success w-100" id="btnVerifyOtp">{{ __('portal.verify_otp') }}</button>
                                             </div>
                                         </div>
                                         <div id="otpStatus" class="small mt-2 @if($phoneVerified) text-success @endif">
                                             @if($phoneVerified)
-                                                Phone verified: {{ $phoneVerified }}
+                                                {{ __('portal.phone_verified', ['phone' => $phoneVerified]) }}
                                             @else
-                                                Phone must be verified before submission.
+                                                {{ __('portal.phone_must_verify') }}
                                             @endif
                                         </div>
                                         <div id="devOtpFlash" class="alert alert-warning mt-2 d-none"></div>
@@ -122,10 +126,10 @@
                                         <select id="field_{{ $name }}" name="{{ $name }}"
                                                 class="form-select @error($name) is-invalid @enderror"
                                                 @if($required) required @endif>
-                                            <option value="">Select district</option>
+                                            <option value="">{{ __('portal.select_district') }}</option>
                                             @foreach($districts as $district)
                                                 <option value="{{ $district->id }}" @selected((string) $old === (string) $district->id)>
-                                                    {{ $district->name }}
+                                                    {{ $district->t("name") }}
                                                 </option>
                                             @endforeach
                                         </select>
@@ -134,7 +138,7 @@
                                         <select id="field_{{ $name }}" name="{{ $name }}"
                                                 class="form-select @error($name) is-invalid @enderror"
                                                 @if($required) required @endif>
-                                            <option value="">Select</option>
+                                            <option value="">{{ __('portal.select') }}</option>
                                             @foreach($options as $option)
                                                 <option value="{{ $option }}" @selected($old === $option)>{{ $option }}</option>
                                             @endforeach
@@ -190,7 +194,7 @@
 
                     @if($form->documents->isNotEmpty())
                         <div class="border rounded-3 p-4 mb-4 bg-white shadow-sm">
-                            <h5 class="mb-3">Required Documents</h5>
+                            <h5 class="mb-3">{{ __('portal.required_documents') }}</h5>
                             <div class="row g-3">
                                 @foreach($form->documents as $document)
                                     @php $inputName = 'documents['.$document->id.']'; @endphp
@@ -204,9 +208,9 @@
                                              data-progress="doc_progress_{{ $document->id }}"
                                              data-filename="doc_filename_{{ $document->id }}">
                                             <p class="mb-2"><i class="fa-solid fa-cloud-arrow-up fa-2x text-muted"></i></p>
-                                            <p class="mb-1">Drag &amp; drop file here, or <button type="button" class="btn btn-link p-0 align-baseline js-browse">browse</button></p>
+                                            <p class="mb-1">{{ __('portal.drag_drop_browse') }} <button type="button" class="btn btn-link p-0 align-baseline js-browse">{{ __('portal.browse') }}</button></p>
                                             <p class="small text-muted mb-0">
-                                                Allowed: {{ $document->allowed_extensions }} · Max {{ $document->max_size_mb }} MB
+                                                {{ __('portal.allowed_files', ['ext' => $document->allowed_extensions, 'size' => $document->max_size_mb]) }}
                                             </p>
                                             <input type="file"
                                                    id="doc_input_{{ $document->id }}"
@@ -236,8 +240,8 @@
                     </div>
 
                     <div class="d-flex gap-2 flex-wrap">
-                        <button type="submit" class="btn famie-btn" id="btnSubmitApply">Submit Application</button>
-                        <a href="{{ route('schemes.show', $scheme->slug) }}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn famie-btn" id="btnSubmitApply">{{ __('portal.submit_application') }}</button>
+                        <a href="{{ route('schemes.show', $scheme->slug) }}" class="btn btn-outline-secondary">{{ __('portal.cancel') }}</a>
                     </div>
                 </form>
             </div>
@@ -259,6 +263,21 @@
     var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     var phoneVerified = @json((bool) $phoneVerified);
     var verifiedPhone = @json($phoneVerified);
+    var i18n = @json([
+        'otp_phone_changed' => __('portal.otp_phone_changed'),
+        'otp_enter_phone' => __('portal.otp_enter_phone'),
+        'otp_sent' => __('portal.otp_sent'),
+        'otp_send_failed' => __('portal.otp_send_failed'),
+        'otp_network_send' => __('portal.otp_network_send'),
+        'otp_enter_both' => __('portal.otp_enter_both'),
+        'otp_invalid' => __('portal.otp_invalid'),
+        'otp_verified' => __('portal.otp_verified'),
+        'otp_network_verify' => __('portal.otp_network_verify'),
+        'otp_verify_before_submit' => __('portal.otp_verify_before_submit'),
+        'cnic_must_13' => __('portal.cnic_must_13'),
+        'submission_failed' => __('portal.submission_failed'),
+        'dev_otp' => __('portal.dev_otp'),
+    ]);
 
     function digitsOnly(value, max) {
         return String(value || '').replace(/\D/g, '').slice(0, max || 99);
@@ -277,7 +296,7 @@
             if (verifiedPhone && this.value !== verifiedPhone) {
                 phoneVerified = false;
                 document.getElementById('otpStatus').className = 'small mt-2 text-danger';
-                document.getElementById('otpStatus').textContent = 'Phone changed — please verify OTP again.';
+                document.getElementById('otpStatus').textContent = i18n.otp_phone_changed;
             }
         });
     });
@@ -292,7 +311,7 @@
         btnSendOtp.addEventListener('click', function () {
             if (!phoneInput || phoneInput.value.length < 11) {
                 otpStatus.className = 'small mt-2 text-danger';
-                otpStatus.textContent = 'Enter a valid phone number first.';
+                otpStatus.textContent = i18n.otp_enter_phone;
                 return;
             }
             btnSendOtp.disabled = true;
@@ -310,20 +329,20 @@
                 btnSendOtp.disabled = false;
                 if (!res.ok) {
                     otpStatus.className = 'small mt-2 text-danger';
-                    otpStatus.textContent = (res.d.message || (res.d.errors && res.d.errors.phone && res.d.errors.phone[0]) || 'Failed to send OTP.');
+                    otpStatus.textContent = (res.d.message || (res.d.errors && res.d.errors.phone && res.d.errors.phone[0]) || i18n.otp_send_failed);
                     return;
                 }
                 otpStatus.className = 'small mt-2 text-primary';
-                otpStatus.textContent = res.d.message || 'OTP sent.';
+                otpStatus.textContent = res.d.message || i18n.otp_sent;
                 if (res.d.dev_otp) {
                     devOtpFlash.classList.remove('d-none');
-                    devOtpFlash.innerHTML = '<strong>Dev OTP:</strong> ' + res.d.dev_otp;
+                    devOtpFlash.innerHTML = '<strong>' + i18n.dev_otp + ':</strong> ' + res.d.dev_otp;
                 }
             })
             .catch(function () {
                 btnSendOtp.disabled = false;
                 otpStatus.className = 'small mt-2 text-danger';
-                otpStatus.textContent = 'Network error while sending OTP.';
+                otpStatus.textContent = i18n.otp_network_send;
             });
         });
     }
@@ -333,7 +352,7 @@
             var code = document.getElementById('otpCode').value.trim();
             if (!phoneInput || !code) {
                 otpStatus.className = 'small mt-2 text-danger';
-                otpStatus.textContent = 'Enter phone and OTP.';
+                otpStatus.textContent = i18n.otp_enter_both;
                 return;
             }
             btnVerifyOtp.disabled = true;
@@ -352,18 +371,18 @@
                 if (!res.ok || !res.d.success) {
                     phoneVerified = false;
                     otpStatus.className = 'small mt-2 text-danger';
-                    otpStatus.textContent = res.d.message || 'Invalid OTP.';
+                    otpStatus.textContent = res.d.message || i18n.otp_invalid;
                     return;
                 }
                 phoneVerified = true;
                 verifiedPhone = res.d.phone || digitsOnly(phoneInput.value, 15);
                 otpStatus.className = 'small mt-2 text-success';
-                otpStatus.textContent = 'Phone verified successfully.';
+                otpStatus.textContent = i18n.otp_verified;
             })
             .catch(function () {
                 btnVerifyOtp.disabled = false;
                 otpStatus.className = 'small mt-2 text-danger';
-                otpStatus.textContent = 'Network error while verifying OTP.';
+                otpStatus.textContent = i18n.otp_network_verify;
             });
         });
     }
@@ -440,14 +459,14 @@
 
         if (!phoneVerified) {
             formError.classList.remove('d-none');
-            formError.textContent = 'Please verify your phone number with OTP before submitting.';
+            formError.textContent = i18n.otp_verify_before_submit;
             return;
         }
 
         var cnicEl = form.querySelector('.js-cnic');
         if (cnicEl && digitsOnly(cnicEl.value, 13).length !== 13) {
             formError.classList.remove('d-none');
-            formError.textContent = 'CNIC must be exactly 13 digits.';
+            formError.textContent = i18n.cnic_must_13;
             return;
         }
 
@@ -483,7 +502,7 @@
                 return;
             }
 
-            var msg = data.message || 'Submission failed. Please check the form and try again.';
+            var msg = data.message || i18n.submission_failed;
             if (data.errors) {
                 msg = Object.keys(data.errors).map(function (k) { return data.errors[k].join(' '); }).join(' ');
             }

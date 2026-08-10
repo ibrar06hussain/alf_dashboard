@@ -21,6 +21,7 @@
                 <thead>
                 <tr>
                     <th>Order</th>
+                    <th>Image</th>
                     <th>Name</th>
                     <th>Slug</th>
                     <th>Schemes</th>
@@ -33,6 +34,9 @@
                 @forelse($departments as $department)
                     <tr>
                         <td>{{ $department->display_order }}</td>
+                        <td>
+                            <img src="{{ $department->coverUrl() }}" alt="" class="alf-table-thumb" width="64" height="44">
+                        </td>
                         <td><strong>{{ $department->name }}</strong></td>
                         <td>{{ $department->slug }}</td>
                         <td>{{ $department->schemes_count }}</td>
@@ -54,7 +58,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7"><div class="alf-empty">No departments found.</div></td></tr>
+                    <tr><td colspan="8"><div class="alf-empty">No departments found.</div></td></tr>
                 @endforelse
                 </tbody>
             </table>

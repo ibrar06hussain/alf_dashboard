@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Application;
+use App\Models\CarouselSlide;
 use App\Models\Department;
 use App\Models\Scheme;
 use Illuminate\View\View;
@@ -12,6 +13,12 @@ class HomeController extends Controller
 {
     public function index(): View
     {
+        $carouselSlides = CarouselSlide::query()
+            ->where('is_active', true)
+            ->orderBy('display_order')
+            ->orderBy('id')
+            ->get();
+
         $departments = Department::query()
             ->where('is_active', true)
             ->with(['stats' => fn ($q) => $q->where('is_active', true)])
@@ -49,6 +56,12 @@ class HomeController extends Controller
             'applications' => Application::count(),
         ];
 
-        return view('public.home', compact('departments', 'featuredSchemes', 'proposedSchemes', 'stats'));
+        return view('public.home', compact(
+            'carouselSlides',
+            'departments',
+            'featuredSchemes',
+            'proposedSchemes',
+            'stats'
+        ));
     }
 }

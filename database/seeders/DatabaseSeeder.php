@@ -164,6 +164,8 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call(ProposedSchemeSeeder::class);
+        $this->call(MediaSeeder::class);
+        $this->call(UrduContentSeeder::class);
 
         $admin = User::updateOrCreate(['email' => 'admin@alf.gb.gov.pk'], [
             'name' => 'Super Admin',

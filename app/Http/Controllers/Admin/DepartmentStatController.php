@@ -105,6 +105,7 @@ class DepartmentStatController extends Controller
         return $request->validate([
             'department_id' => ['required', 'exists:departments,id'],
             'stat_label' => ['required', 'string', 'max:255'],
+            'stat_label_ur' => ['nullable', 'string', 'max:255'],
             'stat_value' => ['nullable', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:100'],
             'source' => ['required', 'in:manual,auto'],

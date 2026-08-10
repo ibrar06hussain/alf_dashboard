@@ -1,26 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ app()->getLocale() === 'ur' ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="description" content="@yield('meta_description', 'Government of Gilgit-Baltistan — Secretariat of Agriculture, Livestock & Dairy Development, and Fisheries. Apply online for ALF schemes.')">
-    <title>@yield('title', 'ALF Gilgit-Baltistan') | ALF Portal</title>
-    <link rel="icon" href="{{ asset('frontend/img/core-img/favicon.ico') }}">
+    <meta name="description" content="@yield('meta_description', \App\Models\SiteSetting::text('footer_about'))">
+    <title>@yield('title', \App\Models\SiteSetting::text('site_name')) | ALF Portal</title>
+    <link rel="icon" href="{{ \App\Support\Media::site('favicon', 'frontend/img/core-img/favicon.ico') }}">
+    @if(app()->getLocale() === 'ur')
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
+    @endif
     <link rel="stylesheet" href="{{ asset('frontend/style.css') }}">
     <link rel="stylesheet" href="{{ asset('frontend/css/alf-portal.css') }}">
     <style>.preloader{transition:opacity .4s}.preloader.is-hidden{opacity:0;visibility:hidden}</style>
     @stack('styles')
 </head>
-<body>
+<body class="{{ app()->getLocale() === 'ur' ? 'locale-ur' : 'locale-en' }}">
 @php
     $navDepartments = \App\Models\Department::query()
         ->where('is_active', true)
         ->orderBy('display_order')
         ->get();
+    $currentLocale = app()->getLocale();
+    $siteEmail = \App\Models\SiteSetting::text('contact_email');
+    $sitePhone = \App\Models\SiteSetting::text('contact_phone');
+    $logoPrimary = \App\Models\SiteSetting::text('logo_primary');
+    $logoSecondary = \App\Models\SiteSetting::text('logo_secondary');
 @endphp
 
-<a class="skip-link" href="#main-content">Skip to main content</a>
+<a class="skip-link" href="#main-content">{{ __('portal.skip_to_content') }}</a>
 
 <div class="preloader d-flex align-items-center justify-content-center">
     <div class="spinner"></div>
@@ -31,18 +41,36 @@
         <div class="container">
             <div class="row">
                 <div class="col-12">
-                    <div class="top-header-content d-flex align-items-center justify-content-between">
-                        <div class="top-header-meta">
-                            <p>Welcome to <span>ALF Gilgit-Baltistan</span> — Secretariat of Agriculture, Livestock &amp; Dairy Development, and Fisheries</p>
+                    <div class="top-header-content d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="top-header-meta alf-top-welcome">
+                            <p>{{ \App\Models\SiteSetting::text('welcome_message') }}</p>
                         </div>
-                        <div class="top-header-meta text-end">
-                            <a href="mailto:info@alf.gb.gov.pk" data-bs-toggle="tooltip" data-bs-placement="bottom" title="info@alf.gb.gov.pk">
-                                <i class="fa-regular fa-envelope" aria-hidden="true"></i>
-                                <span>Email: info@alf.gb.gov.pk</span>
-                            </a>
+                        <div class="top-header-meta alf-top-actions d-flex align-items-center flex-wrap gap-2 justify-content-end">
+                            <div class="alf-lang-switch" role="group" aria-label="{{ __('portal.language') }}">
+                                <a href="{{ route('locale.switch', ['locale' => 'en', 'redirect' => url()->full()]) }}"
+                                   class="alf-lang-btn {{ $currentLocale === 'en' ? 'is-active' : '' }}"
+                                   hreflang="en"
+                                   lang="en">EN</a>
+                                <a href="{{ route('locale.switch', ['locale' => 'ur', 'redirect' => url()->full()]) }}"
+                                   class="alf-lang-btn {{ $currentLocale === 'ur' ? 'is-active' : '' }}"
+                                   hreflang="ur"
+                                   lang="ur">اردو</a>
+                            </div>
+                            @if($siteEmail)
+                                <a href="mailto:{{ $siteEmail }}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="{{ $siteEmail }}">
+                                    <i class="fa-regular fa-envelope" aria-hidden="true"></i>
+                                    <span>{{ __('portal.email') }}</span>
+                                </a>
+                            @endif
+                            @if($sitePhone)
+                                <a href="tel:{{ preg_replace('/\s+/', '', $sitePhone) }}">
+                                    <i class="fa-solid fa-phone" aria-hidden="true"></i>
+                                    <span>{{ $sitePhone }}</span>
+                                </a>
+                            @endif
                             <a href="{{ url('/admin/login') }}">
                                 <i class="fa-solid fa-lock" aria-hidden="true"></i>
-                                <span>Admin Login</span>
+                                <span>{{ __('portal.admin_login') }}</span>
                             </a>
                         </div>
                     </div>
@@ -55,8 +83,11 @@
         <div class="classy-nav-container breakpoint-off">
             <div class="container">
                 <nav class="classy-navbar justify-content-between" id="famieNav" aria-label="Main navigation">
-                    <a href="{{ route('home') }}" class="nav-brand alf-text-logo" aria-label="ALF Gilgit Baltistan">
-                        <span class="alf-logo-primary">ALF Gilgit</span><span class="alf-logo-secondary"> Baltistan</span>
+                    <a href="{{ route('home') }}" class="nav-brand alf-text-logo"
+                       lang="{{ $currentLocale }}"
+                       dir="{{ $currentLocale === 'ur' ? 'rtl' : 'ltr' }}"
+                       aria-label="{{ \App\Models\SiteSetting::text('site_name') }}">
+                        <span class="alf-logo-primary">{{ $logoPrimary }}</span><span class="alf-logo-secondary">{{ $logoSecondary }}</span>
                     </a>
 
                     <div class="classy-navbar-toggler">
@@ -70,37 +101,54 @@
                         <div class="classynav">
                             <ul>
                                 <li class="{{ request()->routeIs('home') ? 'active' : '' }}">
-                                    <a href="{{ route('home') }}">Home</a>
+                                    <a href="{{ route('home') }}">{{ __('portal.home') }}</a>
                                 </li>
                                 <li>
-                                    <a href="#">Departments</a>
+                                    <a href="#">{{ __('portal.departments') }}</a>
                                     <ul class="dropdown">
                                         @foreach($navDepartments as $dept)
                                             <li>
-                                                <a href="{{ route('departments.show', $dept->slug) }}">{{ $dept->name }}</a>
+                                                <a href="{{ route('departments.show', $dept->slug) }}">{{ $dept->t("name") }}</a>
                                             </li>
                                         @endforeach
                                     </ul>
                                 </li>
                                 <li class="{{ request()->routeIs('schemes.*') ? 'active' : '' }}">
-                                    <a href="{{ route('schemes.index') }}">Schemes</a>
+                                    <a href="{{ route('schemes.index') }}">{{ __('portal.schemes') }}</a>
                                     <ul class="dropdown">
-                                        <li><a href="{{ route('schemes.index', ['type' => 'running']) }}">On Going Schemes</a></li>
-                                        <li><a href="{{ route('schemes.index', ['type' => 'proposed']) }}">Proposed for CM</a></li>
-                                        <li><a href="{{ url('/#cm-proposed-schemes') }}">CM Proposals (Home)</a></li>
+                                        <li><a href="{{ route('schemes.index', ['type' => 'running']) }}">{{ __('portal.on_going_schemes') }}</a></li>
+                                        <li><a href="{{ route('schemes.index', ['type' => 'proposed']) }}">{{ __('portal.proposed_for_cm') }}</a></li>
+                                        <li><a href="{{ url('/#cm-proposed-schemes') }}">{{ __('portal.cm_proposals_home') }}</a></li>
                                     </ul>
                                 </li>
                                 <li class="{{ request()->routeIs('applications.track') ? 'active' : '' }}">
-                                    <a href="{{ route('applications.track') }}">Track Application</a>
+                                    <a href="{{ route('applications.track') }}">{{ __('portal.track_application') }}</a>
                                 </li>
                                 <li class="{{ request()->routeIs('about') ? 'active' : '' }}">
-                                    <a href="{{ route('about') }}">About</a>
+                                    <a href="{{ route('about') }}">{{ __('portal.about') }}</a>
                                 </li>
                                 <li class="{{ request()->routeIs('contact') ? 'active' : '' }}">
-                                    <a href="{{ route('contact') }}">Contact</a>
+                                    <a href="{{ route('contact') }}">{{ __('portal.contact') }}</a>
+                                </li>
+                                <li class="alf-nav-lang">
+                                    <a href="#">{{ __('portal.language') }}</a>
+                                    <ul class="dropdown">
+                                        <li>
+                                            <a href="{{ route('locale.switch', ['locale' => 'en', 'redirect' => url()->full()]) }}"
+                                               hreflang="en"
+                                               lang="en"
+                                               class="{{ $currentLocale === 'en' ? 'alf-lang-active' : '' }}">{{ __('portal.english') }}</a>
+                                        </li>
+                                        <li>
+                                            <a href="{{ route('locale.switch', ['locale' => 'ur', 'redirect' => url()->full()]) }}"
+                                               hreflang="ur"
+                                               lang="ur"
+                                               class="{{ $currentLocale === 'ur' ? 'alf-lang-active' : '' }}">{{ __('portal.urdu') }}</a>
+                                        </li>
+                                    </ul>
                                 </li>
                                 <li>
-                                    <a href="{{ url('/admin/login') }}">Admin Login</a>
+                                    <a href="{{ url('/admin/login') }}">{{ __('portal.admin_login') }}</a>
                                 </li>
                             </ul>
                         </div>
@@ -127,32 +175,41 @@
 </main>
 
 <footer class="footer-area" role="contentinfo">
-    <div class="main-footer bg-img bg-overlay section-padding-80-0" style="background-image: url('{{ asset('frontend/img/bg-img/3.jpg') }}');">
+    <div class="main-footer alf-footer-bg bg-img bg-overlay section-padding-80-0"
+         data-alf-fit="bg"
+         data-alf-w="{{ \App\Support\ImageSlots::get('footer')['width'] }}"
+         data-alf-h="{{ \App\Support\ImageSlots::get('footer')['height'] }}"
+         style="background-image: url('{{ \App\Support\Media::site('footer_background', 'frontend/img/bg-img/3.jpg') }}');">
         <div class="container">
             <div class="row">
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="footer-widget mb-80">
-                        <a href="{{ route('home') }}" class="foo-logo alf-text-logo alf-text-logo--footer d-inline-block mb-30" aria-label="ALF Gilgit Baltistan">
-                            <span class="alf-logo-primary">ALF Gilgit</span><span class="alf-logo-secondary"> Baltistan</span>
+                        <a href="{{ route('home') }}" class="foo-logo alf-text-logo alf-text-logo--footer d-inline-block mb-30"
+                           lang="{{ $currentLocale }}"
+                           dir="{{ $currentLocale === 'ur' ? 'rtl' : 'ltr' }}"
+                           aria-label="{{ \App\Models\SiteSetting::text('site_name') }}">
+                            <span class="alf-logo-primary">{{ $logoPrimary }}</span><span class="alf-logo-secondary">{{ $logoSecondary }}</span>
                         </a>
-                        <p>
-                            Secretariat of Agriculture, Livestock &amp; Dairy Development, and Fisheries —
-                            Government of Gilgit-Baltistan.
-                        </p>
+                        <p>{{ \App\Models\SiteSetting::text('footer_about') }}</p>
                         <div class="contact-info">
-                            <p><i class="fa-solid fa-map-pin" aria-hidden="true"></i><span>Secretariat Complex, Gilgit</span></p>
-                            <p><i class="fa-solid fa-envelope" aria-hidden="true"></i><span>info@alf.gb.gov.pk</span></p>
+                            <p><i class="fa-solid fa-map-pin" aria-hidden="true"></i><span>{{ \App\Models\SiteSetting::text('contact_address_short') }}</span></p>
+                            @if($siteEmail)
+                                <p><i class="fa-solid fa-envelope" aria-hidden="true"></i><span>{{ $siteEmail }}</span></p>
+                            @endif
+                            @if($sitePhone)
+                                <p><i class="fa-solid fa-phone" aria-hidden="true"></i><span>{{ $sitePhone }}</span></p>
+                            @endif
                         </div>
                     </div>
                 </div>
 
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="footer-widget mb-80">
-                        <h5 class="widget-title">Departments</h5>
+                        <h5 class="widget-title">{{ __('portal.departments') }}</h5>
                         <nav class="footer-widget-nav">
                             <ul>
                                 @foreach($navDepartments as $dept)
-                                    <li><a href="{{ route('departments.show', $dept->slug) }}">{{ $dept->name }}</a></li>
+                                    <li><a href="{{ route('departments.show', $dept->slug) }}">{{ $dept->t("name") }}</a></li>
                                 @endforeach
                             </ul>
                         </nav>
@@ -161,15 +218,15 @@
 
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="footer-widget mb-80">
-                        <h5 class="widget-title">Quick Links</h5>
+                        <h5 class="widget-title">{{ __('portal.quick_links') }}</h5>
                         <nav class="footer-widget-nav">
                             <ul>
-                                <li><a href="{{ route('schemes.index') }}">All Schemes</a></li>
-                                <li><a href="{{ route('schemes.index', ['type' => 'running']) }}">On Going Schemes</a></li>
-                                <li><a href="{{ route('schemes.index', ['type' => 'proposed']) }}">Proposed Schemes</a></li>
-                                <li><a href="{{ route('applications.track') }}">Track Application</a></li>
-                                <li><a href="{{ route('about') }}">About</a></li>
-                                <li><a href="{{ route('contact') }}">Contact</a></li>
+                                <li><a href="{{ route('schemes.index') }}">{{ __('portal.all_schemes') }}</a></li>
+                                <li><a href="{{ route('schemes.index', ['type' => 'running']) }}">{{ __('portal.on_going_schemes') }}</a></li>
+                                <li><a href="{{ route('schemes.index', ['type' => 'proposed']) }}">{{ __('portal.proposed_schemes') }}</a></li>
+                                <li><a href="{{ route('applications.track') }}">{{ __('portal.track_application') }}</a></li>
+                                <li><a href="{{ route('about') }}">{{ __('portal.about') }}</a></li>
+                                <li><a href="{{ route('contact') }}">{{ __('portal.contact') }}</a></li>
                             </ul>
                         </nav>
                     </div>
@@ -177,9 +234,9 @@
 
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="footer-widget mb-80">
-                        <h5 class="widget-title">Citizen Services</h5>
-                        <p class="text-white-50 mb-3">Apply online with CNIC verification and track your application status in real time.</p>
-                        <a href="{{ route('schemes.index') }}" class="btn famie-btn">Browse Schemes</a>
+                        <h5 class="widget-title">{{ __('portal.citizen_services') }}</h5>
+                        <p class="text-white-50 mb-3">{{ \App\Models\SiteSetting::text('citizen_services_blurb') }}</p>
+                        <a href="{{ route('schemes.index') }}" class="btn famie-btn">{{ __('portal.browse_schemes') }}</a>
                     </div>
                 </div>
             </div>
@@ -191,19 +248,16 @@
             <div class="copywrite-text">
                 <div class="row align-items-center">
                     <div class="col-md-6">
-                        <p>
-                            Copyright &copy; <span class="current-year">{{ date('Y') }}</span>
-                            Government of Gilgit-Baltistan — ALF Secretariat. All rights reserved.
-                        </p>
+                        <p>{{ \App\Models\SiteSetting::text('copyright_text', null, ['year' => date('Y')]) }}</p>
                     </div>
                     <div class="col-md-6">
                         <div class="footer-nav">
                             <nav>
                                 <ul>
-                                    <li><a href="{{ route('about') }}">About</a></li>
-                                    <li><a href="{{ route('schemes.index') }}">Schemes</a></li>
-                                    <li><a href="{{ route('applications.track') }}">Track</a></li>
-                                    <li><a href="{{ route('contact') }}">Contact</a></li>
+                                    <li><a href="{{ route('about') }}">{{ __('portal.about') }}</a></li>
+                                    <li><a href="{{ route('schemes.index') }}">{{ __('portal.schemes') }}</a></li>
+                                    <li><a href="{{ route('applications.track') }}">{{ __('portal.track') }}</a></li>
+                                    <li><a href="{{ route('contact') }}">{{ __('portal.contact') }}</a></li>
                                 </ul>
                             </nav>
                         </div>
@@ -221,6 +275,7 @@
 <script src="{{ asset('frontend/js/jarallax.min.js') }}"></script>
 <script src="{{ asset('frontend/js/jarallax-video.min.js') }}"></script>
 <script src="{{ asset('frontend/js/main.js') }}"></script>
+<script src="{{ asset('frontend/js/alf-media-fit.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var preloader = document.querySelector('.preloader');

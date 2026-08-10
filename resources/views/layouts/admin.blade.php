@@ -112,6 +112,21 @@
                                     <i class="metismenu-icon fa-solid fa-location-dot"></i> Districts
                                 </a>
                             </li>
+                            <li class="{{ request()->routeIs('admin.carousel.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.carousel.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-images"></i> Carousel
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.media.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.media.edit') }}">
+                                    <i class="metismenu-icon fa-solid fa-photo-film"></i> Site Media
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.site-info.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.site-info.edit') }}">
+                                    <i class="metismenu-icon fa-solid fa-address-card"></i> Site Information
+                                </a>
+                            </li>
                         @endif
                         @if($canManageSchemes)
                             <li class="{{ (request()->routeIs('admin.schemes.*') && request('type') !== 'proposed') || request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">

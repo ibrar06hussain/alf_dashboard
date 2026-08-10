@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedFields;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,11 +11,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Scheme extends Model
 {
+    use HasLocalizedFields;
+
     protected $fillable = [
-        'department_id', 'title', 'slug', 'type', 'scope', 'budget',
-        'start_date', 'last_date', 'status', 'description',
-        'eligibility_criteria', 'terms_conditions', 'featured_image', 'is_featured',
-        'display_order',
+        'department_id', 'title', 'title_ur', 'slug', 'type', 'scope', 'budget',
+        'start_date', 'last_date', 'status', 'description', 'description_ur',
+        'eligibility_criteria', 'eligibility_criteria_ur',
+        'terms_conditions', 'terms_conditions_ur',
+        'featured_image', 'is_featured', 'display_order',
     ];
 
     protected function casts(): array
@@ -36,7 +40,12 @@ class Scheme extends Model
 
         $n = $fallbackIndex ?? (($this->id % 5) + 8);
 
-        return asset('frontend/img/bg-img/'.$n.'.jpg');
+        return \App\Models\SiteSetting::imageUrl('default_breadcrumb', 'frontend/img/bg-img/'.$n.'.jpg');
+    }
+
+    public function bannerUrl(?int $fallbackIndex = null): string
+    {
+        return $this->imageUrl($fallbackIndex);
     }
 
     public function department(): BelongsTo
@@ -92,9 +101,18 @@ class Scheme extends Model
     public function typeLabel(): string
     {
         return match ($this->type) {
-            'running' => 'On Going',
-            'proposed' => 'Proposed',
+            'running' => __('portal.type_running'),
+            'proposed' => __('portal.type_proposed'),
             default => ucfirst((string) $this->type),
+        };
+    }
+
+    public function scopeLabel(): string
+    {
+        return match ($this->scope) {
+            'gb' => __('portal.scope_gb'),
+            'district' => __('portal.scope_district'),
+            default => ucfirst((string) $this->scope).' '.__('portal.scope'),
         };
     }
 

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedFields;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class District extends Model
 {
-    protected $fillable = ['name', 'code', 'is_active'];
+    use HasLocalizedFields;
+
+    protected $fillable = ['name', 'name_ur', 'code', 'is_active'];
 
     protected function casts(): array
     {

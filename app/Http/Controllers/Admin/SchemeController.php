@@ -191,6 +191,7 @@ class SchemeController extends Controller
         return $request->validate([
             'department_id' => ['required', 'exists:departments,id'],
             'title' => ['required', 'string', 'max:255'],
+            'title_ur' => ['nullable', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', 'unique:schemes,slug,'.($ignoreId ?? 'NULL')],
             'type' => ['required', 'in:running,proposed'],
             'scope' => ['required', 'in:gb,district'],
@@ -199,11 +200,14 @@ class SchemeController extends Controller
             'last_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'status' => ['required', 'in:draft,active,closed'],
             'description' => ['nullable', 'string'],
+            'description_ur' => ['nullable', 'string'],
             'eligibility_criteria' => ['nullable', 'string'],
+            'eligibility_criteria_ur' => ['nullable', 'string'],
             'terms_conditions' => ['nullable', 'string'],
+            'terms_conditions_ur' => ['nullable', 'string'],
             'is_featured' => ['nullable'],
             'display_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
-            'featured_image' => ['nullable', 'image', 'max:4096'],
+            'featured_image' => ['nullable', 'image', 'max:5120'],
             'district_quotas' => ['nullable', 'array'],
             'district_quotas.*' => ['nullable', 'integer', 'min:0'],
         ]);

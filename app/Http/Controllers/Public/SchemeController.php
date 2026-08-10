@@ -93,6 +93,6 @@ class SchemeController extends Controller
             $data
         );
 
-        return back()->with('success', 'Thank you. Your interest has been recorded. You will be notified when this scheme opens for applications.');
+        return back()->with('success', __('portal.interest_success'));
     }
 }

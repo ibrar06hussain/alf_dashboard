@@ -15,7 +15,7 @@
 <div class="card alf-panel mb-3">
     <div class="card-header">Department details</div>
     <div class="card-body alf-form-grid">
-        <form method="POST" action="{{ route('admin.departments.store') }}">
+        <form method="POST" action="{{ route('admin.departments.store') }}" enctype="multipart/form-data">
             @csrf
             @include('admin.departments._form')
             <div class="alf-form-actions">

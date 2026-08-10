@@ -1,24 +1,52 @@
 <div class="row">
     <div class="col-md-8">
-        <div class="mb-3">
-            <label class="form-label">Title</label>
-            <input type="text" name="title" class="form-control" value="{{ old('title', $scheme->title ?? '') }}" required>
+        <div class="card alf-panel mb-3">
+            <div class="card-header">English content</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Title (English)</label>
+                    <input type="text" name="title" class="form-control" value="{{ old('title', $scheme->title ?? '') }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Slug</label>
+                    <input type="text" name="slug" class="form-control" value="{{ old('slug', $scheme->slug ?? '') }}" placeholder="auto from title">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description (English)</label>
+                    <textarea name="description" class="form-control" rows="4">{{ old('description', $scheme->description ?? '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Eligibility criteria (English)</label>
+                    <textarea name="eligibility_criteria" class="form-control" rows="3">{{ old('eligibility_criteria', $scheme->eligibility_criteria ?? '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Terms &amp; conditions (English)</label>
+                    <textarea name="terms_conditions" class="form-control" rows="3">{{ old('terms_conditions', $scheme->terms_conditions ?? '') }}</textarea>
+                </div>
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Slug</label>
-            <input type="text" name="slug" class="form-control" value="{{ old('slug', $scheme->slug ?? '') }}" placeholder="auto from title">
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Description</label>
-            <textarea name="description" class="form-control" rows="4">{{ old('description', $scheme->description ?? '') }}</textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Eligibility criteria</label>
-            <textarea name="eligibility_criteria" class="form-control" rows="3">{{ old('eligibility_criteria', $scheme->eligibility_criteria ?? '') }}</textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Terms & conditions</label>
-            <textarea name="terms_conditions" class="form-control" rows="3">{{ old('terms_conditions', $scheme->terms_conditions ?? '') }}</textarea>
+
+        <div class="card alf-panel mb-3">
+            <div class="card-header">Urdu content (اردو)</div>
+            <div class="card-body" dir="rtl" lang="ur">
+                <div class="mb-3">
+                    <label class="form-label">Title (Urdu)</label>
+                    <input type="text" name="title_ur" class="form-control" value="{{ old('title_ur', $scheme->title_ur ?? '') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description (Urdu)</label>
+                    <textarea name="description_ur" class="form-control" rows="4">{{ old('description_ur', $scheme->description_ur ?? '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Eligibility criteria (Urdu)</label>
+                    <textarea name="eligibility_criteria_ur" class="form-control" rows="3">{{ old('eligibility_criteria_ur', $scheme->eligibility_criteria_ur ?? '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Terms &amp; conditions (Urdu)</label>
+                    <textarea name="terms_conditions_ur" class="form-control" rows="3">{{ old('terms_conditions_ur', $scheme->terms_conditions_ur ?? '') }}</textarea>
+                </div>
+                <p class="small text-muted mb-0" dir="ltr">Shown when visitors switch to Urdu. Leave blank to fall back to English.</p>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
@@ -69,9 +97,13 @@
         </div>
         <div class="mb-3">
             <label class="form-label">Cover image</label>
+            @include('admin.partials.image-size-hint', ['slot' => 'scheme_cover'])
             <input type="file" name="featured_image" class="form-control" accept="image/*">
             @if(!empty($scheme?->featured_image))
-                <img src="{{ $scheme->imageUrl() }}" alt="" class="img-thumbnail mt-2" style="max-height:100px;">
+                <div class="mt-2 border rounded overflow-hidden" style="max-width:100%;">
+                    <img src="{{ $scheme->imageUrl() }}" alt="" class="w-100" style="max-height:160px;object-fit:cover;display:block;">
+                </div>
+                <small class="text-muted">Current uploaded cover</small>
             @endif
         </div>
         <div class="mb-3">

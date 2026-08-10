@@ -56,11 +56,21 @@
         </div>
     </div>
     <div class="col-lg-4">
-        @if($scheme->featured_image)
-            <div class="card alf-panel mb-3 overflow-hidden">
-                <img src="{{ $scheme->imageUrl() }}" alt="" class="w-100" style="max-height:220px;object-fit:cover;">
+        <div class="card alf-panel mb-3">
+            <div class="card-header">Cover image</div>
+            <div class="card-body p-2">
+                <div class="alf-show-cover-wrap">
+                    <img src="{{ $scheme->imageUrl() }}" alt="{{ $scheme->title }}" class="alf-show-cover">
+                </div>
+                <div class="small text-muted mt-2 px-1">
+                    @if($scheme->featured_image)
+                        Uploaded cover image
+                    @else
+                        Default / fallback image (no custom upload yet)
+                    @endif
+                </div>
             </div>
-        @endif
+        </div>
         <div class="card alf-panel mb-3">
             <div class="card-header">District Quotas</div>
             <ul class="list-group list-group-flush">

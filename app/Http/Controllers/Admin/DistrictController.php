@@ -28,6 +28,7 @@ class DistrictController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'name_ur' => ['nullable', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:20', 'unique:districts,code'],
             'is_active' => ['nullable'],
         ]);
@@ -43,6 +44,7 @@ class DistrictController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'name_ur' => ['nullable', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:20', 'unique:districts,code,'.$district->id],
             'is_active' => ['nullable'],
         ]);

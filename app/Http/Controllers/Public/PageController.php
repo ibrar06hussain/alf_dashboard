@@ -34,6 +34,6 @@ class PageController extends Controller
             'message' => ['required', 'string', 'max:2000'],
         ]);
 
-        return back()->with('success', 'Thank you. Your message has been received. Our team will respond shortly.');
+        return back()->with('success', __('portal.contact_success'));
     }
 }

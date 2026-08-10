@@ -1,6 +1,6 @@
 @extends('layouts.public')
 
-@section('title', 'Application Submitted')
+@section('title', __('portal.application_submitted'))
 
 @section('content')
 <section class="section-padding-100">
@@ -11,30 +11,30 @@
                     <div class="mb-3 text-success">
                         <i class="fa-solid fa-circle-check fa-3x"></i>
                     </div>
-                    <h2 class="mb-3">Application Submitted</h2>
-                    <p class="text-muted">Your application has been received successfully. Please save your application number for tracking.</p>
+                    <h2 class="mb-3">{{ __('portal.application_submitted') }}</h2>
+                    <p class="text-muted">{{ __('portal.application_submitted_blurb') }}</p>
 
                     <div class="alert alert-success">
-                        <div class="small text-uppercase mb-1">Application Number</div>
+                        <div class="small text-uppercase mb-1">{{ __('portal.application_no') }}</div>
                         <div class="fs-4 fw-bold">{{ $application->application_no }}</div>
                     </div>
 
                     <dl class="row text-start mt-4 mb-4">
-                        <dt class="col-sm-4">Applicant</dt>
+                        <dt class="col-sm-4">{{ __('portal.applicant') }}</dt>
                         <dd class="col-sm-8">{{ $application->applicant?->full_name }}</dd>
-                        <dt class="col-sm-4">Scheme</dt>
-                        <dd class="col-sm-8">{{ $application->scheme?->title }}</dd>
-                        <dt class="col-sm-4">Department</dt>
-                        <dd class="col-sm-8">{{ $application->scheme?->department?->name }}</dd>
-                        <dt class="col-sm-4">District</dt>
-                        <dd class="col-sm-8">{{ $application->district?->name }}</dd>
-                        <dt class="col-sm-4">Status</dt>
-                        <dd class="col-sm-8">{{ \App\Models\Application::STATUSES[$application->status] ?? $application->status }}</dd>
+                        <dt class="col-sm-4">{{ __('portal.scheme') }}</dt>
+                        <dd class="col-sm-8">{{ $application->scheme?->t("title") }}</dd>
+                        <dt class="col-sm-4">{{ __('portal.department') }}</dt>
+                        <dd class="col-sm-8">{{ $application->scheme?->department?->t("name") }}</dd>
+                        <dt class="col-sm-4">{{ __('portal.district') }}</dt>
+                        <dd class="col-sm-8">{{ $application->district?->t("name") }}</dd>
+                        <dt class="col-sm-4">{{ __('portal.status') }}</dt>
+                        <dd class="col-sm-8">{{ $application->statusLabel() }}</dd>
                     </dl>
 
                     <div class="d-flex gap-2 justify-content-center flex-wrap">
-                        <a href="{{ route('applications.track', ['application_no' => $application->application_no]) }}" class="btn famie-btn">Track Application</a>
-                        <a href="{{ route('home') }}" class="btn btn-outline-secondary">Back to Home</a>
+                        <a href="{{ route('applications.track', ['application_no' => $application->application_no]) }}" class="btn famie-btn">{{ __('portal.track_application') }}</a>
+                        <a href="{{ route('home') }}" class="btn btn-outline-secondary">{{ __('portal.back_to_home') }}</a>
                     </div>
                 </div>
             </div>

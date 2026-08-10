@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Admin\ApplicationReviewController;
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\CarouselSlideController;
 use App\Http\Controllers\Admin\CmDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DepartmentController as AdminDepartmentController;
@@ -11,15 +12,21 @@ use App\Http\Controllers\Admin\DistrictController;
 use App\Http\Controllers\Admin\FormBuilderController;
 use App\Http\Controllers\Admin\SchemeController as AdminSchemeController;
 use App\Http\Controllers\Admin\SchemeInterestController;
+use App\Http\Controllers\Admin\SiteMediaController;
+use App\Http\Controllers\Admin\SiteInfoController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Public\ApplicationController;
 use App\Http\Controllers\Public\DepartmentController;
 use App\Http\Controllers\Public\HomeController;
+use App\Http\Controllers\Public\LocaleController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SchemeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/locale/{locale}', [LocaleController::class, 'switch'])
+    ->whereIn('locale', ['en', 'ur'])
+    ->name('locale.switch');
 
 Route::get('/departments/{slug}', [DepartmentController::class, 'show'])->name('departments.show');
 
@@ -91,6 +98,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
             Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');
             Route::put('districts/{district}', [DistrictController::class, 'update'])->name('districts.update');
+
+            Route::resource('carousel', CarouselSlideController::class)->except(['show']);
+            Route::get('media', [SiteMediaController::class, 'edit'])->name('media.edit');
+            Route::put('media', [SiteMediaController::class, 'update'])->name('media.update');
+            Route::get('site-info', [SiteInfoController::class, 'edit'])->name('site-info.edit');
+            Route::put('site-info', [SiteInfoController::class, 'update'])->name('site-info.update');
 
             Route::get('users', [UserController::class, 'index'])->name('users.index');
             Route::get('users/create', [UserController::class, 'create'])->name('users.create');

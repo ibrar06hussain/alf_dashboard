@@ -24,6 +24,21 @@
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card alf-panel mb-3">
+            <div class="card-header">Cover image</div>
+            <div class="card-body p-2">
+                <div class="alf-show-cover-wrap">
+                    <img src="{{ $department->coverUrl() }}" alt="{{ $department->name }}" class="alf-show-cover">
+                </div>
+                <div class="small text-muted mt-2 px-1">
+                    @if($department->cover_image)
+                        Uploaded cover image
+                    @else
+                        Default / fallback image (no custom upload yet)
+                    @endif
+                </div>
+            </div>
+        </div>
+        <div class="card alf-panel mb-3">
             <div class="card-header">About</div>
             <div class="card-body">
                 <h5 class="fw-bold">Vision</h5>
