@@ -291,12 +291,12 @@ class SiteSetting extends Model
             [
                 'section' => 'Footer',
                 'key' => 'copyright_text',
-                'label' => 'Copyright text',
+                'label' => 'Copyright text (legacy)',
                 'type' => 'textarea',
                 'translatable' => true,
-                'fallback' => 'Copyright © :year Government of Gilgit-Baltistan — ALF Secretariat. All rights reserved.',
-                'fallback_ur' => 'کاپی رائٹ © :year حکومت گلگت بلتستان — اے ایل ایف سیکرٹریٹ۔ جملہ حقوق محفوظ ہیں۔',
-                'help_text' => 'Use :year where the current year should appear.',
+                'fallback' => 'Powered By Information Technology Department, Government of Gilgit-Baltistan © :year All rights reserved',
+                'fallback_ur' => 'تیار کردہ محکمہ انفارمیشن ٹیکنالوجی، حکومت گلگت بلتستان © :year جملہ حقوق محفوظ ہیں',
+                'help_text' => 'Legacy field. Public footer credit is fixed in translations (IT Department link). Use :year for the year.',
             ],
             [
                 'section' => 'About',

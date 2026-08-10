@@ -282,7 +282,7 @@
             <div class="copywrite-text">
                 <div class="row align-items-center">
                     <div class="col-md-6">
-                        <p>{{ \App\Models\SiteSetting::text('copyright_text', null, ['year' => date('Y')]) }}</p>
+                        <p>{!! __('portal.powered_by', ['year' => date('Y')]) !!}</p>
                     </div>
                     <div class="col-md-6">
                         <div class="footer-nav">
