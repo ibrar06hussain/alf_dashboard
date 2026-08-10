@@ -23,3 +23,10 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Avoid week-long CDN/browser cache on portal CSS during active development
+<IfModule mod_headers.c>
+    <FilesMatch "alf-portal\.css$">
+        Header set Cache-Control "public, max-age=300, must-revalidate"
+    </FilesMatch>
+</IfModule>

@@ -13,7 +13,8 @@
         <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
     @endif
     <link rel="stylesheet" href="{{ asset('frontend/style.css') }}?v={{ @filemtime(public_path('frontend/style.css')) ?: '1' }}">
-    <link rel="stylesheet" href="{{ asset('frontend/css/alf-portal.css') }}?v={{ @filemtime(public_path('frontend/css/alf-portal.css')) ?: '1' }}">
+    {{-- Hard bump + filemtime: Hostinger CDN caches CSS for 7 days without a changing query string --}}
+    <link rel="stylesheet" href="{{ asset('frontend/css/alf-portal.css') }}?v=20260810-lang-{{ @filemtime(public_path('frontend/css/alf-portal.css')) ?: '1' }}">
     <style>
         /* Critical top-bar + language switcher (works even if alf-portal.css fails to load) */
         .preloader{transition:opacity .4s}.preloader.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
