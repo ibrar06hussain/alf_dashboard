@@ -73,16 +73,17 @@ class SiteMediaController extends Controller
     private function ensureRows(): void
     {
         foreach (SiteSetting::mediaDefinitions() as $def) {
-            SiteSetting::firstOrCreate(
-                ['key' => $def['key']],
-                [
-                    'label' => $def['label'],
-                    'group' => 'media',
-                    'fallback' => $def['fallback'],
-                    'help_text' => $def['help_text'],
-                    'value' => null,
-                ]
-            );
+            $setting = SiteSetting::firstOrNew(['key' => $def['key']]);
+            $setting->fill([
+                'label' => $def['label'],
+                'group' => 'media',
+                'fallback' => $def['fallback'],
+                'help_text' => $def['help_text'],
+            ]);
+            if (! $setting->exists) {
+                $setting->value = null;
+            }
+            $setting->save();
         }
     }
 }

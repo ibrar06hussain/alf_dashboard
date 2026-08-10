@@ -217,6 +217,7 @@
 </div>
 
 <script defer src="{{ asset('admin-assets/assets/scripts/vendors.46b0e993b2652496c5e9.js') }}"></script>
+<script defer src="{{ asset('admin-assets/assets/scripts/scrollbar.46b0e993b2652496c5e9.js') }}"></script>
 <script defer src="{{ asset('admin-assets/assets/scripts/main.46b0e993b2652496c5e9.js') }}"></script>
 @stack('scripts')
 </body>

@@ -49,6 +49,11 @@ class ImageSlots
             'height' => 560,
             'label' => 'About page side image',
         ],
+        'cm_banner' => [
+            'width' => 1600,
+            'height' => 900,
+            'label' => 'Chief Minister message banner (home)',
+        ],
         'favicon' => [
             'width' => 64,
             'height' => 64,
@@ -83,6 +88,7 @@ class ImageSlots
         return match ($key) {
             'footer_background' => 'footer',
             'about_side_image' => 'about_side',
+            'cm_message_image' => 'cm_banner',
             'favicon' => 'favicon',
             default => 'breadcrumb',
         };

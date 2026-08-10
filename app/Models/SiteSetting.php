@@ -14,14 +14,15 @@ class SiteSetting extends Model
     public static function getValue(string $key, ?string $default = null): ?string
     {
         $settings = static::cached();
+        $definitionFallback = static::definitionFallback($key);
 
         if (! isset($settings[$key])) {
-            return $default;
+            return $default ?? $definitionFallback;
         }
 
         $row = $settings[$key];
 
-        return $row['value'] ?: ($row['fallback'] ?: $default);
+        return $row['value'] ?: ($row['fallback'] ?: ($default ?? $definitionFallback));
     }
 
     /**
@@ -31,14 +32,15 @@ class SiteSetting extends Model
     {
         $settings = static::cached();
         $row = $settings[$key] ?? null;
+        $def = static::contentDefinition($key);
 
         $english = filled($row['value'] ?? null)
             ? (string) $row['value']
-            : (string) ($row['fallback'] ?? $default ?? '');
+            : (string) ($row['fallback'] ?? $def['fallback'] ?? $default ?? '');
 
         $urdu = filled($row['value_ur'] ?? null)
             ? (string) $row['value_ur']
-            : (string) ($row['fallback_ur'] ?? '');
+            : (string) ($row['fallback_ur'] ?? $def['fallback_ur'] ?? '');
 
         $value = app()->getLocale() === 'ur' && $urdu !== ''
             ? $urdu
@@ -53,6 +55,31 @@ class SiteSetting extends Model
         }
 
         return $value;
+    }
+
+    /** Resolve fallback path/text from media or content definition arrays. */
+    public static function definitionFallback(string $key): ?string
+    {
+        foreach (static::mediaDefinitions() as $def) {
+            if (($def['key'] ?? null) === $key) {
+                return $def['fallback'] ?? null;
+            }
+        }
+
+        $content = static::contentDefinition($key);
+
+        return $content['fallback'] ?? null;
+    }
+
+    public static function contentDefinition(string $key): ?array
+    {
+        foreach (static::contentDefinitions() as $def) {
+            if (($def['key'] ?? null) === $key) {
+                return $def;
+            }
+        }
+
+        return null;
     }
 
     public static function imageUrl(string $key, string $defaultAsset = 'frontend/img/bg-img/1.jpg'): string
@@ -116,6 +143,13 @@ class SiteSetting extends Model
                 'fallback' => 'frontend/img/bg-img/2.jpg',
                 'help_text' => 'Large image shown in the About page content.',
                 'slot' => 'about_side',
+            ],
+            [
+                'key' => 'cm_message_image',
+                'label' => 'Chief Minister message banner',
+                'fallback' => 'frontend/img/bg-img/cm-message-banner.png',
+                'help_text' => 'Wide ALF / CM promotional banner on the home page. Recommended landscape ~1600×900 — the full artwork is shown without cropping.',
+                'slot' => 'cm_banner',
             ],
             [
                 'key' => 'contact_breadcrumb',
@@ -197,6 +231,36 @@ class SiteSetting extends Model
                 'fallback' => 'Welcome to ALF Gilgit-Baltistan — Secretariat of Agriculture, Livestock & Dairy Development, and Fisheries',
                 'fallback_ur' => 'اے ایل ایف گلگت بلتستان میں خوش آمدید — سیکرٹریٹ زراعت، لائیوسٹاک اینڈ ڈیری ڈیولپمنٹ، اور فشریز',
                 'help_text' => 'Shown in the top bar of the public website.',
+            ],
+            [
+                'section' => 'Chief Minister',
+                'key' => 'cm_message_eyebrow',
+                'label' => 'CM message eyebrow',
+                'type' => 'text',
+                'translatable' => true,
+                'fallback' => 'Message from the Honourable Chief Minister',
+                'fallback_ur' => 'محترم وزیراعلیٰ کا پیغام',
+                'help_text' => 'Small heading above the Chief Minister message on the home page.',
+            ],
+            [
+                'section' => 'Chief Minister',
+                'key' => 'cm_message_name',
+                'label' => 'CM name / title',
+                'type' => 'text',
+                'translatable' => true,
+                'fallback' => 'Chief Minister, Gilgit-Baltistan',
+                'fallback_ur' => 'وزیراعلیٰ، گلگت بلتستان',
+                'help_text' => 'Name or title shown under the message (e.g. Honourable Chief Minister).',
+            ],
+            [
+                'section' => 'Chief Minister',
+                'key' => 'cm_message_body',
+                'label' => 'CM message about ALF sector',
+                'type' => 'textarea',
+                'translatable' => true,
+                'fallback' => 'Agriculture, livestock & dairy development, and fisheries are the backbone of livelihoods across Gilgit-Baltistan. Through the ALF portal, our Secretariat is committed to transparent, citizen-friendly digital services — so farmers, youth, and entrepreneurs can access schemes, track applications, and contribute to a more food-secure and prosperous Gilgit-Baltistan.',
+                'fallback_ur' => 'زراعت، لائیوسٹاک اینڈ ڈیری ڈیولپمنٹ، اور فشریز گلگت بلتستان بھر میں روزگار کی بنیاد ہیں۔ اے ایل ایف پورٹل کے ذریعے ہمارا سیکرٹریٹ شفاف اور شہری دوست ڈیجیٹل خدمات کے لیے پرعزم ہے — تاکہ کسان، نوجوان اور کاروباری افراد اسکیمز تک رسائی حاصل کر سکیں، درخواستوں کا سراغ لگا سکیں، اور زیادہ غذائی تحفظ اور خوشحال گلگت بلتستان میں اپنا کردار ادا کر سکیں۔',
+                'help_text' => 'Full message from the Chief Minister regarding the ALF sector (shown on the home page).',
             ],
             [
                 'section' => 'Contact',

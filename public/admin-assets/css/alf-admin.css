@@ -60,6 +60,31 @@ body {
   display: none !important;
 }
 
+/* Sidebar nav scroll — PerfectScrollbar (scrollbar.js) + native fallback */
+.fixed-sidebar .app-sidebar .scrollbar-sidebar {
+  position: relative;
+  height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fixed-sidebar .app-sidebar .scrollbar-sidebar.ps {
+  overflow: hidden !important;
+}
+
+.fixed-sidebar .app-sidebar .ps__rail-y {
+  opacity: 0.6;
+  width: 8px;
+}
+
+.fixed-sidebar .app-sidebar .ps__thumb-y {
+  background-color: rgba(119, 177, 34, 0.55);
+  width: 6px;
+  right: 1px;
+}
+
 /* Primary components */
 .btn-primary {
   --bs-btn-color: #fff;

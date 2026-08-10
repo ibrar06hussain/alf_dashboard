@@ -105,6 +105,32 @@
     </div>
 </section>
 
+{{-- Message from the Chief Minister — image + message side by side --}}
+<section id="cm-message" class="alf-cm-message-area">
+    <div class="container">
+        <div class="alf-cm-split" data-aos="fade-up">
+            <figure class="alf-cm-banner">
+                <img src="{{ \App\Support\Media::site('cm_message_image', 'frontend/img/bg-img/cm-message-banner.png') }}"
+                     class="alf-cm-banner__img"
+                     alt="{{ \App\Models\SiteSetting::text('cm_message_name') }} — {{ \App\Models\SiteSetting::text('site_name') }}"
+                     width="{{ \App\Support\ImageSlots::get('cm_banner')['width'] }}"
+                     height="{{ \App\Support\ImageSlots::get('cm_banner')['height'] }}">
+            </figure>
+
+            <div class="alf-cm-panel">
+                <div class="section-heading alf-cm-heading mb-3">
+                    <p>{{ \App\Models\SiteSetting::text('cm_message_eyebrow') }}</p>
+                    <h2><span>{{ \App\Models\SiteSetting::text('cm_message_name') }}</span></h2>
+                </div>
+                <blockquote class="alf-cm-quote">
+                    <p>{!! nl2br(e(\App\Models\SiteSetting::text('cm_message_body'))) !!}</p>
+                </blockquote>
+                <p class="alf-cm-signoff">{{ \App\Models\SiteSetting::text('cm_message_name') }}</p>
+            </div>
+        </div>
+    </div>
+</section>
+
 {{-- Departments --}}
 <section class="about-us-area section-padding-100">
     <div class="container">

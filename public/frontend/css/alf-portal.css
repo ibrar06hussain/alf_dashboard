@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --alf-font: Karla, "Segoe UI", Tahoma, sans-serif;
   --alf-green: #77b122;
   --alf-green-dark: #5f8f18;
@@ -301,6 +301,174 @@ body { font-family: var(--alf-font); }
 @media (max-width: 767px) {
   .alf-stats-area { padding: 55px 0 45px; }
   .alf-metric-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== Chief Minister message (home) — side by side ===== */
+.alf-cm-message-area {
+  --alf-cm-deep: #1f5c28;
+  --alf-cm-mid: #3d8c2e;
+  --alf-cm-mint: #e8f3df;
+  position: relative;
+  padding: 72px 0 80px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, var(--alf-cm-mint) 42%, #ffffff 100%);
+  border-top: 1px solid var(--alf-line);
+  border-bottom: 1px solid var(--alf-line);
+  overflow: hidden;
+}
+
+.alf-cm-message-area::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 20%, rgba(61, 140, 46, 0.12), transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(31, 92, 40, 0.08), transparent 48%);
+  pointer-events: none;
+}
+
+.alf-cm-message-area .container {
+  position: relative;
+  z-index: 1;
+}
+
+.alf-cm-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.alf-cm-heading {
+  margin-bottom: 0;
+}
+
+.alf-cm-heading p {
+  color: var(--alf-cm-mid);
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+
+.alf-cm-heading h2 {
+  font-size: clamp(1.45rem, 2.2vw, 1.9rem);
+  margin-bottom: 0;
+}
+
+.alf-cm-heading h2,
+.alf-cm-heading h2 span {
+  color: var(--alf-cm-deep);
+}
+
+.alf-cm-banner {
+  margin: 0;
+  height: 100%;
+  min-height: 320px;
+  background: #fff;
+  border: 1px solid rgba(31, 92, 40, 0.18);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 16px 36px rgba(31, 92, 40, 0.1),
+    0 2px 0 var(--alf-cm-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alf-cm-banner__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+  background: linear-gradient(180deg, #f4faef 0%, #fff 100%);
+}
+
+.alf-cm-panel {
+  background: #fff;
+  border: 1px solid rgba(31, 92, 40, 0.16);
+  border-radius: 16px;
+  padding: 28px 30px 26px;
+  box-shadow: 0 10px 28px rgba(15, 17, 18, 0.06);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.alf-cm-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--alf-cm-mid), var(--alf-cm-deep));
+}
+
+html[dir="rtl"] .alf-cm-panel::before {
+  left: auto;
+  right: 0;
+}
+
+html[dir="rtl"] .alf-cm-split {
+  direction: rtl;
+}
+
+.alf-cm-quote {
+  margin: 0;
+  padding: 0 0 0 12px;
+  flex: 1;
+}
+
+html[dir="rtl"] .alf-cm-quote {
+  padding: 0 12px 0 0;
+}
+
+.alf-cm-quote p {
+  margin: 0;
+  color: #243028;
+  font-size: 1.02rem;
+  line-height: 1.8;
+}
+
+.alf-cm-signoff {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(31, 92, 40, 0.25);
+  color: var(--alf-cm-deep);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 991px) {
+  .alf-cm-split {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .alf-cm-banner {
+    min-height: 0;
+    max-height: none;
+  }
+
+  .alf-cm-banner__img {
+    height: auto;
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 767px) {
+  .alf-cm-message-area { padding: 48px 0 56px; }
+  .alf-cm-banner { border-radius: 12px; }
+  .alf-cm-panel { padding: 22px 18px 18px; border-radius: 12px; }
+  .alf-cm-panel::before { top: 14px; bottom: 14px; }
+  .alf-cm-quote p { font-size: 0.98rem; }
+  .alf-cm-banner__img { max-height: 300px; }
 }
 
 /* ===== Language switcher + Urdu RTL ===== */
