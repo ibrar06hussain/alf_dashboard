@@ -12,9 +12,30 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
     @endif
-    <link rel="stylesheet" href="{{ asset('frontend/style.css') }}">
-    <link rel="stylesheet" href="{{ asset('frontend/css/alf-portal.css') }}">
-    <style>.preloader{transition:opacity .4s}.preloader.is-hidden{opacity:0;visibility:hidden}</style>
+    <link rel="stylesheet" href="{{ asset('frontend/style.css') }}?v={{ @filemtime(public_path('frontend/style.css')) ?: '1' }}">
+    <link rel="stylesheet" href="{{ asset('frontend/css/alf-portal.css') }}?v={{ @filemtime(public_path('frontend/css/alf-portal.css')) ?: '1' }}">
+    <style>
+        /* Critical top-bar + language switcher (works even if alf-portal.css fails to load) */
+        .preloader{transition:opacity .4s}.preloader.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
+        .top-header-area{display:block!important;visibility:visible!important;background:#f2f4f5!important}
+        .top-header-content{height:auto!important;min-height:44px;padding:8px 0!important;overflow:visible!important;display:flex!important;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+        .top-header-content .alf-top-welcome,
+        .top-header-content .alf-top-actions{flex:1 1 auto!important;max-width:none!important;width:auto!important}
+        .top-header-content .alf-top-actions{flex:0 1 auto!important;display:flex!important;align-items:center;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+        .alf-lang-switch{display:inline-flex!important;align-items:center;border:1px solid #cfd5d8;border-radius:999px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,17,18,.06)}
+        .alf-lang-switch .alf-lang-btn{display:inline-block!important;padding:6px 14px!important;font-size:12px!important;font-weight:700!important;color:#334155!important;text-decoration:none!important;line-height:1.4;background:transparent;white-space:nowrap;margin:0!important}
+        .alf-lang-switch .alf-lang-btn.is-active{background:#77b122!important;color:#fff!important}
+        .alf-lang-switch .alf-lang-btn:hover{color:#77b122!important;background:#f4f8ec}
+        .alf-lang-switch .alf-lang-btn.is-active:hover{color:#fff!important;background:#77b122!important}
+        .top-header-content .top-header-meta .alf-lang-switch a{margin-right:0!important;color:#334155}
+        .top-header-content .top-header-meta .alf-lang-switch a.is-active{color:#fff!important}
+        .alf-nav-lang-inline{display:inline-flex;align-items:center;margin-left:12px}
+        .famie-main-menu .alf-lang-switch{border-color:#d7e3c2}
+        @media (max-width:767px){
+            .top-header-content .alf-top-welcome{display:none!important}
+            .top-header-content .alf-top-actions{width:100%!important;justify-content:space-between!important}
+        }
+    </style>
     @stack('styles')
 </head>
 <body class="{{ app()->getLocale() === 'ur' ? 'locale-ur' : 'locale-en' }}">
@@ -32,7 +53,7 @@
 
 <a class="skip-link" href="#main-content">{{ __('portal.skip_to_content') }}</a>
 
-<div class="preloader d-flex align-items-center justify-content-center">
+<div class="preloader d-flex align-items-center justify-content-center" id="alfPreloader">
     <div class="spinner"></div>
 </div>
 
@@ -83,12 +104,24 @@
         <div class="classy-nav-container breakpoint-off">
             <div class="container">
                 <nav class="classy-navbar justify-content-between" id="famieNav" aria-label="Main navigation">
-                    <a href="{{ route('home') }}" class="nav-brand alf-text-logo"
-                       lang="{{ $currentLocale }}"
-                       dir="{{ $currentLocale === 'ur' ? 'rtl' : 'ltr' }}"
-                       aria-label="{{ \App\Models\SiteSetting::text('site_name') }}">
-                        <span class="alf-logo-primary">{{ $logoPrimary }}</span><span class="alf-logo-secondary">{{ $logoSecondary }}</span>
-                    </a>
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                        <a href="{{ route('home') }}" class="nav-brand alf-text-logo"
+                           lang="{{ $currentLocale }}"
+                           dir="{{ $currentLocale === 'ur' ? 'rtl' : 'ltr' }}"
+                           aria-label="{{ \App\Models\SiteSetting::text('site_name') }}">
+                            <span class="alf-logo-primary">{{ $logoPrimary }}</span><span class="alf-logo-secondary">{{ $logoSecondary }}</span>
+                        </a>
+                        <div class="alf-nav-lang-inline alf-lang-switch" role="group" aria-label="{{ __('portal.language') }}">
+                            <a href="{{ route('locale.switch', ['locale' => 'en', 'redirect' => url()->full()]) }}"
+                               class="alf-lang-btn {{ $currentLocale === 'en' ? 'is-active' : '' }}"
+                               hreflang="en"
+                               lang="en">EN</a>
+                            <a href="{{ route('locale.switch', ['locale' => 'ur', 'redirect' => url()->full()]) }}"
+                               class="alf-lang-btn {{ $currentLocale === 'ur' ? 'is-active' : '' }}"
+                               hreflang="ur"
+                               lang="ur">اردو</a>
+                        </div>
+                    </div>
 
                     <div class="classy-navbar-toggler">
                         <span class="navbarToggler"><span></span><span></span><span></span></span>
@@ -277,13 +310,23 @@
 <script src="{{ asset('frontend/js/main.js') }}"></script>
 <script src="{{ asset('frontend/js/alf-media-fit.js') }}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    var preloader = document.querySelector('.preloader');
-    if (preloader) {
+(function () {
+    function hidePreloader() {
+        var preloader = document.getElementById('alfPreloader') || document.querySelector('.preloader');
+        if (!preloader) return;
         preloader.classList.add('is-hidden');
-        setTimeout(function () { preloader.remove(); }, 500);
+        setTimeout(function () {
+            if (preloader && preloader.parentNode) preloader.parentNode.removeChild(preloader);
+        }, 400);
     }
-});
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hidePreloader);
+    } else {
+        hidePreloader();
+    }
+    // Failsafe if other scripts hang
+    setTimeout(hidePreloader, 2500);
+})();
 </script>
 @stack('scripts')
 </body>
