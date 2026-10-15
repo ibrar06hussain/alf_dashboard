@@ -52,6 +52,21 @@ Route::match(['get', 'post'], '/track', [ApplicationController::class, 'track'])
 
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+
+// Fallback storage route for shared hosting environments (Hostinger / cPanel)
+// Ensures uploaded images/documents are served even if Apache symlink fails or returns 403
+Route::get('/storage/{path}', function (string $path) {
+    if (str_contains($path, '..')) {
+        abort(403);
+    }
+    $fullPath = storage_path('app/public/'.$path);
+    if (! file_exists($fullPath) || is_dir($fullPath)) {
+        abort(404);
+    }
+    return response()->file($fullPath, [
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+})->where('path', '.*')->name('storage.local');
 Route::get('/locations/districts', [LocationController::class, 'districts'])->name('locations.districts');
 Route::get('/districts/{district}/tehsils', [LocationController::class, 'tehsils'])->name('locations.tehsils');
 Route::get('/tehsils/{tehsil}/union-councils', [LocationController::class, 'unionCouncils'])->name('locations.union-councils');
@@ -68,6 +83,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware(['auth', 'admin.active'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout'])->name('logout');
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/fix-storage-link', function () {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('storage:link');
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'The storage symlink has been created successfully!',
+                    'output' => \Illuminate\Support\Facades\Artisan::output(),
+                ]);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $e->getMessage(),
+                ], 500);
+            }
+        })->name('fix-storage-link');
 
         // Review workflow — all authenticated staff
         Route::get('applications', [ApplicationReviewController::class, 'index'])->name('applications.index');
