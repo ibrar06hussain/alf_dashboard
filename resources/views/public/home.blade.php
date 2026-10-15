@@ -251,21 +251,27 @@
         <div class="row">
             @forelse($featuredSchemes as $i => $scheme)
                 <div class="col-12 col-md-6 col-lg-4 mb-4">
-                    <div class="alf-dept-card overflow-hidden p-0">
+                    <div class="alf-dept-card overflow-hidden p-0 h-100 d-flex flex-column">
                         <div class="alf-media-card bg-img"
                              data-alf-fit="bg"
                              data-alf-w="{{ \App\Support\ImageSlots::get('scheme_cover')['width'] }}"
                              data-alf-h="{{ \App\Support\ImageSlots::get('scheme_cover')['height'] }}"
                              style="background-image:url('{{ $scheme->imageUrl(($i % 6) + 4) }}');"></div>
-                        <div class="p-4">
+                        <div class="p-4 d-flex flex-column flex-grow-1">
                             <span class="scheme-badge-running mb-2 d-inline-block">{{ __('portal.on_going') }}</span>
                             <h5 class="mb-2">{{ $scheme->t("title") }}</h5>
                             <p class="small text-muted mb-2">{{ $scheme->department?->t("name") }}</p>
-                            <p class="small">{{ \Illuminate\Support\Str::limit(strip_tags($scheme->t("description")), 100) }}</p>
-                            <a href="{{ route('schemes.show', $scheme->slug) }}" class="btn famie-btn" style="min-width:auto;height:42px;line-height:40px;padding:0 18px;font-size:13px;">{{ __('portal.details') }}</a>
-                            @if($scheme->isOpenForApplications())
-                                <a href="{{ route('schemes.apply', $scheme->slug) }}" class="btn famie-btn" style="min-width:auto;height:42px;line-height:40px;padding:0 18px;font-size:13px;background:#0f1112;">{{ __('portal.apply') }}</a>
-                            @endif
+                            <p class="small flex-grow-1 mb-3">{{ \Illuminate\Support\Str::limit(strip_tags($scheme->t("description")), 100) }}</p>
+                            <div class="alf-card-actions mt-auto pt-3 border-top d-flex gap-2 align-items-center">
+                                <a href="{{ route('schemes.show', $scheme->slug) }}" class="alf-btn-details {{ $scheme->isOpenForApplications() ? '' : 'w-100' }}">
+                                    <i class="fa-solid fa-circle-info me-1"></i> {{ __('portal.details') }}
+                                </a>
+                                @if($scheme->isOpenForApplications())
+                                    <a href="{{ route('schemes.apply', $scheme->slug) }}" class="alf-btn-apply">
+                                        <i class="fa-solid fa-paper-plane me-1"></i> {{ __('portal.apply_now') }}
+                                    </a>
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </div>

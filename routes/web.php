@@ -19,6 +19,7 @@ use App\Http\Controllers\Public\ApplicationController;
 use App\Http\Controllers\Public\DepartmentController;
 use App\Http\Controllers\Public\HomeController;
 use App\Http\Controllers\Public\LocaleController;
+use App\Http\Controllers\Public\LocationController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SchemeController;
 use Illuminate\Support\Facades\Route;
@@ -51,7 +52,12 @@ Route::match(['get', 'post'], '/track', [ApplicationController::class, 'track'])
 
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
-Route::post('/contact', [PageController::class, 'contactSubmit'])->name('contact.submit');
+Route::get('/locations/districts', [LocationController::class, 'districts'])->name('locations.districts');
+Route::get('/districts/{district}/tehsils', [LocationController::class, 'tehsils'])->name('locations.tehsils');
+Route::get('/tehsils/{tehsil}/union-councils', [LocationController::class, 'unionCouncils'])->name('locations.union-councils');
+Route::get('/api/districts', [LocationController::class, 'districts']);
+Route::get('/api/districts/{district}/tehsils', [LocationController::class, 'tehsils']);
+Route::get('/api/tehsils/{tehsil}/union-councils', [LocationController::class, 'unionCouncils']);
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest')->group(function () {
@@ -76,6 +82,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Directors + executives can manage schemes/forms/stats + CM analytics
         Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
+            Route::get('forms', [FormBuilderController::class, 'index'])->name('form-builder.index');
+            Route::get('application-forms', [FormBuilderController::class, 'index'])->name('application-forms.index');
             Route::get('schemes/{scheme}/form-builder', [FormBuilderController::class, 'edit'])->name('form-builder.edit');
             Route::put('schemes/{scheme}/form-builder', [FormBuilderController::class, 'update'])->name('form-builder.update');
 

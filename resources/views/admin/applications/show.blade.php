@@ -47,7 +47,15 @@
                     </div>
                     <div class="alf-meta-item">
                         <span class="alf-meta-item__label">Tehsil</span>
-                        <span class="alf-meta-item__value">{{ $application->applicant?->tehsil }}</span>
+                        <span class="alf-meta-item__value">{{ $application->applicant?->tehsil ?: '—' }}</span>
+                    </div>
+                    <div class="alf-meta-item">
+                        <span class="alf-meta-item__label">Union Council</span>
+                        <span class="alf-meta-item__value">{{ $application->applicant?->union_council ?: '—' }}</span>
+                    </div>
+                    <div class="alf-meta-item">
+                        <span class="alf-meta-item__label">Village</span>
+                        <span class="alf-meta-item__value">{{ $application->applicant?->village ?: '—' }}</span>
                     </div>
                     <div class="alf-meta-item" style="grid-column:1/-1">
                         <span class="alf-meta-item__label">Land location</span>
@@ -65,8 +73,39 @@
                         <tbody>
                         @forelse($application->fieldValues as $value)
                             <tr>
-                                <th style="width:40%">{{ $value->formField?->field_label }}</th>
-                                <td>{{ is_string($value->value) ? $value->value : json_encode($value->value) }}</td>
+                                <th style="width:40%">
+                                    {{ $value->formField?->field_label }}
+                                    @if($value->formField?->field_label_ur)
+                                        <div class="small text-muted" dir="rtl" style="font-family:'Noto Nastaliq Urdu', Tahoma, sans-serif;">{{ $value->formField->field_label_ur }}</div>
+                                    @endif
+                                </th>
+                                <td>
+                                    @if($value->formField?->field_type === 'checkbox_with_text')
+                                        @if(!empty($value->value))
+                                            @php
+                                                $parts = array_filter(array_map('trim', explode(';', $value->value)));
+                                            @endphp
+                                            <div class="d-flex flex-column gap-1">
+                                                @foreach($parts as $part)
+                                                    <div>
+                                                        <span class="badge bg-success-subtle text-success me-1"><i class="fa-solid fa-check me-1"></i>Selected</span>
+                                                        @if(str_contains($part, ':'))
+                                                            @php [$pLabel, $pText] = array_map('trim', explode(':', $part, 2)); @endphp
+                                                            <strong class="text-dark">{{ $pLabel }}:</strong>
+                                                            <span class="text-secondary">{{ $pText }}</span>
+                                                        @else
+                                                            <strong class="text-dark">{{ $part }}</strong>
+                                                        @endif
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @else
+                                            <span class="badge bg-light text-muted border">None Selected / Unchecked</span>
+                                        @endif
+                                    @else
+                                        {{ is_string($value->value) ? $value->value : json_encode($value->value) }}
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr><td class="text-muted p-3">No field values recorded.</td></tr>

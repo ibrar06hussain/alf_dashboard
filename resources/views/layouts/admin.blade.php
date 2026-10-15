@@ -129,9 +129,14 @@
                             </li>
                         @endif
                         @if($canManageSchemes)
-                            <li class="{{ (request()->routeIs('admin.schemes.*') && request('type') !== 'proposed') || request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
+                            <li class="{{ request()->routeIs('admin.schemes.*') && request('type') !== 'proposed' ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.schemes.index') }}">
                                     <i class="metismenu-icon fa-solid fa-file-lines"></i> Schemes
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.form-builder.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-file-pen"></i> Application Forms
                                 </a>
                             </li>
                             <li class="{{ request()->routeIs('admin.schemes.*') && request('type') === 'proposed' ? 'mm-active' : '' }}">

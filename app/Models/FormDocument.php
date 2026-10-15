@@ -8,13 +8,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FormDocument extends Model
 {
     protected $fillable = [
-        'form_id', 'document_name', 'is_mandatory',
+        'form_id', 'document_name', 'document_name_ur', 'is_mandatory',
         'allowed_extensions', 'max_size_mb', 'display_order',
     ];
 
     protected function casts(): array
     {
         return ['is_mandatory' => 'boolean'];
+    }
+
+    public function getUrduName(): ?string
+    {
+        if (! empty($this->document_name_ur)) {
+            return $this->document_name_ur;
+        }
+
+        if (stripos($this->document_name, 'cnic') !== false) {
+            return 'شناختی کارڈ کی کاپی';
+        }
+
+        return null;
     }
 
     public function form(): BelongsTo

@@ -74,6 +74,21 @@
                             <dt class="col-sm-4">{{ __('portal.district') }}</dt>
                             <dd class="col-sm-8">{{ $application->district?->t("name") }}</dd>
 
+                            @if($application->applicant?->tehsil)
+                                <dt class="col-sm-4">{{ __('portal.tehsil') }}</dt>
+                                <dd class="col-sm-8">{{ $application->applicant->tehsil }}</dd>
+                            @endif
+
+                            @if($application->applicant?->union_council)
+                                <dt class="col-sm-4">{{ __('portal.union_council') }}</dt>
+                                <dd class="col-sm-8">{{ $application->applicant->union_council }}</dd>
+                            @endif
+
+                            @if($application->applicant?->village)
+                                <dt class="col-sm-4">{{ __('portal.village') }}</dt>
+                                <dd class="col-sm-8">{{ $application->applicant->village }}</dd>
+                            @endif
+
                             <dt class="col-sm-4">{{ __('portal.submitted') }}</dt>
                             <dd class="col-sm-8">{{ optional($application->submitted_at)->format('d M Y, h:i A') }}</dd>
 

@@ -82,7 +82,10 @@ class ApplicationReviewController extends Controller
                     ->orWhereHas('applicant', function ($aq) use ($q) {
                         $aq->where('full_name', 'like', "%{$q}%")
                             ->orWhere('cnic', 'like', "%{$q}%")
-                            ->orWhere('phone', 'like', "%{$q}%");
+                            ->orWhere('phone', 'like', "%{$q}%")
+                            ->orWhere('tehsil', 'like', "%{$q}%")
+                            ->orWhere('union_council', 'like', "%{$q}%")
+                            ->orWhere('village', 'like', "%{$q}%");
                     });
             });
         }

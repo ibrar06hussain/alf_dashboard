@@ -78,21 +78,24 @@ class ApplicationSubmissionTest extends TestCase
         ]);
     }
 
-    public function test_application_requires_otp_verification(): void
+    public function test_application_does_not_require_otp_verification(): void
     {
-        $response = $this->post(route('schemes.apply.store', $this->scheme->slug), $this->payload());
+        Storage::fake('public');
 
-        $response->assertSessionHasErrors('phone');
-        $this->assertDatabaseCount('applications', 0);
+        $doc = FormDocument::first();
+
+        $response = $this->post(route('schemes.apply.store', $this->scheme->slug), array_merge(
+            $this->payload(),
+            ['documents' => [$doc->id => UploadedFile::fake()->image('cnic.jpg')]]
+        ));
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('applications', 1);
     }
 
     public function test_successful_application_submission(): void
     {
         Storage::fake('public');
-
-        $otp = app(OtpService::class);
-        $code = $otp->send('03001112233');
-        $this->assertTrue($otp->verify('03001112233', $code));
 
         $doc = FormDocument::first();
 
@@ -110,10 +113,6 @@ class ApplicationSubmissionTest extends TestCase
     public function test_duplicate_cnic_blocked_for_same_scheme(): void
     {
         Storage::fake('public');
-
-        $otp = app(OtpService::class);
-        $code = $otp->send('03001112233');
-        $otp->verify('03001112233', $code);
 
         $applicant = Applicant::create([
             'cnic' => '1234567890123',

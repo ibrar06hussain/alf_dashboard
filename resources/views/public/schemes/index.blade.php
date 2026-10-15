@@ -66,42 +66,55 @@
         <div class="row">
             @forelse($schemes as $i => $scheme)
                 <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="border rounded-3 overflow-hidden h-100 bg-white shadow-sm">
-                        <div class="alf-media-card bg-img"
+                    <div class="alf-scheme-card card h-100 border-0 shadow-sm rounded-3 overflow-hidden d-flex flex-column">
+                        <div class="alf-media-card bg-img position-relative"
                              data-alf-fit="bg"
                              data-alf-w="{{ \App\Support\ImageSlots::get('scheme_cover')['width'] }}"
                              data-alf-h="{{ \App\Support\ImageSlots::get('scheme_cover')['height'] }}"
                              style="background-image:url('{{ $scheme->imageUrl(($i % 6) + 4) }}');"></div>
-                        <div class="p-4">
+                        <div class="card-body p-4 d-flex flex-column flex-grow-1">
                         @php
                             $open = $scheme->isOpenForApplications();
                             $daysLeft = $scheme->last_date ? now()->startOfDay()->diffInDays($scheme->last_date->copy()->startOfDay(), false) : null;
                         @endphp
-                        <div class="d-flex justify-content-between mb-2 flex-wrap gap-1">
-                            <span class="badge {{ $scheme->type === 'running' ? 'bg-success' : 'bg-warning text-dark' }}">
-                                {{ $scheme->typeLabel() }}
-                            </span>
-                            <span class="badge bg-secondary">{{ $scheme->scopeLabel() }}</span>
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                            <div class="d-flex gap-1 flex-wrap">
+                                <span class="badge {{ $scheme->type === 'running' ? 'bg-success' : 'bg-warning text-dark' }} px-2 py-1">
+                                    {{ $scheme->typeLabel() }}
+                                </span>
+                                <span class="badge bg-secondary px-2 py-1">{{ $scheme->scopeLabel() }}</span>
+                            </div>
                             @if($scheme->type === 'running')
                                 @if($open && $daysLeft !== null && $daysLeft >= 0)
-                                    <span class="badge bg-primary">{{ __('portal.days_left', ['count' => (int) $daysLeft]) }}</span>
+                                    <span class="badge bg-primary px-2 py-1"><i class="fa-solid fa-clock me-1"></i>{{ __('portal.days_left', ['count' => (int) $daysLeft]) }}</span>
                                 @elseif(! $open)
-                                    <span class="badge bg-danger">{{ __('portal.closed') }}</span>
+                                    <span class="badge bg-danger px-2 py-1">{{ __('portal.closed') }}</span>
                                 @endif
                             @endif
                         </div>
-                        <h5>{{ $scheme->t("title") }}</h5>
-                        <p class="small text-muted mb-1">{{ $scheme->department?->t("name") }}</p>
+                        <h5 class="card-title fw-bold mb-1 text-dark">{{ $scheme->t("title") }}</h5>
+                        <p class="small text-muted mb-2"><i class="fa-solid fa-building me-1 text-secondary"></i>{{ $scheme->department?->t("name") }}</p>
                         @if($scheme->last_date)
-                            <p class="small mb-2">{{ __('portal.last_date') }}: <strong>{{ $scheme->last_date->format('d M Y') }}</strong></p>
+                            <p class="small text-secondary mb-2">
+                                <i class="fa-regular fa-calendar-days me-1 text-muted"></i>{{ __('portal.last_date') }}: <strong>{{ $scheme->last_date->format('d M Y') }}</strong>
+                            </p>
                         @endif
-                        <p class="small">{{ \Illuminate\Support\Str::limit(strip_tags($scheme->t("description")), 110) }}</p>
-                        <a href="{{ route('schemes.show', $scheme->slug) }}" class="btn famie-btn btn-sm">{{ __('portal.view_details') }}</a>
-                        @if($open)
-                            <a href="{{ route('schemes.apply', $scheme->slug) }}" class="btn btn-outline-success btn-sm">{{ __('portal.apply') }}</a>
-                        @elseif($scheme->type === 'proposed')
-                            <a href="{{ route('schemes.show', $scheme->slug) }}" class="btn btn-outline-warning btn-sm">{{ __('portal.express_interest') }}</a>
-                        @endif
+                        <p class="small text-muted flex-grow-1 mb-3">{{ \Illuminate\Support\Str::limit(strip_tags($scheme->t("description")), 110) }}</p>
+
+                        <div class="alf-card-actions mt-auto pt-3 border-top d-flex gap-2 align-items-center">
+                            <a href="{{ route('schemes.show', $scheme->slug) }}" class="alf-btn-details {{ $open || $scheme->type === 'proposed' ? '' : 'w-100' }}">
+                                <i class="fa-solid fa-circle-info me-1"></i> {{ __('portal.view_details') }}
+                            </a>
+                            @if($open)
+                                <a href="{{ route('schemes.apply', $scheme->slug) }}" class="alf-btn-apply">
+                                    <i class="fa-solid fa-paper-plane me-1"></i> {{ __('portal.apply_now') }}
+                                </a>
+                            @elseif($scheme->type === 'proposed')
+                                <a href="{{ route('schemes.show', $scheme->slug) }}" class="alf-btn-interest">
+                                    <i class="fa-solid fa-bell me-1"></i> {{ __('portal.express_interest') }}
+                                </a>
+                            @endif
+                        </div>
                         </div>
                     </div>
                 </div>

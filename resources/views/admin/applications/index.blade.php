@@ -82,7 +82,14 @@
                         </td>
                         <td>{{ $application->scheme?->title }}</td>
                         <td>{{ $application->scheme?->department?->name }}</td>
-                        <td>{{ $application->district?->name }}</td>
+                        <td>
+                            <div>{{ $application->district?->name ?? '—' }}</div>
+                            @if($application->applicant?->tehsil)
+                                <div class="text-muted small">
+                                    {{ $application->applicant->tehsil }}@if($application->applicant?->union_council) · {{ $application->applicant->union_council }}@endif
+                                </div>
+                            @endif
+                        </td>
                         <td><span class="alf-badge alf-badge--slate">{{ $statuses[$application->status] ?? $application->status }}</span></td>
                         <td>{{ $application->submitted_at?->format('d M Y') ?: $application->created_at?->format('d M Y') }}</td>
                         <td><a href="{{ route('admin.applications.show', $application) }}" class="btn btn-sm btn-primary">Review</a></td>

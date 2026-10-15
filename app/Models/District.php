@@ -26,4 +26,9 @@ class District extends Model
     {
         return $this->hasMany(Applicant::class);
     }
+
+    public function tehsils(): HasMany
+    {
+        return $this->hasMany(Tehsil::class)->orderBy('name');
+    }
 }

@@ -2,6 +2,17 @@
 
 @section('title', 'Form Builder')
 
+@push('styles')
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+    .urdu-font {
+        font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', Tahoma, sans-serif;
+    }
+</style>
+@endpush
+
 @section('content')
 @include('admin.partials.page-hero', [
     'title' => 'Form Builder',
@@ -138,6 +149,35 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target.closest('.remove-doc')) {
             e.target.closest('.document-row')?.remove();
             reindex(docsList, 'documents');
+        }
+    });
+
+    fieldsList.addEventListener('change', function (e) {
+        if (e.target && e.target.name && e.target.name.endsWith('[field_type]')) {
+            const row = e.target.closest('.field-row');
+            if (!row) return;
+            const infoBox = row.querySelector('.js-checkbox-text-info');
+            const optionsLabel = row.querySelector('.js-options-label');
+            const optionsInput = row.querySelector('.js-options-input');
+            const isCbText = e.target.value === 'checkbox_with_text';
+
+            if (infoBox) {
+                if (isCbText) {
+                    infoBox.classList.remove('d-none');
+                } else {
+                    infoBox.classList.add('d-none');
+                }
+            }
+
+            if (optionsLabel && optionsInput) {
+                if (isCbText) {
+                    optionsLabel.textContent = 'Checkbox Options (comma or newline separated — each option gets a dynamic text field)';
+                    optionsInput.placeholder = 'Commercial Bank, ZTBL, Microfinance, Informal / Other';
+                } else {
+                    optionsLabel.textContent = 'Options (comma or newline separated)';
+                    optionsInput.placeholder = 'Yes, No';
+                }
+            }
         }
     });
 });

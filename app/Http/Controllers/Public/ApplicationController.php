@@ -11,6 +11,8 @@ use App\Models\ApplicationStatusLog;
 use App\Models\District;
 use App\Models\FormField;
 use App\Models\Scheme;
+use App\Models\Tehsil;
+use App\Models\UnionCouncil;
 use App\Services\Otp\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -79,6 +81,40 @@ class ApplicationController extends Controller
             'phone' => preg_replace('/\D+/', '', (string) $request->input('phone')),
         ]);
 
+        $selectedDistrictId = $request->input('district_id');
+        $selectedTehsil = $request->input('tehsil');
+        $tehsilModel = null;
+        if (\Illuminate\Support\Facades\Schema::hasTable('tehsils')) {
+            if (is_numeric($selectedTehsil)) {
+                $tehsilModel = Tehsil::where('id', $selectedTehsil)
+                    ->when($selectedDistrictId, fn ($q) => $q->where('district_id', $selectedDistrictId))
+                    ->first();
+            } elseif ($selectedTehsil) {
+                $tehsilModel = Tehsil::where('name', $selectedTehsil)
+                    ->when($selectedDistrictId, fn ($q) => $q->where('district_id', $selectedDistrictId))
+                    ->first()
+                    ?? Tehsil::where('name', $selectedTehsil)->first();
+            }
+        }
+        $tehsilName = $tehsilModel?->name ?? (string) $selectedTehsil;
+
+        $hasUnionCouncils = ($tehsilModel && \Illuminate\Support\Facades\Schema::hasTable('union_councils'))
+            ? UnionCouncil::where('tehsil_id', $tehsilModel->id)->exists()
+            : false;
+
+        $selectedUc = $request->input('union_council');
+        $ucModel = null;
+        if (\Illuminate\Support\Facades\Schema::hasTable('union_councils')) {
+            if (is_numeric($selectedUc)) {
+                $ucModel = UnionCouncil::find($selectedUc);
+            } elseif ($selectedUc) {
+                $ucModel = UnionCouncil::where('name', $selectedUc)
+                    ->when($tehsilModel, fn ($q) => $q->where('tehsil_id', $tehsilModel->id))
+                    ->first();
+            }
+        }
+        $unionCouncilName = $ucModel?->name ?? ($selectedUc ?: null);
+
         $request->validate([
             'cnic' => ['required', 'regex:/^\d{13}$/'],
             'phone' => ['required', 'string', 'min:11', 'max:15'],
@@ -86,25 +122,57 @@ class ApplicationController extends Controller
             'father_name' => ['required', 'string', 'max:150'],
             'district_id' => ['required', 'exists:districts,id'],
             'tehsil' => ['required', 'string', 'max:150'],
+            'union_council' => $hasUnionCouncils ? ['required', 'string', 'max:150'] : ['nullable', 'string', 'max:150'],
+            'village' => ['nullable', 'string', 'max:150'],
             'land_location' => ['required', 'string', 'max:500'],
         ], [
             'cnic.regex' => 'CNIC must be exactly 13 digits.',
+            'union_council.required' => 'Please select a Union Council.',
         ]);
 
         $cnic = (string) $request->input('cnic');
         $phone = (string) $request->input('phone');
 
-        if (! $this->otp->isVerified($phone)) {
-            throw ValidationException::withMessages([
-                'phone' => 'Please verify your phone number with OTP before submitting.',
-            ]);
-        }
-
-        $rules = $this->buildValidationRules($form->fields, $form->documents);
-        $request->validate($rules, [
+        $rules = $this->buildValidationRules($form->fields, $form->documents, $hasUnionCouncils);
+        $customMessages = [
             'cnic.regex' => 'CNIC must be exactly 13 digits.',
             'cnic.size' => 'CNIC must be exactly 13 digits.',
-        ]);
+            'union_council.required' => 'Please select a Union Council.',
+        ];
+        foreach ($form->fields as $field) {
+            if ($field->field_type === 'checkbox_with_text') {
+                $inputVal = $request->input($field->field_key);
+                $hasChecked = false;
+                if (is_array($inputVal)) {
+                    foreach ($inputVal as $idx => $item) {
+                        if (is_array($item) && !empty($item['checked'])) {
+                            $hasChecked = true;
+                            $text = trim((string)($item['text'] ?? ''));
+                            $optLabel = trim((string)($item['label'] ?? ''));
+                            if ($text === '') {
+                                $rules[$field->field_key.'.'.$idx.'.text'] = ['required', 'string', 'max:2000'];
+                                $customMessages[$field->field_key.'.'.$idx.'.text.required'] = 'Please provide details for ' . ($optLabel ?: $field->field_label) . '.';
+                            }
+                        }
+                    }
+                    if (isset($inputVal['checked']) && !empty($inputVal['checked'])) {
+                        $hasChecked = true;
+                        $text = trim((string)($inputVal['text'] ?? ''));
+                        if ($text === '') {
+                            $rules[$field->field_key.'.text'] = ['required', 'string', 'max:2000'];
+                            $customMessages[$field->field_key.'.text.required'] = 'Please provide details for ' . $field->field_label . '.';
+                        }
+                    }
+                }
+
+                if ($field->is_mandatory && !$hasChecked) {
+                    $rules[$field->field_key] = ['required', function ($attribute, $value, $fail) use ($field) {
+                        $fail('Please select at least one option for ' . $field->field_label . '.');
+                    }];
+                }
+            }
+        }
+        $request->validate($rules, $customMessages);
 
         $existingApplicant = Applicant::where('cnic', $cnic)->first();
         if ($existingApplicant && Application::where('scheme_id', $scheme->id)
@@ -115,7 +183,7 @@ class ApplicationController extends Controller
             ]);
         }
 
-        $application = DB::transaction(function () use ($request, $scheme, $form, $cnic, $phone) {
+        $application = DB::transaction(function () use ($request, $scheme, $form, $cnic, $phone, $tehsilName, $unionCouncilName) {
             $applicantData = [
                 'cnic' => $cnic,
                 'full_name' => $request->input('full_name'),
@@ -123,8 +191,8 @@ class ApplicationController extends Controller
                 'phone' => $phone,
                 'phone_verified' => true,
                 'district_id' => (int) $request->input('district_id'),
-                'tehsil' => $request->input('tehsil'),
-                'union_council' => $request->input('union_council'),
+                'tehsil' => $tehsilName,
+                'union_council' => $unionCouncilName,
                 'village' => $request->input('village'),
                 'address' => $request->input('address'),
                 'land_location' => $request->input('land_location'),
@@ -160,7 +228,43 @@ class ApplicationController extends Controller
                 }
 
                 $value = $request->input($field->field_key);
-                if (is_array($value)) {
+                if ($field->field_type === 'checkbox_with_text') {
+                    if (is_array($value)) {
+                        $selectedParts = [];
+                        foreach ($value as $item) {
+                            if (is_array($item)) {
+                                $isChecked = !empty($item['checked']) && ((string)$item['checked'] === '1' || $item['checked'] === true || $item['checked'] === 'yes');
+                                if ($isChecked) {
+                                    $label = trim((string)($item['label'] ?? ''));
+                                    $text = trim((string)($item['text'] ?? ''));
+                                    if ($label !== '' && $text !== '') {
+                                        $selectedParts[] = $label . ': ' . $text;
+                                    } elseif ($label !== '') {
+                                        $selectedParts[] = $label;
+                                    } elseif ($text !== '') {
+                                        $selectedParts[] = 'Yes: ' . $text;
+                                    } else {
+                                        $selectedParts[] = 'Yes';
+                                    }
+                                }
+                            }
+                        }
+
+                        if (empty($selectedParts) && isset($value['checked'])) {
+                            $isChecked = !empty($value['checked']) && ((string)$value['checked'] === '1' || $value['checked'] === true || $value['checked'] === 'yes');
+                            $text = trim((string)($value['text'] ?? ''));
+                            if ($isChecked) {
+                                $selectedParts[] = $text !== '' ? ('Yes: ' . $text) : 'Yes';
+                            }
+                        }
+
+                        $value = !empty($selectedParts) ? implode('; ', $selectedParts) : null;
+                    } elseif (is_string($value)) {
+                        $value = trim($value) !== '' ? trim($value) : null;
+                    } else {
+                        $value = null;
+                    }
+                } elseif (is_array($value)) {
                     $value = implode(', ', $value);
                 }
 
@@ -301,7 +405,7 @@ class ApplicationController extends Controller
         ]);
     }
 
-    private function buildValidationRules($fields, $documents): array
+    private function buildValidationRules($fields, $documents, bool $hasUnionCouncils = false): array
     {
         $rules = [
             'cnic' => ['required', 'regex:/^\d{13}$/'],
@@ -310,12 +414,14 @@ class ApplicationController extends Controller
             'father_name' => ['required', 'string', 'max:150'],
             'district_id' => ['required', 'exists:districts,id'],
             'tehsil' => ['required', 'string', 'max:150'],
+            'union_council' => $hasUnionCouncils ? ['required', 'string', 'max:150'] : ['nullable', 'string', 'max:150'],
+            'village' => ['nullable', 'string', 'max:150'],
             'land_location' => ['required', 'string', 'max:500'],
         ];
 
         /** @var FormField $field */
         foreach ($fields as $field) {
-            if (in_array($field->field_key, ['cnic', 'phone', 'full_name', 'father_name', 'district_id', 'tehsil', 'land_location'], true)) {
+            if (in_array($field->field_key, ['cnic', 'phone', 'full_name', 'father_name', 'district_id', 'tehsil', 'union_council', 'village', 'land_location'], true)) {
                 continue;
             }
 
@@ -329,6 +435,14 @@ class ApplicationController extends Controller
                 case 'checkbox':
                     $fieldRules = [$field->is_mandatory ? 'required' : 'nullable', 'array'];
                     $rules[$field->field_key.'.*'] = ['string'];
+                    break;
+                case 'checkbox_with_text':
+                    $fieldRules = [$field->is_mandatory ? 'required' : 'nullable', 'array'];
+                    $rules[$field->field_key.'.*.checked'] = ['nullable', 'in:1'];
+                    $rules[$field->field_key.'.*.label'] = ['nullable', 'string'];
+                    $rules[$field->field_key.'.*.text'] = ['nullable', 'string', 'max:2000'];
+                    $rules[$field->field_key.'.checked'] = ['nullable'];
+                    $rules[$field->field_key.'.text'] = ['nullable', 'string', 'max:2000'];
                     break;
                 case 'email':
                     $fieldRules[] = 'email';
