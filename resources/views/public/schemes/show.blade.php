@@ -93,7 +93,13 @@
                     @endif
 
                     @if($scheme->isOpenForApplications())
-                        <a href="{{ route('schemes.apply', $scheme->slug) }}" class="btn famie-btn w-100 mt-3">{{ __('portal.apply_now') }}</a>
+                        <a href="{{ route('schemes.apply', $scheme->slug) }}" class="btn famie-btn alf-btn-apply alf-btn-apply-pulse w-100 mt-3 d-flex align-items-center justify-content-center">
+                            <span class="alf-pulse-beacon" aria-hidden="true">
+                                <span class="alf-beacon-ping"></span>
+                                <span class="alf-beacon-dot"></span>
+                            </span>
+                            <i class="fa-solid fa-paper-plane me-2"></i> {{ __('portal.apply_now') }}
+                        </a>
                     @elseif($scheme->type === 'proposed')
                         <p class="small text-muted mt-3 mb-0">{{ __('portal.proposed_notice') }}</p>
                     @else

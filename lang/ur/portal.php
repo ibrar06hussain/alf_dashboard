@@ -212,4 +212,13 @@ return [
     'farm_size' => 'فارم کا رقبہ',
     'animals_count' => 'جانوروں کی تعداد',
     'experience_years' => 'تجربہ (سال)',
+    'popup_new_schemes_title' => 'نئی اسکیمیں اور سبسڈیز',
+    'popup_new_schemes_subtitle' => 'حکومتی معاونتی اسکیموں کی تفصیلات دیکھیں اور آن لائن درخواست دیں',
+    'popup_badge_new' => 'نئی اسکیم',
+    'popup_announcement' => 'نئی اسکیموں کا اعلان',
+    'popup_dont_show_again' => 'اس سیشن میں دوبارہ نہ دکھائیں',
+    'popup_close' => 'بند کریں',
+    'popup_open_status' => 'درخواستیں جاری ہیں',
+    'popup_deadline' => 'آخری تاریخ',
+    'popup_browse_all' => 'تمام اسکیمز دیکھیں',
 ];

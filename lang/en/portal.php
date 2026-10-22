@@ -202,4 +202,13 @@ return [
     'scope_district' => 'District Scope',
     'view_all_running' => 'View All On Going Schemes',
     'select' => 'Select',
+    'popup_new_schemes_title' => 'New Schemes & Subsidies',
+    'popup_new_schemes_subtitle' => 'Explore the latest citizen support schemes and apply online',
+    'popup_badge_new' => 'NEW SCHEME',
+    'popup_announcement' => 'New Schemes Announcement',
+    'popup_dont_show_again' => "Don't show again this session",
+    'popup_close' => 'Close',
+    'popup_open_status' => 'Applications Open',
+    'popup_deadline' => 'Last Date',
+    'popup_browse_all' => 'Browse All Schemes',
 ];

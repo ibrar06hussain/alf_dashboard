@@ -106,7 +106,11 @@
                                 <i class="fa-solid fa-circle-info me-1"></i> {{ __('portal.view_details') }}
                             </a>
                             @if($open)
-                                <a href="{{ route('schemes.apply', $scheme->slug) }}" class="alf-btn-apply">
+                                <a href="{{ route('schemes.apply', $scheme->slug) }}" class="alf-btn-apply alf-btn-apply-pulse">
+                                    <span class="alf-pulse-beacon" aria-hidden="true">
+                                        <span class="alf-beacon-ping"></span>
+                                        <span class="alf-beacon-dot"></span>
+                                    </span>
                                     <i class="fa-solid fa-paper-plane me-1"></i> {{ __('portal.apply_now') }}
                                 </a>
                             @elseif($scheme->type === 'proposed')

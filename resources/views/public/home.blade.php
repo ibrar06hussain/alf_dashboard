@@ -267,7 +267,11 @@
                                     <i class="fa-solid fa-circle-info me-1"></i> {{ __('portal.details') }}
                                 </a>
                                 @if($scheme->isOpenForApplications())
-                                    <a href="{{ route('schemes.apply', $scheme->slug) }}" class="alf-btn-apply">
+                                    <a href="{{ route('schemes.apply', $scheme->slug) }}" class="alf-btn-apply alf-btn-apply-pulse">
+                                        <span class="alf-pulse-beacon" aria-hidden="true">
+                                            <span class="alf-beacon-ping"></span>
+                                            <span class="alf-beacon-dot"></span>
+                                        </span>
                                         <i class="fa-solid fa-paper-plane me-1"></i> {{ __('portal.apply_now') }}
                                     </a>
                                 @endif
@@ -288,6 +292,9 @@
         </div>
     </div>
 </section>
+
+{{-- New Schemes Announcement Popup Modal & Quick Trigger --}}
+@include('public.partials.new-schemes-popup')
 @endsection
 
 @push('scripts')
@@ -325,6 +332,128 @@
         io.observe(document.getElementById('portal-stats'));
     } else {
         nodes.forEach(animateCount);
+    }
+})();
+
+// New Schemes Announcement Popup & Slider Controller
+(function () {
+    var modalEl = document.getElementById('alfNewSchemesModal');
+    if (!modalEl) return;
+
+    var modal = null;
+    var swiperInstance = null;
+    var currentIdxEl = document.getElementById('alfPopupCurrentIdx');
+    var triggerBtn = document.getElementById('alfFloatingSchemesTrigger');
+    var dismissCheck = document.getElementById('alfDismissPopupCheck');
+
+    function getModalInstance() {
+        if (!modal) {
+            modal = new bootstrap.Modal(modalEl, {
+                backdrop: true,
+                keyboard: true
+            });
+        }
+        return modal;
+    }
+
+    function initPopupSwiper() {
+        if (swiperInstance) {
+            swiperInstance.update();
+            return;
+        }
+
+        var swiperContainer = document.getElementById('alfPopupSwiper');
+        if (!swiperContainer) return;
+
+        var isUrdu = document.documentElement.getAttribute('dir') === 'rtl';
+
+        swiperInstance = new Swiper('#alfPopupSwiper', {
+            slidesPerView: 1,
+            spaceBetween: 0,
+            loop: true,
+            speed: 600,
+            autoplay: {
+                delay: 5500,
+                disableOnInteraction: false,
+                pauseOnMouseEnter: true
+            },
+            pagination: {
+                el: '.alf-popup-pagination',
+                clickable: true
+            },
+            navigation: {
+                nextEl: '.alf-swiper-nav-next',
+                prevEl: '.alf-swiper-nav-prev'
+            },
+            on: {
+                slideChange: function () {
+                    if (currentIdxEl && swiperInstance) {
+                        currentIdxEl.textContent = (swiperInstance.realIndex + 1);
+                    }
+                }
+            }
+        });
+    }
+
+    modalEl.addEventListener('shown.bs.modal', function () {
+        initPopupSwiper();
+        if (swiperInstance) {
+            swiperInstance.update();
+            if (swiperInstance.autoplay) {
+                swiperInstance.autoplay.start();
+            }
+        }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        if (swiperInstance && swiperInstance.autoplay) {
+            swiperInstance.autoplay.stop();
+        }
+        // Remember that user has closed the popup in this session
+        sessionStorage.setItem('alf_schemes_popup_seen', '1');
+
+        // If user explicitly checked "Don't show again"
+        if (dismissCheck && dismissCheck.checked) {
+            localStorage.setItem('alf_schemes_popup_dismiss_forever', '1');
+        }
+    });
+
+    // Re-open trigger button (floating pill at bottom corner)
+    if (triggerBtn) {
+        triggerBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            getModalInstance().show();
+        });
+    }
+
+    // Determine whether to automatically display the modal on initial page load
+    function shouldShowPopup() {
+        // Allow URL override (?popup=1 or #schemes-popup) for easy testing
+        var urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('popup') || window.location.hash === '#schemes-popup') {
+            return true;
+        }
+
+        // If user chose "Don't show again" across visits
+        if (localStorage.getItem('alf_schemes_popup_dismiss_forever') === '1') {
+            return false;
+        }
+
+        // If already seen/closed during this browsing session
+        if (sessionStorage.getItem('alf_schemes_popup_seen') === '1') {
+            return false;
+        }
+
+        return true;
+    }
+
+    if (shouldShowPopup()) {
+        // Wait 700ms after load so preloader transitions smoothly before popup
+        window.addEventListener('load', function () {
+            setTimeout(function () {
+                getModalInstance().show();
+            }, 750);
+        });
     }
 })();
 </script>

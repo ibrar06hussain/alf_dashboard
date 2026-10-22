@@ -48,6 +48,23 @@ class HomeController extends Controller
             ->take(12)
             ->get();
 
+        $newSchemes = Scheme::query()
+            ->with(['department', 'publishedForm'])
+            ->where('status', 'active')
+            ->where('type', 'running')
+            ->latest()
+            ->take(6)
+            ->get();
+
+        if ($newSchemes->isEmpty()) {
+            $newSchemes = Scheme::query()
+                ->with(['department', 'publishedForm'])
+                ->where('status', 'active')
+                ->latest()
+                ->take(6)
+                ->get();
+        }
+
         $stats = [
             'departments' => $departments->count(),
             'schemes' => Scheme::where('status', 'active')->count(),
@@ -61,6 +78,7 @@ class HomeController extends Controller
             'departments',
             'featuredSchemes',
             'proposedSchemes',
+            'newSchemes',
             'stats'
         ));
     }
