@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\ApplicationsExport;
 use App\Http\Controllers\Controller;
+use App\Models\AccessAuditLog;
 use App\Models\Application;
+use App\Models\ApplicationAssignment;
 use App\Models\ApplicationStatusLog;
 use App\Models\Department;
 use App\Models\District;
 use App\Models\Scheme;
+use App\Models\User;
 use App\Services\QuotaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,10 +26,21 @@ class ApplicationReviewController extends Controller
 
     public function index(Request $request): View
     {
+        $user = auth()->user();
         $query = $this->filteredQuery($request);
-        $departments = Department::orderBy('display_order')->get();
-        $districts = District::orderBy('name')->get();
-        $schemes = Scheme::orderBy('title')->get(['id', 'title', 'department_id']);
+
+        $departments = Department::when(! $user->isGlobalScope() && ! $user->hasRole('Division Director'), function ($q) use ($user) {
+            $q->whereIn('id', $user->authorizedDepartmentIds());
+        })->orderBy('display_order')->get();
+
+        $districts = District::when(! $user->isGlobalScope(), function ($q) use ($user) {
+            $q->whereIn('id', $user->authorizedDistrictIds());
+        })->orderBy('name')->get();
+
+        $schemes = Scheme::when(! $user->isGlobalScope() && ! $user->hasRole('Division Director'), function ($q) use ($user) {
+            $q->whereIn('department_id', $user->authorizedDepartmentIds());
+        })->orderBy('title')->get(['id', 'title', 'department_id']);
+
         $statuses = Application::STATUSES;
 
         $pageStats = [
@@ -45,36 +59,58 @@ class ApplicationReviewController extends Controller
 
     public function export(Request $request): BinaryFileResponse
     {
+        $user = auth()->user();
         $format = $request->string('format', 'xlsx')->toString();
         $rows = $this->filteredQuery($request)->limit(5000)->get();
         $filename = 'alf-applications-'.now()->format('Ymd_His');
 
+        $masked = ! $user->can('beneficiaries.export_unmasked');
+
+        AccessAuditLog::log('beneficiaries_exported', Application::class, null, [
+            'count' => $rows->count(),
+            'format' => $format,
+            'is_masked' => $masked,
+        ]);
+
         if ($format === 'csv') {
-            return Excel::download(new ApplicationsExport($rows), $filename.'.csv', \Maatwebsite\Excel\Excel::CSV);
+            return Excel::download(new ApplicationsExport($rows, $masked), $filename.'.csv', \Maatwebsite\Excel\Excel::CSV);
         }
 
-        return Excel::download(new ApplicationsExport($rows), $filename.'.xlsx');
+        return Excel::download(new ApplicationsExport($rows, $masked), $filename.'.xlsx');
     }
 
     private function filteredQuery(Request $request)
     {
         $user = auth()->user();
-        $query = Application::with(['scheme.department', 'applicant', 'district'])->latest();
+        $query = Application::with(['scheme.department', 'applicant', 'district', 'assignments.assignee'])
+            ->authorizedFor($user)
+            ->latest();
 
-        $this->applyRoleScope($query, $user);
+        $authorizedDistricts = $user->authorizedDistrictIds();
+        $authorizedDepts = $user->authorizedDepartmentIds();
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
+
         if ($request->filled('department_id')) {
-            $query->whereHas('scheme', fn ($q) => $q->where('department_id', $request->integer('department_id')));
+            $deptId = $request->integer('department_id');
+            if ($user->isGlobalScope() || $user->hasRole('Division Director') || in_array($deptId, $authorizedDepts, true)) {
+                $query->whereHas('scheme', fn ($q) => $q->where('department_id', $deptId));
+            }
         }
+
         if ($request->filled('district_id')) {
-            $query->where('district_id', $request->integer('district_id'));
+            $distId = $request->integer('district_id');
+            if ($user->isGlobalScope() || in_array($distId, $authorizedDistricts, true)) {
+                $query->where('district_id', $distId);
+            }
         }
+
         if ($request->filled('scheme_id')) {
             $query->where('scheme_id', $request->integer('scheme_id'));
         }
+
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(function ($builder) use ($q) {
@@ -95,7 +131,11 @@ class ApplicationReviewController extends Controller
 
     public function show(Application $application): View
     {
-        $this->authorizeView($application);
+        $user = auth()->user();
+
+        if (! $user->can('view', $application)) {
+            abort(403, 'Unauthorized access to application in another administrative scope.');
+        }
 
         $application->load([
             'scheme.department',
@@ -105,17 +145,38 @@ class ApplicationReviewController extends Controller
             'fieldValues.formField',
             'documents.formDocument',
             'statusLogs.user',
+            'assignments.assignee',
+            'assignments.assigner',
         ]);
 
-        $allowedTransitions = $this->allowedTransitions(auth()->user(), $application);
+        $allowedTransitions = $this->allowedTransitions($user, $application);
         $quotaStatus = $this->quotas->status($application->scheme, $application->district_id);
 
-        return view('admin.applications.show', compact('application', 'allowedTransitions', 'quotaStatus'));
+        $fieldOfficers = $user->can('assignFieldOfficer', $application)
+            ? User::role('Field Officer')
+                ->where(function ($q) use ($application) {
+                    $q->where('district_id', $application->district_id)
+                        ->orWhereHas('officeAssignments', function ($aq) use ($application) {
+                            $aq->active()->where('district_id', $application->district_id);
+                        });
+                })
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
+
+        AccessAuditLog::log('application_viewed', Application::class, (string) $application->id);
+
+        return view('admin.applications.show', compact('application', 'allowedTransitions', 'quotaStatus', 'fieldOfficers'));
     }
 
     public function updateStatus(Request $request, Application $application): RedirectResponse
     {
-        $this->authorizeView($application);
+        $user = auth()->user();
+
+        if (! $user->can('view', $application)) {
+            abort(403, 'Unauthorized access.');
+        }
 
         $data = $request->validate([
             'status' => ['required', 'in:district_verified,directorate_approved,disbursed,rejected'],
@@ -124,11 +185,10 @@ class ApplicationReviewController extends Controller
             'verification_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $user = auth()->user();
         $allowed = $this->allowedTransitions($user, $application);
 
         if (! in_array($data['status'], $allowed, true)) {
-            return back()->with('error', 'You are not allowed to set this status.');
+            return back()->with('error', 'You are not authorized to transition this application to the requested status.');
         }
 
         if (in_array($data['status'], ['directorate_approved', 'disbursed'], true)
@@ -167,62 +227,123 @@ class ApplicationReviewController extends Controller
                 'user_id' => $user->id,
                 'note' => $data['note'] ?? $data['rejection_reason'] ?? null,
             ]);
+
+            AccessAuditLog::log('application_status_updated', Application::class, (string) $application->id, [
+                'from' => $from,
+                'to' => $data['status'],
+                'note' => $data['note'] ?? $data['rejection_reason'] ?? null,
+            ]);
         });
 
         return back()->with('success', 'Application status updated to '.Application::STATUSES[$data['status']].'.');
     }
 
-    private function applyRoleScope($query, $user): void
-    {
-        if ($user->hasRole('District Officer')) {
-            $query->where('district_id', $user->district_id);
-        } elseif ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
-            if ($user->department_id) {
-                $query->whereHas('scheme', fn ($q) => $q->where('department_id', $user->department_id));
-            }
-        }
-    }
-
-    private function authorizeView(Application $application): void
+    public function assignFieldOfficer(Request $request, Application $application): RedirectResponse
     {
         $user = auth()->user();
 
-        if ($user->hasRole('District Officer') && $application->district_id !== $user->district_id) {
-            abort(403);
+        if (! $user->can('assignFieldOfficer', $application)) {
+            abort(403, 'Unauthorized to assign field officers for this application.');
         }
 
-        if ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
-            if ($user->department_id && $application->scheme->department_id !== $user->department_id) {
-                abort(403);
-            }
+        $data = $request->validate([
+            'assigned_to' => ['required', 'exists:users,id'],
+            'task_type' => ['required', 'in:land_verification,seed_distribution,technical_audit'],
+            'due_date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $fieldOfficer = User::findOrFail($data['assigned_to']);
+
+        if (! in_array($application->district_id, $fieldOfficer->authorizedDistrictIds(), true)) {
+            return back()->with('error', 'Selected Field Officer is not assigned to this district.');
         }
+
+        $assignment = ApplicationAssignment::create([
+            'application_id' => $application->id,
+            'assigned_to' => $fieldOfficer->id,
+            'assigned_by' => $user->id,
+            'task_type' => $data['task_type'],
+            'status' => ApplicationAssignment::STATUS_ASSIGNED,
+            'due_date' => $data['due_date'] ?? null,
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        AccessAuditLog::log('field_officer_assigned', Application::class, (string) $application->id, [
+            'assignment_id' => $assignment->id,
+            'assigned_to' => $fieldOfficer->name,
+            'task_type' => $data['task_type'],
+        ]);
+
+        return back()->with('success', "Task successfully delegated to Field Officer {$fieldOfficer->name}.");
+    }
+
+    public function submitTaskReport(Request $request, ApplicationAssignment $assignment): RedirectResponse
+    {
+        $user = auth()->user();
+
+        if ($assignment->assigned_to !== $user->id && ! $user->hasRole('Super Admin')) {
+            abort(403, 'You are not assigned to this task.');
+        }
+
+        $data = $request->validate([
+            'status' => ['required', 'in:in_progress,completed'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'land_verified_kanals' => ['nullable', 'numeric'],
+            'recommendation' => ['nullable', 'in:recommended,not_recommended,needs_further_audit'],
+        ]);
+
+        $assignment->status = $data['status'];
+        $assignment->notes = $data['notes'] ?? $assignment->notes;
+        $assignment->report_data = [
+            'land_verified_kanals' => $data['land_verified_kanals'] ?? null,
+            'recommendation' => $data['recommendation'] ?? null,
+            'submitted_at' => now()->toIso8601String(),
+            'ip' => $request->ip(),
+        ];
+
+        if ($data['status'] === 'completed') {
+            $assignment->completed_at = now();
+        }
+
+        $assignment->save();
+
+        AccessAuditLog::log('task_report_submitted', ApplicationAssignment::class, (string) $assignment->id, [
+            'status' => $data['status'],
+            'application_id' => $assignment->application_id,
+        ]);
+
+        return back()->with('success', 'Task report recorded successfully.');
     }
 
     private function allowedTransitions($user, Application $application): array
     {
+        // Technical Super Admin, Secretary, and Division Directors have ZERO default approval authority
+        if ($user->hasAnyRole(['Super Admin', 'Secretary', 'Division Director'])) {
+            return [];
+        }
+
+        $allowed = [];
         $status = $application->status;
 
-        if ($user->hasAnyRole(['Super Admin', 'Secretary'])) {
-            return match ($status) {
-                'pending' => ['district_verified', 'rejected'],
-                'district_verified' => ['directorate_approved', 'rejected'],
-                'directorate_approved' => ['disbursed', 'rejected'],
-                default => [],
-            };
+        // District Verification: District DD / District Officer
+        if ($status === 'pending' && $user->can('verifyDistrict', $application)) {
+            $allowed[] = 'district_verified';
+            $allowed[] = 'rejected';
         }
 
-        if ($user->hasRole('District Officer') && $status === 'pending') {
-            return ['district_verified', 'rejected'];
+        // Directorate Approval: District DD / Directorate
+        if ($status === 'district_verified' && $user->can('approveDirectorate', $application)) {
+            $allowed[] = 'directorate_approved';
+            $allowed[] = 'rejected';
         }
 
-        if ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
-            return match ($status) {
-                'district_verified' => ['directorate_approved', 'rejected'],
-                'directorate_approved' => ['disbursed', 'rejected'],
-                default => [],
-            };
+        // Disbursement: Delivery confirmation / Disbursed
+        if ($status === 'directorate_approved' && $user->can('disburse', $application)) {
+            $allowed[] = 'disbursed';
+            $allowed[] = 'rejected';
         }
 
-        return [];
+        return array_values(array_unique($allowed));
     }
 }

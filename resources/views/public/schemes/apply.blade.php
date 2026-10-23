@@ -107,17 +107,45 @@
                                                   @if($required) required @endif>{{ $old }}</textarea>
 
                                     @elseif($field->field_type === 'number')
-                                        <input type="number" step="any" id="field_{{ $name }}" name="{{ $name }}"
-                                               class="form-control @error($name) is-invalid @enderror"
-                                               value="{{ $old }}" placeholder="{{ $fieldPlaceholder }}"
+                                        @php
+                                            $isBagsField = in_array($name, ['bags_required', 'seed_bags_required'], true);
+                                        @endphp
+                                        <input type="number" 
+                                               step="{{ $isBagsField ? '1' : 'any' }}" 
+                                               @if($isBagsField) min="1" @endif
+                                               id="field_{{ $name }}" 
+                                               name="{{ $name }}"
+                                               class="form-control @error($name) is-invalid @enderror {{ $isBagsField ? 'js-seed-bags-input' : ($name === 'land_kanals' ? 'js-land-kanals-input' : '') }}"
+                                               value="{{ $old }}" 
+                                               placeholder="{{ $fieldPlaceholder }}"
                                                @if($required) required @endif>
+                                        @if($isBagsField)
+                                            <div id="bags_limit_feedback_{{ $name }}" class="small mt-1 text-muted js-bags-limit-feedback">
+                                                <i class="fa-solid fa-calculator text-primary me-1"></i>
+                                                <span class="js-bags-limit-text">
+                                                    {{ __('portal.bags_limit_help', ['max' => '...', 'rate' => 4]) }}
+                                                </span>
+                                            </div>
+                                            <div id="bags_dynamic_error_{{ $name }}" class="invalid-feedback d-none js-bags-dynamic-error"></div>
+                                        @endif
 
                                     @elseif($field->field_type === 'cnic')
-                                        <input type="text" id="field_{{ $name }}" name="{{ $name }}"
-                                               class="form-control js-cnic @error($name) is-invalid @enderror"
-                                               value="{{ $old }}" maxlength="15" inputmode="numeric"
-                                               placeholder="{{ $fieldPlaceholder ?: __('portal.cnic_hint') }}"
-                                               @if($required) required @endif>
+                                        <div class="input-group cnic-input-group">
+                                            <input type="text" id="field_{{ $name }}" name="{{ $name }}"
+                                                   class="form-control js-cnic @error($name) is-invalid @enderror"
+                                                   value="{{ $old }}" maxlength="15" inputmode="numeric"
+                                                   placeholder="{{ $fieldPlaceholder ?: __('portal.cnic_hint') }}"
+                                                   @if($required) required @endif
+                                                   autocomplete="off">
+                                            <button type="button" class="btn btn-outline-success js-verify-cnic-btn"
+                                                    id="btn_verify_{{ $name }}" data-target="field_{{ $name }}"
+                                                    data-status="cnic_verification_status_{{ $name }}"
+                                                    title="{{ __('portal.verify') }}">
+                                                <i class="fa-solid fa-shield-halved me-1"></i>
+                                                <span class="btn-text">{{ __('portal.verify') }}</span>
+                                            </button>
+                                        </div>
+                                        <div id="cnic_verification_status_{{ $name }}" class="cnic-status-box mt-2 d-none"></div>
                                         <div class="field-help-wrapper">
                                             <span class="form-text small mb-0">{{ __('portal.cnic_digits_hint') }}</span>
                                             <span dir="rtl" class="field-help-ur">13 ہندسے بغیر ڈیش کے لکھیں</span>
@@ -135,7 +163,7 @@
                                                 class="form-select js-cascading-district @error($name) is-invalid @enderror"
                                                 data-placeholder="{{ __('portal.select_district') }}"
                                                 @if($required) required @endif>
-                                            <option value="">{{ __('portal.select_district') }}</option>
+                                            <option value="" disabled {{ $old ? '' : 'selected' }} hidden>{{ __('portal.select_district') }}</option>
                                             @foreach($districts as $district)
                                                 <option value="{{ $district->id }}" @selected((string) $old === (string) $district->id)>
                                                     {{ $district->t("name") }}
@@ -151,7 +179,7 @@
                                                 data-empty-placeholder="{{ __('portal.select_district_first') }}"
                                                 @if($required) required @endif
                                                 disabled>
-                                            <option value="">{{ __('portal.select_district_first') }}</option>
+                                            <option value="" disabled {{ $old ? '' : 'selected' }} hidden>{{ __('portal.select_district_first') }}</option>
                                         </select>
 
                                     @elseif($field->field_type === 'union_council' || $name === 'union_council')
@@ -163,16 +191,17 @@
                                                 data-no-uc-msg="{{ __('portal.no_union_councils') }}"
                                                 @if($required) required @endif
                                                 disabled>
-                                            <option value="">{{ __('portal.select_tehsil_first') }}</option>
+                                            <option value="" disabled {{ $old ? '' : 'selected' }} hidden>{{ __('portal.select_tehsil_first') }}</option>
                                         </select>
                                         <div id="ucHelpText" class="form-text small mt-1 d-none"></div>
 
                                     @elseif($field->field_type === 'select')
                                         <select id="field_{{ $name }}" name="{{ $name }}"
-                                                class="form-select @error($name) is-invalid @enderror"
+                                                class="form-select js-custom-select @error($name) is-invalid @enderror"
+                                                data-placeholder="{{ $fieldPlaceholder ?: __('portal.select') }}"
                                                 @if($required) required @endif>
-                                            <option value="">{{ __('portal.select') }}</option>
-                                            @foreach($options as $option)
+                                            <option value="" disabled {{ $old ? '' : 'selected' }} hidden>{{ $fieldPlaceholder ?: __('portal.select') }}</option>
+                                            @foreach(collect($options)->sort(fn($a,$b) => class_exists(\Collator::class) ? (new \Collator(app()->getLocale() === 'ur' ? 'ur_PK' : 'en_US'))->compare((string)$a, (string)$b) : strnatcasecmp((string)$a, (string)$b))->values() as $option)
                                                 <option value="{{ $option }}" @selected($old === $option)>{{ $option }}</option>
                                             @endforeach
                                         </select>
@@ -519,6 +548,112 @@
     font-size: 0.85rem;
     margin-top: 6px;
 }
+.cnic-status-box {
+    border-radius: 8px;
+    font-size: 0.88rem;
+    transition: all 0.25s ease-in-out;
+}
+/* CNIC Input & Verify Button exact height, alignment, and border matching */
+.cnic-input-group {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    margin-bottom: 0 !important;
+    position: relative !important;
+}
+
+/* Override theme style.css margin-bottom: 30px (line 11641) and lock exact 48px height */
+.cnic-input-group > .form-control.js-cnic {
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    margin-bottom: 0 !important;
+    padding: 10px 16px !important;
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
+    box-sizing: border-box !important;
+    flex: 1 1 auto !important;
+    width: 1% !important;
+    background-color: #ffffff !important;
+}
+
+.cnic-input-group > .js-verify-cnic-btn {
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    margin: 0 !important;
+    padding: 0 1.25rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    z-index: 2 !important;
+    transition: all 0.2s ease-in-out !important;
+    line-height: 1 !important;
+}
+
+/* Default / Unverified button styling */
+.cnic-input-group > .js-verify-cnic-btn.btn-outline-success {
+    color: #276722 !important;
+    border-color: #276722 !important;
+    background-color: #f7faf4 !important;
+}
+.cnic-input-group > .js-verify-cnic-btn.btn-outline-success:hover,
+.cnic-input-group > .js-verify-cnic-btn.btn-outline-success:focus {
+    color: #ffffff !important;
+    background-color: #276722 !important;
+    border-color: #276722 !important;
+}
+
+/* Verified state styling */
+.cnic-input-group > .js-verify-cnic-btn.btn-success {
+    color: #ffffff !important;
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+}
+
+/* Seamless corners for LTR (English) */
+html:not([dir="rtl"]) .cnic-input-group > .form-control.js-cnic,
+body:not(.locale-ur) .cnic-input-group > .form-control.js-cnic {
+    border-top-left-radius: 4px !important;
+    border-bottom-left-radius: 4px !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+html:not([dir="rtl"]) .cnic-input-group > .js-verify-cnic-btn,
+body:not(.locale-ur) .cnic-input-group > .js-verify-cnic-btn {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-top-right-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+    margin-left: -1px !important;
+}
+
+/* Seamless corners for RTL (Urdu) */
+html[dir="rtl"] .cnic-input-group > .form-control.js-cnic,
+body.locale-ur .cnic-input-group > .form-control.js-cnic {
+    border-top-right-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
+html[dir="rtl"] .cnic-input-group > .js-verify-cnic-btn,
+body.locale-ur .cnic-input-group > .js-verify-cnic-btn {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 4px !important;
+    border-bottom-left-radius: 4px !important;
+    margin-right: -1px !important;
+    margin-left: 0 !important;
+    font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', Tahoma, sans-serif !important;
+}
 </style>
 @endpush
 
@@ -527,6 +662,7 @@
 <script>
 (function () {
     var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var urlCnicVerify = @json(route('cnic.verify'));
     var i18n = {!! json_encode([
         'cnic_must_13' => __('portal.cnic_must_13'),
         'submission_failed' => __('portal.submission_failed'),
@@ -539,17 +675,172 @@
         'loading_union_councils' => __('portal.loading_union_councils'),
         'no_union_councils' => __('portal.no_union_councils'),
         'no_results_found' => __('portal.no_results_found'),
+        'verify' => __('portal.verify'),
+        'verifying' => __('portal.verifying'),
+        'verified' => __('portal.verified'),
+        'cnic_verified' => __('portal.cnic_verified'),
+        'cnic_verifying' => __('portal.cnic_verifying'),
+        'cnic_not_found' => __('portal.cnic_not_found'),
+        'cnic_must_verify' => __('portal.cnic_must_verify'),
+        'cnic_service_unavailable' => __('portal.cnic_service_unavailable'),
+        'cnic_verified_badge' => __('portal.cnic_verified_badge'),
+        'manual_entry' => __('portal.manual_entry'),
+        'auto_filled_hint' => __('portal.auto_filled_hint'),
     ], JSON_UNESCAPED_UNICODE) !!};
+
 
     function digitsOnly(value, max) {
         return String(value || '').replace(/\D/g, '').slice(0, max || 99);
     }
 
-    // CNIC auto-format: keep 13 digits only
-    document.querySelectorAll('.js-cnic').forEach(function (input) {
-        input.addEventListener('input', function () {
-            this.value = digitsOnly(this.value, 13);
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // CNIC verification logic
+    var lastVerifiedCnic = null;
+    var cnicDebounceTimer = null;
+
+    function resetCnicState(inputEl, btnEl, statusEl) {
+        lastVerifiedCnic = null;
+        if (inputEl) {
+            inputEl.classList.remove('is-valid', 'is-invalid');
+        }
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.className = 'btn btn-outline-success js-verify-cnic-btn';
+            btnEl.innerHTML = '<i class="fa-solid fa-shield-halved me-1"></i> <span class="btn-text">' + i18n.verify + '</span>';
+        }
+        if (statusEl) {
+            statusEl.classList.add('d-none');
+            statusEl.innerHTML = '';
+        }
+    }
+
+    function verifyCnic(inputEl, btnEl, statusEl) {
+        if (!inputEl) return;
+        var rawVal = digitsOnly(inputEl.value, 13);
+        if (rawVal.length !== 13) {
+            if (statusEl) {
+                statusEl.className = 'cnic-status-box alert alert-warning py-2 px-3 small mt-2 d-flex align-items-center gap-2 mb-1';
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-warning"></i> <span>' + i18n.cnic_must_13 + '</span>';
+                statusEl.classList.remove('d-none');
+            }
+            return;
+        }
+
+        if (lastVerifiedCnic === rawVal && inputEl.classList.contains('is-valid')) {
+            return;
+        }
+
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> <span class="btn-text">' + i18n.verify + '</span>';
+        }
+
+        if (statusEl) {
+            statusEl.className = 'cnic-status-box alert alert-info py-2 px-3 small mt-2 d-flex align-items-center gap-2 mb-1';
+            statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-primary"></i> <span>' + i18n.cnic_verifying + '</span>';
+            statusEl.classList.remove('d-none');
+        }
+
+        fetch(urlCnicVerify, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ cnic: rawVal })
+        })
+        .then(function (res) {
+            return res.json().then(function (data) {
+                return { status: res.status, data: data };
+            });
+        })
+        .then(function (result) {
+            if (btnEl) btnEl.disabled = false;
+            var data = result.data || {};
+
+            if (result.status === 200 && (data.success === true || (data.data && typeof data.data === 'object'))) {
+                lastVerifiedCnic = rawVal;
+                inputEl.classList.remove('is-invalid');
+                inputEl.classList.add('is-valid');
+
+                if (btnEl) {
+                    btnEl.className = 'btn btn-success js-verify-cnic-btn';
+                    btnEl.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> <span class="btn-text">' + i18n.verified + '</span>';
+                }
+
+                if (statusEl) {
+                    statusEl.className = 'cnic-status-box alert alert-success py-2 px-3 small mt-2 mb-1';
+                    statusEl.innerHTML = '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">' +
+                        '<span><i class="fa-solid fa-circle-check text-success me-1"></i> <strong>' + i18n.cnic_verified + '</strong></span>' +
+                        '<span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="fa-solid fa-shield-check me-1"></i>' + i18n.cnic_verified_badge + '</span>' +
+                        '</div>';
+                    statusEl.classList.remove('d-none');
+                }
+            } else {
+                lastVerifiedCnic = null;
+                inputEl.classList.remove('is-valid');
+                inputEl.classList.add('is-invalid');
+                if (btnEl) {
+                    btnEl.className = 'btn btn-outline-success js-verify-cnic-btn';
+                    btnEl.innerHTML = '<i class="fa-solid fa-shield-halved me-1"></i> <span class="btn-text">' + i18n.verify + '</span>';
+                }
+                var errMsg = data.message || i18n.cnic_not_found;
+                if (statusEl) {
+                    statusEl.className = 'cnic-status-box alert alert-danger py-2 px-3 small mt-2 d-flex align-items-center gap-2 mb-1';
+                    statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation text-danger fs-5"></i> <span>' + escapeHtml(errMsg) + '</span>';
+                    statusEl.classList.remove('d-none');
+                }
+            }
+
+        })
+        .catch(function (err) {
+            console.error('CNIC verification error', err);
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.className = 'btn btn-outline-success js-verify-cnic-btn';
+                btnEl.innerHTML = '<i class="fa-solid fa-shield-halved me-1"></i> <span class="btn-text">' + i18n.verify + '</span>';
+            }
+            if (statusEl) {
+                statusEl.className = 'cnic-status-box alert alert-warning py-2 px-3 small mt-2 d-flex align-items-center gap-2 mb-1';
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-warning"></i> <span>' + i18n.cnic_service_unavailable + '</span>';
+                statusEl.classList.remove('d-none');
+            }
         });
+    }
+
+    // Attach CNIC input & button handlers
+    document.querySelectorAll('.js-cnic').forEach(function (input) {
+        var parentCol = input.closest('.col-12, .col-md-6') || input.parentElement;
+        var btn = parentCol.querySelector('.js-verify-cnic-btn');
+        var statusBox = parentCol.querySelector('.cnic-status-box');
+
+        input.addEventListener('input', function () {
+            var oldVal = this.value;
+            this.value = digitsOnly(this.value, 13);
+            if (this.value !== lastVerifiedCnic) {
+                resetCnicState(this, btn, statusBox);
+            }
+            clearTimeout(cnicDebounceTimer);
+            if (this.value.length === 13) {
+                cnicDebounceTimer = setTimeout(function () {
+                    verifyCnic(input, btn, statusBox);
+                }, 400);
+            }
+        });
+
+        if (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                verifyCnic(input, btn, statusBox);
+            });
+        }
     });
 
     // Phone auto-format: keep 15 digits only
@@ -630,10 +921,31 @@
         e.preventDefault();
 
         var cnicEl = form.querySelector('.js-cnic');
-        if (cnicEl && digitsOnly(cnicEl.value, 13).length !== 13) {
-            formError.classList.remove('d-none');
-            formError.textContent = i18n.cnic_must_13;
-            return;
+        if (cnicEl) {
+            var rawCnic = digitsOnly(cnicEl.value, 13);
+            if (rawCnic.length !== 13) {
+                formError.classList.remove('d-none');
+                formError.textContent = i18n.cnic_must_13;
+                cnicEl.focus();
+                return;
+            }
+            if (rawCnic !== lastVerifiedCnic || !cnicEl.classList.contains('is-valid')) {
+                formError.classList.remove('d-none');
+                var notFoundMsg = i18n.cnic_not_found || i18n.cnic_must_verify;
+                formError.textContent = notFoundMsg;
+                cnicEl.classList.remove('is-valid');
+                cnicEl.classList.add('is-invalid');
+                cnicEl.focus();
+
+                var parentCol = cnicEl.closest('.col-12, .col-md-6') || cnicEl.parentElement;
+                var statusBox = parentCol ? parentCol.querySelector('.cnic-status-box') : null;
+                if (statusBox) {
+                    statusBox.className = 'cnic-status-box alert alert-danger py-2 px-3 small mt-2 d-flex align-items-center gap-2 mb-1';
+                    statusBox.innerHTML = '<i class="fa-solid fa-circle-exclamation text-danger fs-5"></i> <span>' + escapeHtml(notFoundMsg) + '</span>';
+                    statusBox.classList.remove('d-none');
+                }
+                return;
+            }
         }
 
         formError.classList.add('d-none');
@@ -702,9 +1014,9 @@
 
         var tomCommonConfig = {
             create: false,
-            allowEmptyOption: true,
+            allowEmptyOption: false,
             maxItems: 1,
-            sortField: { field: 'text', direction: 'asc' },
+            sortField: { field: '$order', direction: 'asc' },
             render: {
                 no_results: function (data, escape) {
                     return '<div class="no-results">' + escape(i18n.no_results_found) + '</div>';
@@ -717,16 +1029,36 @@
                 districtTom = new TomSelect(districtSelect, Object.assign({}, tomCommonConfig, {
                     placeholder: districtSelect.getAttribute('data-placeholder') || i18n.select_district
                 }));
+                if (districtTom && districtTom.options['']) {
+                    districtTom.removeOption('');
+                }
 
                 tehsilTom = new TomSelect(tehsilSelect, Object.assign({}, tomCommonConfig, {
                     placeholder: tehsilSelect.getAttribute('data-empty-placeholder') || i18n.select_district_first
                 }));
+                if (tehsilTom && tehsilTom.options['']) {
+                    tehsilTom.removeOption('');
+                }
 
                 if (ucSelect) {
                     ucTom = new TomSelect(ucSelect, Object.assign({}, tomCommonConfig, {
                         placeholder: ucSelect.getAttribute('data-empty-placeholder') || i18n.select_tehsil_first
                     }));
+                    if (ucTom && ucTom.options['']) {
+                        ucTom.removeOption('');
+                    }
                 }
+
+                document.querySelectorAll('.js-custom-select').forEach(function (sel) {
+                    try {
+                        var customTom = new TomSelect(sel, Object.assign({}, tomCommonConfig, {
+                            placeholder: sel.getAttribute('data-placeholder') || i18n.select
+                        }));
+                        if (customTom && customTom.options['']) {
+                            customTom.removeOption('');
+                        }
+                    } catch (err) {}
+                });
             } catch (e) {
                 console.warn('TomSelect init error, falling back to native selects', e);
             }
@@ -750,7 +1082,7 @@
                 tomInstance.disable();
                 if (placeholderText) setPlaceholder(tomInstance, nativeEl, placeholderText);
             } else if (nativeEl) {
-                nativeEl.innerHTML = '<option value="">' + (placeholderText || '') + '</option>';
+                nativeEl.innerHTML = '<option value="" disabled selected hidden>' + (placeholderText || '') + '</option>';
                 nativeEl.value = '';
                 nativeEl.disabled = true;
             }
@@ -809,20 +1141,21 @@
             .then(function (r) { return r.json(); })
             .then(function (tehsils) {
                 currentTehsils = tehsils || [];
+                var currentLang = document.documentElement.getAttribute('lang') || (document.documentElement.getAttribute('dir') === 'rtl' ? 'ur' : 'en');
                 currentTehsils.sort(function (a, b) {
-                    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+                    return a.name.localeCompare(b.name, currentLang, { sensitivity: 'base', numeric: true });
                 });
 
                 if (tehsilTom) {
                     tehsilTom.clear();
                     tehsilTom.clearOptions();
-                    tehsilTom.addOption({ value: '', text: i18n.select_tehsil });
                     currentTehsils.forEach(function (t) {
                         tehsilTom.addOption({ value: t.name, text: t.name, id: t.id });
                     });
+                    setPlaceholder(tehsilTom, tehsilSelect, i18n.select_tehsil);
                     enableControl(tehsilTom, tehsilSelect, i18n.select_tehsil);
                 } else {
-                    tehsilSelect.innerHTML = '<option value="">' + i18n.select_tehsil + '</option>';
+                    tehsilSelect.innerHTML = '<option value="" disabled selected hidden>' + i18n.select_tehsil + '</option>';
                     currentTehsils.forEach(function (t) {
                         var opt = document.createElement('option');
                         opt.value = t.name;
@@ -878,20 +1211,21 @@
                     return;
                 }
 
+                var currentLang = document.documentElement.getAttribute('lang') || (document.documentElement.getAttribute('dir') === 'rtl' ? 'ur' : 'en');
                 ucs.sort(function (a, b) {
-                    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+                    return a.name.localeCompare(b.name, currentLang, { sensitivity: 'base', numeric: true });
                 });
 
                 if (ucTom) {
                     ucTom.clear();
                     ucTom.clearOptions();
-                    ucTom.addOption({ value: '', text: i18n.select_union_council });
                     ucs.forEach(function (u) {
                         ucTom.addOption({ value: u.name, text: u.name, id: u.id });
                     });
+                    setPlaceholder(ucTom, ucSelect, i18n.select_union_council);
                     enableControl(ucTom, ucSelect, i18n.select_union_council);
                 } else {
-                    ucSelect.innerHTML = '<option value="">' + i18n.select_union_council + '</option>';
+                    ucSelect.innerHTML = '<option value="" disabled selected hidden>' + i18n.select_union_council + '</option>';
                     ucs.forEach(function (u) {
                         var opt = document.createElement('option');
                         opt.value = u.name;
@@ -1007,6 +1341,119 @@
         });
         updateState();
     });
+
+    // Dynamic Seed Bags Requirement Limitation (1 bag per 4 kanals of available land)
+    (function initSeedBagsLimitation() {
+        var landInput = document.getElementById('field_land_kanals') || document.querySelector('.js-land-kanals-input');
+        var bagsInput = document.getElementById('field_bags_required') || document.querySelector('.js-seed-bags-input') || document.querySelector('input[name="bags_required"]');
+
+        if (!landInput || !bagsInput) return;
+
+        var kanalsPerBag = 4;
+        var feedbackText = document.querySelector('.js-bags-limit-text');
+        var errorBox = document.querySelector('.js-bags-dynamic-error');
+
+        function recalculateBagsLimit() {
+            var land = parseFloat(landInput.value);
+            var bagsVal = bagsInput.value.trim();
+            var bags = parseFloat(bagsVal);
+
+            if (isNaN(land) || land <= 0) {
+                bagsInput.removeAttribute('max');
+                if (feedbackText) {
+                    feedbackText.innerHTML = '<span class="text-muted"><i class="fa-solid fa-circle-info text-secondary me-1"></i>Please enter <strong>Available Land (Kanals)</strong> first to calculate maximum allowable bags (1 bag per 4 kanals).</span>';
+                }
+                if (bagsVal !== '' && !isNaN(bags) && bags > 0) {
+                    bagsInput.classList.add('is-invalid');
+                    if (errorBox) {
+                        errorBox.textContent = 'Please enter valid Available Land (Kanals) first. Bags are limited to 1 bag per 4 kanals.';
+                        errorBox.classList.remove('d-none');
+                    }
+                } else {
+                    bagsInput.classList.remove('is-invalid');
+                    if (errorBox) errorBox.classList.add('d-none');
+                }
+                return;
+            }
+
+            var maxBags = Math.floor(land / kanalsPerBag);
+            bagsInput.max = maxBags;
+
+            if (feedbackText) {
+                if (maxBags > 0) {
+                    feedbackText.innerHTML = '<span class="text-success fw-semibold"><i class="fa-solid fa-check-circle me-1"></i>Maximum allowed: <strong>' + maxBags + ' bag(s)</strong> (based on ' + land + ' kanals: 1 bag per 4 kanals).</span>';
+                } else {
+                    feedbackText.innerHTML = '<span class="text-warning fw-semibold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Available land is less than 4 kanals. Minimum 4 kanals required for 1 standard 50kg bag.</span>';
+                }
+            }
+
+            if (bagsVal !== '' && !isNaN(bags)) {
+                if (bags > maxBags) {
+                    bagsInput.classList.add('is-invalid');
+                    if (errorBox) {
+                        errorBox.textContent = 'The requested ' + bags + ' bag(s) exceeds the maximum limit of ' + maxBags + ' bag(s) for ' + land + ' kanals (1 bag per 4 kanals).';
+                        errorBox.classList.remove('d-none');
+                    }
+                } else if (bags < 1) {
+                    bagsInput.classList.add('is-invalid');
+                    if (errorBox) {
+                        errorBox.textContent = 'Number of bags must be at least 1.';
+                        errorBox.classList.remove('d-none');
+                    }
+                } else {
+                    bagsInput.classList.remove('is-invalid');
+                    if (errorBox) {
+                        errorBox.classList.add('d-none');
+                        errorBox.textContent = '';
+                    }
+                }
+            } else {
+                bagsInput.classList.remove('is-invalid');
+                if (errorBox) {
+                    errorBox.classList.add('d-none');
+                    errorBox.textContent = '';
+                }
+            }
+        }
+
+        landInput.addEventListener('input', recalculateBagsLimit);
+        landInput.addEventListener('change', recalculateBagsLimit);
+        bagsInput.addEventListener('input', recalculateBagsLimit);
+        bagsInput.addEventListener('change', recalculateBagsLimit);
+
+        // Run once on load to sync prefilled or old values
+        recalculateBagsLimit();
+
+        // Intercept form submission if bags exceed max
+        var form = document.getElementById('applyForm');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                var land = parseFloat(landInput.value);
+                var bags = parseFloat(bagsInput.value);
+                var maxBags = !isNaN(land) && land > 0 ? Math.floor(land / kanalsPerBag) : 0;
+
+                if (isNaN(land) || land <= 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    landInput.classList.add('is-invalid');
+                    landInput.focus();
+                    return false;
+                }
+
+                if (!isNaN(bags) && bags > maxBags) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    bagsInput.classList.add('is-invalid');
+                    if (errorBox) {
+                        errorBox.textContent = 'The requested ' + bags + ' bag(s) exceeds the maximum limit of ' + maxBags + ' bag(s) for ' + land + ' kanals (1 bag per 4 kanals).';
+                        errorBox.classList.remove('d-none');
+                    }
+                    bagsInput.focus();
+                    return false;
+                }
+            });
+        }
+    })();
 })();
 </script>
 @endpush

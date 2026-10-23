@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    'survey_external' => [
+        'base_url' => env('SURVEY_EXTERNAL_BASE_URL', ''),
+        'username' => env('SURVEY_EXTERNAL_USERNAME', ''),
+        'password' => env('SURVEY_EXTERNAL_PASSWORD', ''),
+        'auth_path' => env('SURVEY_EXTERNAL_AUTH_PATH', 'auth/login'),
+        'lookup_path' => env('SURVEY_EXTERNAL_LOOKUP_PATH', 'solar/member/lookup'),
+    ],
+
+    'power_dept_reference_api' => [
+        'base_url' => env('POWER_DEPT_BASE_URL', ''),
+        'username' => env('POWER_DEPT_USERNAME', ''),
+        'password' => env('POWER_DEPT_PASSWORD', ''),
+    ],
+
 ];
+

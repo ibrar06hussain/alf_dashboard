@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\SchemeInterestController;
 use App\Http\Controllers\Admin\SiteMediaController;
 use App\Http\Controllers\Admin\SiteInfoController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WheatSeedMisController;
 use App\Http\Controllers\Public\ApplicationController;
 use App\Http\Controllers\Public\DepartmentController;
 use App\Http\Controllers\Public\HomeController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Public\LocaleController;
 use App\Http\Controllers\Public\LocationController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SchemeController;
+use App\Http\Controllers\Web\CnicVerificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -46,6 +48,11 @@ Route::post('/otp/send', [ApplicationController::class, 'sendOtp'])
 Route::post('/otp/verify', [ApplicationController::class, 'verifyOtp'])
     ->middleware('throttle:10,1')
     ->name('otp.verify');
+
+Route::post('/cnic/verify', [CnicVerificationController::class, 'verify'])
+    ->middleware('throttle:30,1')
+    ->name('cnic.verify');
+Route::post('/api/cnic/verify', [CnicVerificationController::class, 'verify']);
 
 Route::get('/applications/success/{application_no}', [ApplicationController::class, 'success'])->name('applications.success');
 Route::match(['get', 'post'], '/track', [ApplicationController::class, 'track'])->name('applications.track');
@@ -104,13 +111,24 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('applications/export', [ApplicationReviewController::class, 'export'])->name('applications.export');
         Route::get('applications/{application}', [ApplicationReviewController::class, 'show'])->name('applications.show');
         Route::post('applications/{application}/status', [ApplicationReviewController::class, 'updateStatus'])->name('applications.status');
+        Route::post('applications/{application}/assign-field-officer', [ApplicationReviewController::class, 'assignFieldOfficer'])->name('applications.assign-field-officer');
+        Route::post('applications/assignments/{assignment}/report', [ApplicationReviewController::class, 'submitTaskReport'])->name('applications.assignments.report');
         Route::get('applications/{application}/documents/{document}/download', [ApplicationDocumentController::class, 'download'])
             ->name('applications.documents.download');
 
         Route::get('interests', [SchemeInterestController::class, 'index'])->name('interests.index');
 
+        // Dedicated Scheme MIS: Distribution of Wheat Seed (Cost Sharing 50:50)
+        Route::middleware('role:Super Admin|Secretary|Director Agriculture|District Officer|District Deputy Director|Division Director')->group(function () {
+            Route::get('schemes/wheat-mis', [WheatSeedMisController::class, 'index'])->name('wheat-mis.index');
+            Route::get('schemes/wheat-mis/analytics', [WheatSeedMisController::class, 'analytics'])->name('wheat-mis.analytics');
+            Route::get('schemes/wheat-mis/beneficiaries', [WheatSeedMisController::class, 'beneficiaries'])->name('wheat-mis.beneficiaries');
+            Route::get('schemes/wheat-mis/export', [WheatSeedMisController::class, 'export'])->name('wheat-mis.export');
+            Route::post('schemes/wheat-mis/rate', [WheatSeedMisController::class, 'updateRate'])->name('wheat-mis.rate');
+        });
+
         // Directors + executives can manage schemes/forms/stats + CM analytics
-        Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries')->group(function () {
+        Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|Division Director')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
             Route::get('forms', [FormBuilderController::class, 'index'])->name('form-builder.index');
             Route::get('application-forms', [FormBuilderController::class, 'index'])->name('application-forms.index');
@@ -148,6 +166,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('users', [UserController::class, 'store'])->name('users.store');
             Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
             Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+            Route::get('users/{user}/assignments', [UserController::class, 'assignments'])->name('users.assignments');
+            Route::post('users/{user}/assignments', [UserController::class, 'storeAssignment'])->name('users.assignments.store');
+            Route::delete('users/assignments/{assignment}', [UserController::class, 'destroyAssignment'])->name('users.assignments.destroy');
+
+            Route::get('roles-matrix', [UserController::class, 'rolesMatrix'])->name('roles.matrix');
+            Route::get('audit-logs', [UserController::class, 'auditLogs'])->name('audit-logs.index');
         });
     });
 });

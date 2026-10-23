@@ -345,13 +345,17 @@
     var currentIdxEl = document.getElementById('alfPopupCurrentIdx');
     var triggerBtn = document.getElementById('alfFloatingSchemesTrigger');
     var dismissCheck = document.getElementById('alfDismissPopupCheck');
+    var popupTriggered = false;
 
     function getModalInstance() {
         if (!modal) {
-            modal = new bootstrap.Modal(modalEl, {
-                backdrop: true,
-                keyboard: true
-            });
+            var bs = window.bootstrap || (typeof bootstrap !== 'undefined' ? bootstrap : null);
+            if (bs && bs.Modal) {
+                modal = bs.Modal.getOrCreateInstance(modalEl, {
+                    backdrop: true,
+                    keyboard: true
+                });
+            }
         }
         return modal;
     }
@@ -365,18 +369,20 @@
         var swiperContainer = document.getElementById('alfPopupSwiper');
         if (!swiperContainer) return;
 
-        var isUrdu = document.documentElement.getAttribute('dir') === 'rtl';
+        var slideEls = swiperContainer.querySelectorAll('.swiper-slide');
+        var slideCount = slideEls ? slideEls.length : 0;
+        var canLoop = slideCount > 1;
 
         swiperInstance = new Swiper('#alfPopupSwiper', {
             slidesPerView: 1,
             spaceBetween: 0,
-            loop: true,
+            loop: canLoop,
             speed: 600,
-            autoplay: {
+            autoplay: canLoop ? {
                 delay: 5500,
                 disableOnInteraction: false,
                 pauseOnMouseEnter: true
-            },
+            } : false,
             pagination: {
                 el: '.alf-popup-pagination',
                 clickable: true
@@ -399,7 +405,7 @@
         initPopupSwiper();
         if (swiperInstance) {
             swiperInstance.update();
-            if (swiperInstance.autoplay) {
+            if (swiperInstance.autoplay && swiperInstance.params.autoplay && swiperInstance.params.autoplay.enabled) {
                 swiperInstance.autoplay.start();
             }
         }
@@ -409,12 +415,12 @@
         if (swiperInstance && swiperInstance.autoplay) {
             swiperInstance.autoplay.stop();
         }
-        // Remember that user has closed the popup in this session
-        sessionStorage.setItem('alf_schemes_popup_seen', '1');
 
         // If user explicitly checked "Don't show again"
         if (dismissCheck && dismissCheck.checked) {
-            localStorage.setItem('alf_schemes_popup_dismiss_forever', '1');
+            try {
+                localStorage.setItem('alf_schemes_popup_dismiss_forever', '1');
+            } catch (e) {}
         }
     });
 
@@ -422,39 +428,74 @@
     if (triggerBtn) {
         triggerBtn.addEventListener('click', function (e) {
             e.preventDefault();
-            getModalInstance().show();
+            var inst = getModalInstance();
+            if (inst) inst.show();
         });
     }
 
     // Determine whether to automatically display the modal on initial page load
     function shouldShowPopup() {
-        // Allow URL override (?popup=1 or #schemes-popup) for easy testing
         var urlParams = new URLSearchParams(window.location.search);
+        // Force show with ?popup=1 or #schemes-popup, and clear dismissal if explicitly requested
         if (urlParams.has('popup') || window.location.hash === '#schemes-popup') {
+            try {
+                localStorage.removeItem('alf_schemes_popup_dismiss_forever');
+                sessionStorage.removeItem('alf_schemes_popup_seen');
+            } catch (e) {}
             return true;
         }
 
-        // If user chose "Don't show again" across visits
-        if (localStorage.getItem('alf_schemes_popup_dismiss_forever') === '1') {
-            return false;
-        }
-
-        // If already seen/closed during this browsing session
-        if (sessionStorage.getItem('alf_schemes_popup_seen') === '1') {
-            return false;
-        }
+        // If user explicitly checked "Don't show again" across visits
+        try {
+            if (localStorage.getItem('alf_schemes_popup_dismiss_forever') === '1') {
+                return false;
+            }
+        } catch (e) {}
 
         return true;
     }
 
-    if (shouldShowPopup()) {
-        // Wait 700ms after load so preloader transitions smoothly before popup
-        window.addEventListener('load', function () {
-            setTimeout(function () {
-                getModalInstance().show();
-            }, 750);
-        });
+    function triggerPopupNow() {
+        if (popupTriggered) return;
+        popupTriggered = true;
+
+        setTimeout(function () {
+            try {
+                var inst = getModalInstance();
+                if (inst) {
+                    inst.show();
+                }
+            } catch (err) {
+                console.warn('[ALF Schemes Modal] Error opening modal:', err);
+            }
+        }, 750);
     }
+
+    if (shouldShowPopup()) {
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            triggerPopupNow();
+        } else {
+            window.addEventListener('load', triggerPopupNow);
+            document.addEventListener('DOMContentLoaded', function () {
+                // Safety fallback: if window.load is slow or hung by external assets
+                setTimeout(triggerPopupNow, 1200);
+            });
+        }
+    }
+
+    // Dev/Admin debug helpers on window
+    window.showSchemesPopup = function () {
+        var inst = getModalInstance();
+        if (inst) inst.show();
+    };
+    window.resetSchemesPopup = function () {
+        try {
+            localStorage.removeItem('alf_schemes_popup_dismiss_forever');
+            sessionStorage.removeItem('alf_schemes_popup_seen');
+        } catch (e) {}
+        var inst = getModalInstance();
+        if (inst) inst.show();
+    };
 })();
 </script>
 @endpush

@@ -10,8 +10,10 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping
 {
-    public function __construct(private Collection $applications)
-    {
+    public function __construct(
+        private Collection $applications,
+        private bool $masked = false
+    ) {
     }
 
     public function collection(): Collection
@@ -40,11 +42,24 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
 
     public function map($application): array
     {
+        $cnic = $application->applicant?->cnic;
+        $phone = $application->applicant?->phone;
+
+        if ($this->masked) {
+            if ($cnic && strlen($cnic) >= 13) {
+                $raw = str_replace('-', '', $cnic);
+                $cnic = substr($raw, 0, 5).'-******-'.substr($raw, -1);
+            }
+            if ($phone && strlen($phone) >= 10) {
+                $phone = substr($phone, 0, 4).'***'.substr($phone, -4);
+            }
+        }
+
         return [
             $application->application_no,
             $application->applicant?->full_name,
-            $application->applicant?->cnic,
-            $application->applicant?->phone,
+            $cnic,
+            $phone,
             $application->district?->name,
             $application->applicant?->tehsil,
             $application->applicant?->union_council,

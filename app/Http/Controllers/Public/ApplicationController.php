@@ -47,8 +47,17 @@ class ApplicationController extends Controller
 
         $form = $scheme->publishedForm;
         $districts = $scheme->scope === 'district' && $scheme->districts->isNotEmpty()
-            ? $scheme->districts->sortBy('name')->values()
-            : District::where('is_active', true)->orderBy('name')->get();
+            ? $scheme->districts
+            : District::where('is_active', true)->get();
+
+        if (class_exists(\Collator::class)) {
+            $collator = new \Collator(app()->getLocale() === 'ur' ? 'ur_PK' : 'en_US');
+            $districts = $districts->sort(function ($a, $b) use ($collator) {
+                return $collator->compare((string) $a->t('name'), (string) $b->t('name'));
+            })->values();
+        } else {
+            $districts = $districts->sortBy(fn ($d) => $d->t('name'), SORT_NATURAL | SORT_FLAG_CASE)->values();
+        }
 
         $phoneVerified = session('phone_verified');
 
@@ -172,7 +181,64 @@ class ApplicationController extends Controller
                 }
             }
         }
+
+        // 50:50 Cost-Sharing Scheme Formula: 1 bag (50kg) per 4 kanals of available land
+        $hasBagsField = $form->fields->contains(fn ($f) => in_array($f->field_key, ['bags_required', 'seed_bags_required'], true));
+        $isWheatCostSharing = $scheme->id === \App\Services\WheatSeedMisService::SCHEME_ID
+            || $scheme->slug === 'distribution-of-wheat-seed-cost-sharing'
+            || str_contains(strtolower($scheme->title), 'wheat');
+
+        if (($hasBagsField || $isWheatCostSharing) && ($request->has('bags_required') || $request->has('seed_bags_required'))) {
+            $bagsKey = $request->has('bags_required') ? 'bags_required' : 'seed_bags_required';
+            $landVal = $request->input('land_kanals');
+            $kanalsPerBag = (float) (\App\Models\SiteSetting::getValue('wheat_seed_kanals_per_bag') ?: 4);
+
+            $rules[$bagsKey] = [
+                'required',
+                'numeric',
+                'min:1',
+                function ($attribute, $value, $fail) use ($landVal, $kanalsPerBag) {
+                    if ($landVal === null || $landVal === '' || !is_numeric($landVal) || (float)$landVal <= 0) {
+                        $fail(__('portal.enter_land_first'));
+                        return;
+                    }
+
+                    $land = (float) $landVal;
+                    $maxBags = (int) floor($land / $kanalsPerBag);
+
+                    if ((float) $value > $maxBags) {
+                        $fail(__('portal.bags_limit_exceeded', [
+                            'bags' => $value,
+                            'max' => $maxBags,
+                            'kanals' => $land,
+                            'rate' => $kanalsPerBag,
+                        ]));
+                    }
+                },
+            ];
+            $customMessages[$bagsKey.'.required'] = 'The number of 50kg seed bags required is mandatory.';
+            $customMessages[$bagsKey.'.numeric'] = 'The number of bags must be a valid number.';
+            $customMessages[$bagsKey.'.min'] = 'The number of bags required must be at least 1.';
+        }
+
         $request->validate($rules, $customMessages);
+
+        // Enforce CNIC verification via external API
+        $verifiedCnic = (string) session('verified_cnic');
+        if ($verifiedCnic !== $cnic) {
+            $surveyCfg = config('services.survey_external');
+            $hasApi = ! empty($surveyCfg['base_url']);
+
+            if ($hasApi) {
+                $resp = \App\Services\SurveyExternalApi::make()->lookup(\App\Support\Cnic::dashed($cnic));
+                if (! ($resp['success'] ?? false)) {
+                    throw ValidationException::withMessages([
+                        'cnic' => __('portal.cnic_not_found'),
+                    ]);
+                }
+                session(['verified_cnic' => $cnic]);
+            }
+        }
 
         $existingApplicant = Applicant::where('cnic', $cnic)->first();
         if ($existingApplicant && Application::where('scheme_id', $scheme->id)
@@ -298,6 +364,7 @@ class ApplicationController extends Controller
         });
 
         session()->forget('phone_verified');
+        session()->forget('verified_cnic');
 
         if ($request->expectsJson()) {
             return response()->json([

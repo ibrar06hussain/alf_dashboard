@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ScopeByOfficeAssignment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Application extends Model
 {
+    use ScopeByOfficeAssignment;
+
     public const STATUSES = [
         'pending' => 'Pending / Under Review',
         'district_verified' => 'District Verified',
@@ -76,6 +79,11 @@ class Application extends Model
     public function statusLogs(): HasMany
     {
         return $this->hasMany(ApplicationStatusLog::class)->latest();
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(ApplicationAssignment::class);
     }
 
     public static function generateApplicationNo(): string

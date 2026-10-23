@@ -298,7 +298,12 @@ class DatabaseSeeder extends Seeder
         $order = 10;
         $fields = [];
 
-        if (str_contains($title, 'Vegetable') || str_contains($title, 'Wheat') || str_contains($title, 'Maize') || str_contains($title, 'Kitchen')) {
+        if (str_contains($title, 'Wheat')) {
+            $fields[] = ['land_kanals', 'Land Available (Kanals)', 'number', true];
+            $fields[] = ['bags_required', 'Number of 50kg Seed Bags Required', 'number', true];
+            $fields[] = ['road_access', 'Road Access to Land', 'radio', true, ['Yes', 'No']];
+            $fields[] = ['water_available', 'Availability of Water', 'radio', true, ['Yes', 'No']];
+        } elseif (str_contains($title, 'Vegetable') || str_contains($title, 'Maize') || str_contains($title, 'Kitchen')) {
             $fields[] = ['land_kanals', 'Land Available (Kanals)', 'number', true];
             $fields[] = ['existing_tunnels', 'Existing Number of Tunnels', 'number', false];
             $fields[] = ['road_access', 'Road Access to Land', 'radio', true, ['Yes', 'No']];

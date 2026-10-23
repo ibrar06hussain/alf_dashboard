@@ -144,6 +144,83 @@ class ApplicationSubmissionTest extends TestCase
         $this->assertEquals(1, Application::count());
     }
 
+    public function test_50_50_wheat_seed_bags_allowed_when_within_1_bag_per_4_kanals(): void
+    {
+        Storage::fake('public');
+
+        // Configure scheme and form with land_kanals and bags_required
+        $form = $this->scheme->forms()->first();
+        FormField::create([
+            'form_id' => $form->id,
+            'field_key' => 'land_kanals',
+            'field_label' => 'Land Available (Kanals)',
+            'field_type' => 'number',
+            'is_mandatory' => true,
+            'display_order' => 10,
+        ]);
+        FormField::create([
+            'form_id' => $form->id,
+            'field_key' => 'bags_required',
+            'field_label' => 'Number of 50kg Seed Bags Required',
+            'field_type' => 'number',
+            'is_mandatory' => true,
+            'display_order' => 11,
+        ]);
+
+        $doc = FormDocument::first();
+
+        // 40 kanals allows up to 10 bags (40 / 4 = 10)
+        $response = $this->post(route('schemes.apply.store', $this->scheme->slug), array_merge(
+            $this->payload(),
+            [
+                'land_kanals' => 40,
+                'bags_required' => 10,
+                'documents' => [$doc->id => UploadedFile::fake()->image('cnic.jpg')],
+            ]
+        ));
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('applications', 1);
+    }
+
+    public function test_50_50_wheat_seed_bags_rejected_when_11_or_greater_for_40_kanals(): void
+    {
+        Storage::fake('public');
+
+        $form = $this->scheme->forms()->first();
+        FormField::create([
+            'form_id' => $form->id,
+            'field_key' => 'land_kanals',
+            'field_label' => 'Land Available (Kanals)',
+            'field_type' => 'number',
+            'is_mandatory' => true,
+            'display_order' => 10,
+        ]);
+        FormField::create([
+            'form_id' => $form->id,
+            'field_key' => 'bags_required',
+            'field_label' => 'Number of 50kg Seed Bags Required',
+            'field_type' => 'number',
+            'is_mandatory' => true,
+            'display_order' => 11,
+        ]);
+
+        $doc = FormDocument::first();
+
+        // 40 kanals with 11 bags must throw validation error
+        $response = $this->post(route('schemes.apply.store', $this->scheme->slug), array_merge(
+            $this->payload(),
+            [
+                'land_kanals' => 40,
+                'bags_required' => 11,
+                'documents' => [$doc->id => UploadedFile::fake()->image('cnic.jpg')],
+            ]
+        ));
+
+        $response->assertSessionHasErrors('bags_required');
+        $this->assertDatabaseCount('applications', 0);
+    }
+
     private function payload(): array
     {
         return [

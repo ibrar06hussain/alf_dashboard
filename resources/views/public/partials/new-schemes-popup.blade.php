@@ -186,7 +186,7 @@
 </div>
 
 {{-- Floating Quick Trigger Button (Allows user to reopen the new schemes popup anytime) --}}
-<button id="alfFloatingSchemesTrigger" class="alf-floating-schemes-btn" type="button" aria-label="{{ __('portal.popup_new_schemes_title') }}" title="{{ __('portal.popup_new_schemes_title') }}">
+<button id="alfFloatingSchemesTrigger" class="alf-floating-schemes-btn" type="button" data-bs-toggle="modal" data-bs-target="#alfNewSchemesModal" aria-label="{{ __('portal.popup_new_schemes_title') }}" title="{{ __('portal.popup_new_schemes_title') }}">
     <span class="alf-floating-ping" aria-hidden="true"></span>
     <i class="fa-solid fa-bullhorn me-2 text-warning" aria-hidden="true"></i>
     <span class="d-none d-md-inline">{{ __('portal.popup_new_schemes_title') }}</span>

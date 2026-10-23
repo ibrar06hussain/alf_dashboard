@@ -575,3 +575,34 @@ a:hover {
   border-radius: 12px;
   background: #eef2e6;
 }
+
+/* ArchitectUI Modal Layout Stacking & Elevation Fixes */
+.modal {
+  z-index: 1060 !important;
+}
+.modal-backdrop {
+  z-index: 1055 !important;
+}
+.modal-dialog {
+  z-index: 1065 !important;
+  margin: 1.75rem auto;
+}
+.modal-dialog-centered {
+  min-height: calc(100% - 3.5rem);
+  display: flex;
+  align-items: center;
+}
+.modal-content {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+}
+.modal-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 1.25rem;
+}
+.modal-footer {
+  border-top: 1px solid #e2e8f0;
+  padding: 0.85rem 1.25rem;
+}
+

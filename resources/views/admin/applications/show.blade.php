@@ -196,6 +196,114 @@
             </div>
         @endif
 
+        {{-- Field Officer Task Delegation (District DD) --}}
+        @if($fieldOfficers->isNotEmpty() && auth()->user()->can('assignFieldOfficer', $application))
+            <div class="card alf-panel mb-3">
+                <div class="card-header bg-primary-subtle text-primary">
+                    <i class="fa-solid fa-user-plus me-1"></i> Delegate to Field Officer
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ route('admin.applications.assign-field-officer', $application) }}">
+                        @csrf
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Field Officer</label>
+                            <select name="assigned_to" class="form-select form-select-sm" required>
+                                <option value="">Select Field Officer...</option>
+                                @foreach($fieldOfficers as $fo)
+                                    <option value="{{ $fo->id }}">{{ $fo->name }} ({{ $fo->email }})</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Task Type</label>
+                            <select name="task_type" class="form-select form-select-sm" required>
+                                <option value="land_verification">Land & Cultivation Verification</option>
+                                <option value="seed_distribution">Seed Delivery Confirmation</option>
+                                <option value="technical_audit">Technical Field Audit</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Due Date</label>
+                            <input type="date" name="due_date" class="form-control form-control-sm" value="{{ now()->addDays(3)->toDateString() }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Instructions / Focus</label>
+                            <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="e.g. Inspect actual canal water availability and measure cultivated land"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Assign Field Task
+                        </button>
+                    </form>
+                </div>
+            </div>
+        @endif
+
+        {{-- Operational Field Tasks & Survey Reports --}}
+        @if($application->assignments->isNotEmpty())
+            <div class="card alf-panel mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fa-solid fa-clipboard-check me-1"></i> Field Tasks</span>
+                    <span class="badge bg-secondary">{{ $application->assignments->count() }}</span>
+                </div>
+                <ul class="list-group list-group-flush">
+                    @foreach($application->assignments as $asn)
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div>
+                                    <strong class="d-block">{{ ucwords(str_replace('_', ' ', $asn->task_type)) }}</strong>
+                                    <span class="small text-muted">Assigned to: <strong>{{ $asn->assignee?->name ?? 'Unknown' }}</strong></span>
+                                </div>
+                                <span class="badge bg-{{ $asn->status === 'completed' ? 'success' : ($asn->status === 'in_progress' ? 'info' : 'warning') }}">
+                                    {{ strtoupper(str_replace('_', ' ', $asn->status)) }}
+                                </span>
+                            </div>
+                            @if($asn->notes)
+                                <div class="small bg-light p-2 rounded mb-2">
+                                    <em>"{{ $asn->notes }}"</em>
+                                </div>
+                            @endif
+                            @if($asn->report_data)
+                                <div class="small p-2 bg-success-subtle text-success rounded mb-2">
+                                    <div><strong>Land Verified:</strong> {{ $asn->report_data['land_verified_kanals'] ?? 'N/A' }} Kanals</div>
+                                    <div><strong>Recommendation:</strong> {{ ucfirst(str_replace('_', ' ', $asn->report_data['recommendation'] ?? 'None')) }}</div>
+                                    @if(!empty($asn->completed_at))
+                                        <div class="text-muted" style="font-size: 11px;">Completed: {{ $asn->completed_at->format('d M Y H:i') }}</div>
+                                    @endif
+                                </div>
+                            @endif
+
+                            {{-- Task completion form for assigned field officer --}}
+                            @if(($asn->assigned_to === auth()->id() || auth()->user()->hasRole('Super Admin')) && $asn->status !== 'completed')
+                                <form method="POST" action="{{ route('admin.applications.assignments.report', $asn) }}" class="mt-2 p-2 border rounded bg-white">
+                                    @csrf
+                                    <div class="small fw-bold mb-1 text-primary">Submit Verification Report</div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6">
+                                            <input type="number" step="0.5" name="land_verified_kanals" class="form-control form-control-sm" placeholder="Verified Kanals">
+                                        </div>
+                                        <div class="col-6">
+                                            <select name="recommendation" class="form-select form-select-sm">
+                                                <option value="recommended">Recommended</option>
+                                                <option value="needs_further_audit">Needs Further Audit</option>
+                                                <option value="not_recommended">Not Recommended</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <textarea name="notes" class="form-control form-control-sm" rows="1" placeholder="Field observations..."></textarea>
+                                    </div>
+                                    <input type="hidden" name="status" value="completed">
+                                    <button type="submit" class="btn btn-sm btn-success w-100">
+                                        <i class="fa-solid fa-check me-1"></i> Submit Report & Complete
+                                    </button>
+                                </form>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="card alf-panel mb-3">
             <div class="card-header">Status Log</div>
             <ul class="list-group list-group-flush">

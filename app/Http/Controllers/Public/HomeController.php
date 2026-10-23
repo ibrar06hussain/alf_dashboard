@@ -65,6 +65,14 @@ class HomeController extends Controller
                 ->get();
         }
 
+        if ($newSchemes->isEmpty()) {
+            $newSchemes = Scheme::query()
+                ->with(['department', 'publishedForm'])
+                ->latest()
+                ->take(6)
+                ->get();
+        }
+
         $stats = [
             'departments' => $departments->count(),
             'schemes' => Scheme::where('status', 'active')->count(),

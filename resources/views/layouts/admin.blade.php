@@ -167,10 +167,27 @@
                                 </a>
                             </li>
                         @endif
+                        @if($user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'District Officer', 'District Deputy Director', 'Division Director']))
+                            <li class="{{ request()->routeIs('admin.wheat-mis.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.wheat-mis.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-wheat-awn"></i> Wheat Seed MIS
+                                </a>
+                            </li>
+                        @endif
                         @if($isExecutive)
                             <li class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.users.index') }}">
-                                    <i class="metismenu-icon fa-solid fa-users"></i> Users
+                                    <i class="metismenu-icon fa-solid fa-users"></i> Users & Hierarchy
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.roles.matrix') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.roles.matrix') }}">
+                                    <i class="metismenu-icon fa-solid fa-shield-halved"></i> Roles & Matrix
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.audit-logs.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.audit-logs.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-clock-rotate-left"></i> Access Audit Logs
                                 </a>
                             </li>
                         @endif
@@ -221,9 +238,21 @@
     </div>
 </div>
 
+@stack('modals')
+
 <script defer src="{{ asset('admin-assets/assets/scripts/vendors.46b0e993b2652496c5e9.js') }}"></script>
 <script defer src="{{ asset('admin-assets/assets/scripts/scrollbar.46b0e993b2652496c5e9.js') }}"></script>
 <script defer src="{{ asset('admin-assets/assets/scripts/main.46b0e993b2652496c5e9.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Hoist any trapped modals directly to document.body so ArchitectUI's fixed header/sidebar never obscures them
+        document.querySelectorAll('.modal').forEach(function (modal) {
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+        });
+    });
+</script>
 @stack('scripts')
 </body>
 </html>

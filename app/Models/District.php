@@ -31,4 +31,19 @@ class District extends Model
     {
         return $this->hasMany(Tehsil::class)->orderBy('name');
     }
+
+    public function divisions(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Division::class, 'division_districts')->withTimestamps();
+    }
+
+    public function division()
+    {
+        return $this->divisions();
+    }
+
+    public function offices(): HasMany
+    {
+        return $this->hasMany(Office::class);
+    }
 }

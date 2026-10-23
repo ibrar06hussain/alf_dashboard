@@ -135,7 +135,7 @@
 @endsection
 
 @push('scripts')
-<script defer src="{{ asset('admin-assets/assets/scripts/apex_charts.46b0e993b2652496c5e9.js') }}"></script>
+<script src="{{ asset('admin-assets/assets/scripts/apexcharts.min.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const analyticsUrl = @json(route('admin.cm-dashboard.analytics'));
