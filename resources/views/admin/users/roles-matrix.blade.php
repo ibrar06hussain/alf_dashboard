@@ -43,7 +43,7 @@
                         </td>
                         @foreach($roles as $role)
                             @php
-                                $hasPerm = $role->hasPermissionTo($permission->name);
+                                $hasPerm = $role->permissions->contains('id', $permission->id);
                             @endphp
                             <td class="text-center">
                                 @if($hasPerm)

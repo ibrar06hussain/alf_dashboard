@@ -19,12 +19,16 @@ class RbacHierarchySeeder extends Seeder
 {
     public function run(): void
     {
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
         DB::transaction(function () {
             $this->seedDivisionsAndDistricts();
             $this->seedPermissionsAndRoles();
             $this->seedOffices();
             $this->seedInitialAssignments();
         });
+
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
     }
 
     private function seedDivisionsAndDistricts(): void
@@ -131,6 +135,8 @@ class RbacHierarchySeeder extends Seeder
         foreach ($permissions as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
+
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         // 1. Super Admin: System & Technical Configuration only (ZERO default beneficiary approval rights)
         $superAdmin = Role::firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
