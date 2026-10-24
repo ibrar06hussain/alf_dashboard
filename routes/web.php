@@ -139,8 +139,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('schemes/wheat-mis/rate', [WheatSeedMisController::class, 'updateRate'])->name('wheat-mis.rate');
         });
 
-        // Directors + executives can manage schemes/forms/stats + CM analytics
+        // CM Executive Analytics Dashboard
         Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|Division Director')->group(function () {
+            Route::get('cm-dashboard', [CmDashboardController::class, 'index'])->name('cm-dashboard.index');
+            Route::get('cm-dashboard/analytics', [CmDashboardController::class, 'analytics'])->name('cm-dashboard.analytics');
+            Route::get('cm-dashboard/export', [CmDashboardController::class, 'export'])->name('cm-dashboard.export');
+        });
+
+        // Scheme & Form Configuration (Super Admin & Directorate Heads ONLY - Secretary is executive oversight, not web modification)
+        Route::middleware('role:Super Admin|Director Agriculture|Director Livestock|Director Fisheries')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
             Route::get('forms', [FormBuilderController::class, 'index'])->name('form-builder.index');
             Route::get('application-forms', [FormBuilderController::class, 'index'])->name('application-forms.index');
@@ -154,14 +161,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('stats/{stat}/edit', [DepartmentStatController::class, 'edit'])->name('stats.edit');
             Route::put('stats/{stat}', [DepartmentStatController::class, 'update'])->name('stats.update');
             Route::delete('stats/{stat}', [DepartmentStatController::class, 'destroy'])->name('stats.destroy');
-
-            Route::get('cm-dashboard', [CmDashboardController::class, 'index'])->name('cm-dashboard.index');
-            Route::get('cm-dashboard/analytics', [CmDashboardController::class, 'analytics'])->name('cm-dashboard.analytics');
-            Route::get('cm-dashboard/export', [CmDashboardController::class, 'export'])->name('cm-dashboard.export');
         });
 
-        // Super Admin / Secretary only
-        Route::middleware('role:Super Admin|Secretary')->group(function () {
+        // Super Admin only (System, CMS & Technical Web Application Configuration)
+        Route::middleware('role:Super Admin')->group(function () {
             Route::resource('departments', AdminDepartmentController::class);
             Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
             Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');

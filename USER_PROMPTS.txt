@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 70
+Total Prompts Logged: 73
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-10-24T23:49:34+05:00 (UTC: 2026-10-24T18:49:34Z)
-File Last Updated  : 2026-10-24 23:49:34 (PKT)
+Latest Prompt Date : 2026-10-25T01:14:51+05:00 (UTC: 2026-10-24T20:14:51Z)
+File Last Updated  : 2026-10-25 01:14:51 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1009,7 +1009,47 @@ Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
 --------------------------------------------------------------------------------
 PUSH IT TO GITHUB
 
+--------------------------------------------------------------------------------
+PROMPT #071
+Date & Time (Local) : 2026-10-24T23:54:25+05:00
+Date & Time (UTC)   : 2026-10-24T18:54:25Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+lIST DOWN DATABASE CHANGES AND CORRESPONDING MYSQL COOMANDS TO UPDATE IN LIVE SERVER.
+
+--------------------------------------------------------------------------------
+PROMPT #072
+Date & Time (Local) : 2026-10-25T00:47:59+05:00
+Date & Time (UTC)   : 2026-10-24T19:47:59Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+The Secretary Role should not see the Web application Modification pages like 
+
+[Departments](https://schemes.alfgb.gog.pk/admin/departments)
+[Districts](https://schemes.alfgb.gog.pk/admin/districts)
+[Carousel](https://schemes.alfgb.gog.pk/admin/carousel)
+[Site Media](https://schemes.alfgb.gog.pk/admin/media)
+[Site Information](https://schemes.alfgb.gog.pk/admin/site-info)
+[Schemes](https://schemes.alfgb.gog.pk/admin/schemes)
+
+[Proposed (CM)](https://schemes.alfgb.gog.pk/admin/schemes?type=proposed)
+
+In his Dashboard page he should  Projects and Schemes of All three Department, Applications Received , Pending and Completed for those schemes, Each departments performance etc
+
+[Interests](https://schemes.alfgb.gog.pk/admin/interests)
+[CM Dashboard](https://schemes.alfgb.gog.pk/admin/cm-dashboard)
+[Wheat Seed MIS](https://schemes.alfgb.gog.pk/admin/schemes/wheat-mis)
+
+================================================================================
+PROMPT #073
+Date & Time (Local) : 2026-10-25T01:14:51+05:00
+Date & Time (UTC)   : 2026-10-24T20:14:51Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+push code
+
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             
 ================================================================================
+
 

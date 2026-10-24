@@ -18,9 +18,10 @@
 <body>
 @php
     $user = auth()->user();
-    $isExecutive = $user?->hasAnyRole(['Super Admin', 'Secretary']);
-    $canManageSchemes = $user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
-    $canViewCm = $canManageSchemes;
+    $isSuperAdmin = $user?->hasRole('Super Admin');
+    $isSecretary = $user?->hasRole('Secretary');
+    $canManageSchemes = ! $isSecretary && $user?->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
+    $canViewCm = $isSecretary || $user?->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'Division Director']);
 @endphp
 <div class="app-container app-theme-white body-tabs-shadow fixed-header fixed-sidebar">
     <div class="app-header header-shadow">
@@ -101,7 +102,7 @@
                                 <i class="metismenu-icon fa-solid fa-rocket"></i> Dashboard
                             </a>
                         </li>
-                        @if($isExecutive)
+                        @if($isSuperAdmin)
                             <li class="{{ request()->routeIs('admin.departments.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.departments.index') }}">
                                     <i class="metismenu-icon fa-solid fa-landmark"></i> Departments
@@ -174,7 +175,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if($isExecutive)
+                        @if($isSuperAdmin)
                             <li class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.users.index') }}">
                                     <i class="metismenu-icon fa-solid fa-users"></i> Users & Hierarchy
