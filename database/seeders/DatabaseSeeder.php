@@ -300,6 +300,7 @@ class DatabaseSeeder extends Seeder
 
         if (str_contains($title, 'Wheat')) {
             $fields[] = ['land_kanals', 'Land Available (Kanals)', 'number', true];
+            $fields[] = ['previous_cultivation', 'Wheat Cultivated Area Last Year (Kanals)', 'number', false];
             $fields[] = ['bags_required', 'Number of 50kg Seed Bags Required', 'number', true];
             $fields[] = ['road_access', 'Road Access to Land', 'radio', true, ['Yes', 'No']];
             $fields[] = ['water_available', 'Availability of Water', 'radio', true, ['Yes', 'No']];

@@ -1165,11 +1165,39 @@ class WheatSeedMisService
         }
         $landAcres = $landKanals !== null ? round($landKanals / self::KANALS_PER_ACRE, 2) : null;
 
-        // Wheat Cultivated Land Last Year
-        $rawCultivated = $valuesByKey['wheat_cultivated_area']
+        // Wheat Cultivated Land Last Year (sourced from previous_cultivation form field)
+        $rawCultivated = $valuesByKey['previous_cultivation']
+            ?? $valuesByKey['previous_cultivated_area']
+            ?? $valuesByKey['previous_cultivated_land']
+            ?? $valuesByKey['wheat_cultivated_area']
             ?? $valuesByKey['cultivated_land']
             ?? $valuesByKey['wheat_area_last_year']
             ?? null;
+
+        // Fallback search through fieldValues collection by key or label
+        if ($rawCultivated === null) {
+            $cultFv = $fieldValues->first(function ($fv) {
+                $k = strtolower(trim($fv->formField?->field_key ?? ''));
+                $lbl = strtolower(trim($fv->formField?->field_label ?? ''));
+                return in_array($k, [
+                    'previous_cultivation',
+                    'previous_cultivated_area',
+                    'previous_cultivated_land',
+                    'wheat_cultivated_area',
+                    'cultivated_land',
+                    'wheat_area_last_year',
+                    'last_year_cultivation',
+                ], true)
+                || str_contains($k, 'previous_cultiv')
+                || str_contains($lbl, 'previous cultiv')
+                || str_contains($lbl, 'last year cultiv')
+                || str_contains($lbl, 'گزشتہ سال زیر کاشت');
+            });
+            if ($cultFv && $cultFv->value !== null && trim($cultFv->value) !== '') {
+                $rawCultivated = $cultFv->value;
+            }
+        }
+
         $cultivatedKanals = null;
         if ($rawCultivated !== null && is_numeric(trim($rawCultivated))) {
             $cultivatedKanals = (float) trim($rawCultivated);
@@ -1378,12 +1406,12 @@ class WheatSeedMisService
             ],
             [
                 'form_question' => 'Wheat Cultivated Area Last Year',
-                'field_key' => 'wheat_cultivated_area',
-                'field_id' => 'Dynamic / Survey',
+                'field_key' => 'previous_cultivation',
+                'field_id' => 'Form Field / Dynamic',
                 'target_table' => 'application_field_values',
                 'target_column' => 'value',
                 'data_type' => 'DECIMAL / FLOAT',
-                'storage_type' => 'Dynamic EAV field (keys: wheat_cultivated_area, cultivated_land)',
+                'storage_type' => 'EAV field (keys: previous_cultivation, wheat_cultivated_area, cultivated_land)',
                 'normalization' => 'If absent: displays "Not yet captured" rather than fabricated 0',
                 'kpi_usage' => 'Total Previous Cultivated Land & Available vs Cultivated Ratio',
             ],
