@@ -2,18 +2,31 @@
 
 namespace App\Exports;
 
+use App\Support\Cnic;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomStartCell;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping
+class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping, WithCustomStartCell, WithEvents
 {
+    private string $generatedAt;
+    private string $generatedBy;
+
     public function __construct(
         private Collection $applications,
-        private bool $masked = false
+        private bool $masked = false,
+        ?string $generatedAt = null,
+        ?string $generatedBy = null
     ) {
+        $this->generatedAt = $generatedAt ?? now()->format('d M Y, h:i A');
+        $this->generatedBy = $generatedBy ?? (auth()->user()?->name ?? 'System Officer');
     }
 
     public function collection(): Collection
@@ -21,54 +34,118 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
         return $this->applications;
     }
 
+    public function startCell(): string
+    {
+        return 'A5';
+    }
+
     public function headings(): array
     {
         return [
             'Application No',
-            'Applicant',
+            'Applicant Name',
+            'Father / Husband Name',
             'CNIC',
-            'Phone',
+            'Mobile Phone',
             'District',
             'Tehsil',
             'Union Council',
             'Village',
             'Department',
             'Scheme',
-            'Status',
+            'Available Land (Kanals)',
+            'Bags Required (50kg)',
+            'Application Status',
             'Submitted At',
-            'Created At',
         ];
     }
 
     public function map($application): array
     {
-        $cnic = $application->applicant?->cnic;
-        $phone = $application->applicant?->phone;
+        $applicant = $application->applicant;
+        $cnic = $applicant?->cnic;
+        $phone = $applicant?->phone;
 
         if ($this->masked) {
-            if ($cnic && strlen($cnic) >= 13) {
-                $raw = str_replace('-', '', $cnic);
-                $cnic = substr($raw, 0, 5).'-******-'.substr($raw, -1);
-            }
-            if ($phone && strlen($phone) >= 10) {
-                $phone = substr($phone, 0, 4).'***'.substr($phone, -4);
-            }
+            $cnic = Cnic::mask($cnic);
+            $phone = Cnic::maskPhone($phone);
+        } else {
+            $cnic = Cnic::dashed($cnic);
         }
+
+        $land = $application->getAvailableLandKanals();
+        $bags = $application->getBagsRequired();
 
         return [
             $application->application_no,
-            $application->applicant?->full_name,
-            $cnic,
-            $phone,
-            $application->district?->name,
-            $application->applicant?->tehsil,
-            $application->applicant?->union_council,
-            $application->applicant?->village,
-            $application->scheme?->department?->name,
-            $application->scheme?->title,
-            $application->status,
-            optional($application->submitted_at)?->format('Y-m-d H:i'),
-            optional($application->created_at)?->format('Y-m-d H:i'),
+            $applicant?->full_name ?? '—',
+            $applicant?->father_name ?? '—',
+            $cnic ?? '—',
+            $phone ?? '—',
+            $application->district?->name ?? '—',
+            $applicant?->tehsil ?: '—',
+            $applicant?->union_council ?: '—',
+            $applicant?->village ?: '—',
+            $application->scheme?->department?->name ?? '—',
+            $application->scheme?->title ?? '—',
+            $land !== null ? $land : '—',
+            $bags !== null ? $bags : '—',
+            $application->statusLabel(),
+            optional($application->submitted_at ?? $application->created_at)->format('Y-m-d H:i'),
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $lastCol = 'O'; // 15 columns (A to O)
+
+                $sheet->mergeCells("A1:{$lastCol}1");
+                $sheet->mergeCells("A2:{$lastCol}2");
+                $sheet->mergeCells("A3:{$lastCol}3");
+
+                $sheet->setCellValue('A1', 'Agriculture Department Gilgit Baltistan — Online Portal');
+                $sheet->setCellValue('A2', 'Applications & Beneficiaries Register Report');
+                $sheet->setCellValue(
+                    'A3',
+                    'Report Generated: ' . $this->generatedAt . ' | Generated By: ' . $this->generatedBy . ' | Total Records: ' . $this->applications->count()
+                );
+
+                // Title row styling
+                $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F766E']],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+
+                // Subtitle row styling
+                $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '1E293B']],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F1F5F9']],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+
+                // Metadata row styling
+                $sheet->getStyle("A3:{$lastCol}3")->applyFromArray([
+                    'font' => ['italic' => true, 'size' => 9, 'color' => ['rgb' => '475569']],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+
+                // Table headings row styling
+                $sheet->getStyle("A5:{$lastCol}5")->applyFromArray([
+                    'font' => ['bold' => true, 'color' => ['rgb' => '0F172A'], 'size' => 10],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E2E8F0']],
+                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+
+                $sheet->getRowDimension(1)->setRowHeight(30);
+                $sheet->getRowDimension(2)->setRowHeight(22);
+                $sheet->getRowDimension(3)->setRowHeight(20);
+                $sheet->getRowDimension(5)->setRowHeight(24);
+            },
         ];
     }
 }

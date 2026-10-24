@@ -86,6 +86,54 @@ class Application extends Model
         return $this->hasMany(ApplicationAssignment::class);
     }
 
+    /**
+     * Get available land in Kanals from dynamic form values.
+     */
+    public function getAvailableLandKanals(): ?float
+    {
+        $fieldValues = $this->relationLoaded('fieldValues')
+            ? $this->fieldValues
+            : $this->fieldValues()->with('formField')->get();
+
+        $fv = $fieldValues->first(function ($v) {
+            $key = $v->formField?->field_key;
+            return in_array($key, ['land_kanals', 'available_land'], true) || $v->form_field_id === 8;
+        });
+
+        if ($fv && is_numeric(trim($fv->value))) {
+            return (float) trim($fv->value);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get number of bags required (50kg each).
+     * Uses explicit bags_required field if submitted; otherwise derives from wheat agronomic formula (1 bag/4 kanals).
+     */
+    public function getBagsRequired(): ?int
+    {
+        $fieldValues = $this->relationLoaded('fieldValues')
+            ? $this->fieldValues
+            : $this->fieldValues()->with('formField')->get();
+
+        $fv = $fieldValues->first(function ($v) {
+            $key = $v->formField?->field_key;
+            return in_array($key, ['bags_required', 'seed_bags', 'seed_bags_required', 'wheat_seed_bags'], true);
+        });
+
+        if ($fv && is_numeric(trim($fv->value)) && (int) $fv->value > 0) {
+            return (int) $fv->value;
+        }
+
+        $land = $this->getAvailableLandKanals();
+        if ($land !== null && $land > 0 && str_contains(strtolower($this->scheme?->title ?? ''), 'wheat')) {
+            return (int) max(1, ceil($land / 4));
+        }
+
+        return null;
+    }
+
     public static function generateApplicationNo(): string
     {
         return 'ALF-'.now()->format('Ymd').'-'.strtoupper(substr(uniqid(), -6));

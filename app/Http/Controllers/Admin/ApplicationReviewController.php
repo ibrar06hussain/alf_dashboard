@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -57,10 +58,10 @@ class ApplicationReviewController extends Controller
         ));
     }
 
-    public function export(Request $request): BinaryFileResponse
+    public function export(Request $request): \Symfony\Component\HttpFoundation\Response
     {
         $user = auth()->user();
-        $format = $request->string('format', 'xlsx')->toString();
+        $format = strtolower($request->string('format', 'xlsx')->toString());
         $rows = $this->filteredQuery($request)->limit(5000)->get();
         $filename = 'alf-applications-'.now()->format('Ymd_His');
 
@@ -72,17 +73,57 @@ class ApplicationReviewController extends Controller
             'is_masked' => $masked,
         ]);
 
-        if ($format === 'csv') {
-            return Excel::download(new ApplicationsExport($rows, $masked), $filename.'.csv', \Maatwebsite\Excel\Excel::CSV);
+        $generatedAt = now()->format('d M Y, h:i A');
+        $generatedBy = $user->name . ' (' . ($user->getRoleNames()->first() ?? 'Officer') . ')';
+
+        if ($format === 'pdf') {
+            $filters = [
+                'q' => $request->string('q')->toString(),
+                'status' => $request->string('status')->toString(),
+                'department_id' => $request->integer('department_id'),
+                'district_id' => $request->integer('district_id'),
+                'scheme_id' => $request->integer('scheme_id'),
+                'min_land' => $request->input('min_land'),
+                'max_land' => $request->input('max_land'),
+                'min_bags' => $request->input('min_bags'),
+                'max_bags' => $request->input('max_bags'),
+            ];
+
+            $pdf = Pdf::loadView('admin.applications.export-pdf', [
+                'applications' => $rows,
+                'masked' => $masked,
+                'generatedAt' => $generatedAt,
+                'generatedBy' => $generatedBy,
+                'filters' => $filters,
+            ])->setPaper('a4', 'landscape');
+
+            return $pdf->download($filename.'.pdf');
         }
 
-        return Excel::download(new ApplicationsExport($rows, $masked), $filename.'.xlsx');
+        if ($format === 'csv') {
+            return Excel::download(
+                new ApplicationsExport($rows, $masked, $generatedAt, $generatedBy),
+                $filename.'.csv',
+                \Maatwebsite\Excel\Excel::CSV
+            );
+        }
+
+        return Excel::download(
+            new ApplicationsExport($rows, $masked, $generatedAt, $generatedBy),
+            $filename.'.xlsx'
+        );
     }
 
     private function filteredQuery(Request $request)
     {
         $user = auth()->user();
-        $query = Application::with(['scheme.department', 'applicant', 'district', 'assignments.assignee'])
+        $query = Application::with([
+            'scheme.department',
+            'applicant',
+            'district',
+            'assignments.assignee',
+            'fieldValues.formField',
+        ])
             ->authorizedFor($user)
             ->latest();
 
@@ -109,6 +150,68 @@ class ApplicationReviewController extends Controller
 
         if ($request->filled('scheme_id')) {
             $query->where('scheme_id', $request->integer('scheme_id'));
+        }
+
+        // Available Land Filter (Min / Max Kanals)
+        $minLand = $request->input('min_land') ?? $request->input('land_kanals');
+        if ($minLand !== null && $minLand !== '' && is_numeric($minLand)) {
+            $val = (float) $minLand;
+            $query->whereHas('fieldValues', function ($fq) use ($val) {
+                $fq->where(function ($sub) {
+                    $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                        ->orWhere('form_field_id', 8);
+                })->whereRaw('CAST(value AS DECIMAL(10,2)) >= ?', [$val]);
+            });
+        }
+
+        if ($request->filled('max_land') && is_numeric($request->input('max_land'))) {
+            $val = (float) $request->input('max_land');
+            $query->whereHas('fieldValues', function ($fq) use ($val) {
+                $fq->where(function ($sub) {
+                    $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                        ->orWhere('form_field_id', 8);
+                })->whereRaw('CAST(value AS DECIMAL(10,2)) <= ?', [$val]);
+            });
+        }
+
+        // Bags Required Filter (Min / Max Bags)
+        $minBags = $request->input('min_bags') ?? $request->input('bags_required');
+        if ($minBags !== null && $minBags !== '' && is_numeric($minBags)) {
+            $val = (int) $minBags;
+            $query->where(function ($bq) use ($val) {
+                $bq->whereHas('fieldValues', function ($fq) use ($val) {
+                    $fq->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['bags_required', 'seed_bags', 'seed_bags_required', 'wheat_seed_bags']))
+                       ->whereRaw('CAST(value AS UNSIGNED) >= ?', [$val]);
+                })->orWhere(function ($wheatQ) use ($val) {
+                    $minLandForBags = max(0, ($val - 1) * 4 + 0.01);
+                    $wheatQ->whereHas('scheme', fn ($sq) => $sq->where('slug', 'like', '%wheat%'))
+                           ->whereHas('fieldValues', function ($fq) use ($minLandForBags) {
+                               $fq->where(function ($sub) {
+                                   $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                                       ->orWhere('form_field_id', 8);
+                               })->whereRaw('CAST(value AS DECIMAL(10,2)) >= ?', [$minLandForBags]);
+                           });
+                });
+            });
+        }
+
+        if ($request->filled('max_bags') && is_numeric($request->input('max_bags'))) {
+            $val = (int) $request->input('max_bags');
+            $query->where(function ($bq) use ($val) {
+                $bq->whereHas('fieldValues', function ($fq) use ($val) {
+                    $fq->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['bags_required', 'seed_bags', 'seed_bags_required', 'wheat_seed_bags']))
+                       ->whereRaw('CAST(value AS UNSIGNED) <= ?', [$val]);
+                })->orWhere(function ($wheatQ) use ($val) {
+                    $maxLandForBags = $val * 4;
+                    $wheatQ->whereHas('scheme', fn ($sq) => $sq->where('slug', 'like', '%wheat%'))
+                           ->whereHas('fieldValues', function ($fq) use ($maxLandForBags) {
+                               $fq->where(function ($sub) {
+                                   $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                                       ->orWhere('form_field_id', 8);
+                               })->whereRaw('CAST(value AS DECIMAL(10,2)) <= ?', [$maxLandForBags]);
+                           });
+                });
+            });
         }
 
         if ($request->filled('q')) {
