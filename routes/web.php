@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\SchemeController as AdminSchemeController;
 use App\Http\Controllers\Admin\SchemeInterestController;
 use App\Http\Controllers\Admin\SiteMediaController;
 use App\Http\Controllers\Admin\SiteInfoController;
+use App\Http\Controllers\Admin\StockManagementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WheatSeedMisController;
 use App\Http\Controllers\Public\ApplicationController;
@@ -137,6 +138,32 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('schemes/wheat-mis/beneficiaries', [WheatSeedMisController::class, 'beneficiaries'])->name('wheat-mis.beneficiaries');
             Route::get('schemes/wheat-mis/export', [WheatSeedMisController::class, 'export'])->name('wheat-mis.export');
             Route::post('schemes/wheat-mis/rate', [WheatSeedMisController::class, 'updateRate'])->name('wheat-mis.rate');
+        });
+
+        // Stock & Distribution Management (Centers, Receipts, Transfers, Damages, Demand vs Stock)
+        Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|District Officer|District Deputy Director|Division Director|Distribution Officer')->prefix('stock')->name('stock.')->group(function () {
+            Route::get('/', [StockManagementController::class, 'index'])->name('index');
+            Route::get('demand-vs-stock', [StockManagementController::class, 'demandVsStock'])->name('demand');
+            
+            // Collection Centers
+            Route::get('centers', [StockManagementController::class, 'centersIndex'])->name('centers');
+            Route::post('centers', [StockManagementController::class, 'centersStore'])->name('centers.store');
+            Route::put('centers/{center}', [StockManagementController::class, 'centersUpdate'])->name('centers.update');
+            
+            // Receipts (Stock In)
+            Route::get('receipts', [StockManagementController::class, 'receiptsIndex'])->name('receipts');
+            Route::post('receipts', [StockManagementController::class, 'receiptsStore'])->name('receipts.store');
+            
+            // Transfers
+            Route::get('transfers', [StockManagementController::class, 'transfersIndex'])->name('transfers');
+            Route::post('transfers', [StockManagementController::class, 'transfersStore'])->name('transfers.store');
+            
+            // Damages / Wastages
+            Route::get('damages', [StockManagementController::class, 'damagesIndex'])->name('damages');
+            Route::post('damages', [StockManagementController::class, 'damagesStore'])->name('damages.store');
+
+            // Scheme Stock Items
+            Route::post('items', [StockManagementController::class, 'itemsStore'])->name('items.store');
         });
 
         // CM Executive Analytics Dashboard

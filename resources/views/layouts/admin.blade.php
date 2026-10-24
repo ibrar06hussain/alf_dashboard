@@ -175,6 +175,39 @@
                                 </a>
                             </li>
                         @endif
+                        @if($user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'District Officer', 'District Deputy Director', 'Division Director', 'Distribution Officer']))
+                            <li class="app-sidebar__heading">Stock & Logistics</li>
+                            <li class="{{ request()->routeIs('admin.stock.index') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-boxes-stacked"></i> Stock Overview
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.stock.demand') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.demand') }}">
+                                    <i class="metismenu-icon fa-solid fa-chart-pie"></i> Demand vs Stock
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.stock.centers*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.centers') }}">
+                                    <i class="metismenu-icon fa-solid fa-warehouse"></i> Collection Centers
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.stock.receipts*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.receipts') }}">
+                                    <i class="metismenu-icon fa-solid fa-truck-ramp-box"></i> Stock Received
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.stock.transfers*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.transfers') }}">
+                                    <i class="metismenu-icon fa-solid fa-arrow-right-arrow-left"></i> Stock Transfers
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.stock.damages*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.damages') }}">
+                                    <i class="metismenu-icon fa-solid fa-triangle-exclamation"></i> Wasted / Damaged
+                                </a>
+                            </li>
+                        @endif
                         @if($isSuperAdmin)
                             <li class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.users.index') }}">
