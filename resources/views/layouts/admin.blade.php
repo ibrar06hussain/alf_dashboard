@@ -167,7 +167,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if($user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'District Officer', 'District Deputy Director', 'Division Director']))
+                        @if($user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'District Officer', 'District Deputy Director', 'Division Director', 'Field Officer', 'Accounts Officer', 'Distribution Officer']))
                             <li class="{{ request()->routeIs('admin.wheat-mis.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.wheat-mis.index') }}">
                                     <i class="metismenu-icon fa-solid fa-wheat-awn"></i> Wheat Seed MIS

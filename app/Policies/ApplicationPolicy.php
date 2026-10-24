@@ -32,12 +32,18 @@ class ApplicationPolicy
             return false;
         }
 
-        // Field officers: strictly limited to applications with tasks assigned to them
+        // Field officers: strictly limited to applications with tasks or surveys assigned to them
         if ($user->hasRole('Field Officer') && ! $user->hasRole('Super Admin')) {
-            return $application->assignments()
+            $hasAssignment = $application->assignments()
                 ->where('assigned_to', $user->id)
                 ->whereIn('status', ['assigned', 'in_progress', 'completed'])
                 ->exists();
+
+            $hasSurvey = $application->surveys()
+                ->where('assigned_to', $user->id)
+                ->exists();
+
+            return $hasAssignment || $hasSurvey;
         }
 
         // Division Directors: authorized within their division's districts
@@ -114,7 +120,7 @@ class ApplicationPolicy
     }
 
     /**
-     * Determine whether the user can assign a Field Officer to this application.
+     * Determine whether the user can assign a Field Officer or survey to this application.
      */
     public function assignFieldOfficer(User $user, Application $application): bool
     {
@@ -123,6 +129,66 @@ class ApplicationPolicy
         }
 
         if (! $user->can('applications.assign_field_officer')) {
+            return false;
+        }
+
+        return $this->isInOperationalScope($user, $application);
+    }
+
+    /**
+     * Alias for assignFieldOfficer
+     */
+    public function assignSurvey(User $user, Application $application): bool
+    {
+        return $this->assignFieldOfficer($user, $application);
+    }
+
+    /**
+     * Determine whether the user can request correction from citizen.
+     */
+    public function requestCorrection(User $user, Application $application): bool
+    {
+        if ($user->hasAnyRole(['Super Admin', 'Secretary', 'Field Officer'])) {
+            return false;
+        }
+
+        if (! $user->hasAnyRole(['District Deputy Director', 'District Officer'])) {
+            return false;
+        }
+
+        return $this->isInOperationalScope($user, $application);
+    }
+
+    /**
+     * Determine whether the user can verify payments.
+     */
+    public function verifyPayment(User $user, Application $application): bool
+    {
+        if (! $user->can('payments.verify') && ! $user->hasRole('Accounts Officer')) {
+            return false;
+        }
+
+        return $this->isInOperationalScope($user, $application);
+    }
+
+    /**
+     * Determine whether the user can allocate stock / items.
+     */
+    public function allocateStock(User $user, Application $application): bool
+    {
+        if (! ($user->can('distribution.allocate_stock') || $user->hasAnyRole(['Distribution Officer', 'District Deputy Director', 'District Officer']))) {
+            return false;
+        }
+
+        return $this->isInOperationalScope($user, $application);
+    }
+
+    /**
+     * Determine whether the user can reactivate a dormant application.
+     */
+    public function reactivate(User $user, Application $application): bool
+    {
+        if (! $user->hasAnyRole(['District Deputy Director', 'District Officer'])) {
             return false;
         }
 
@@ -142,7 +208,8 @@ class ApplicationPolicy
             return false;
         }
 
-        if ($application->status !== 'directorate_approved') {
+        if (! in_array($application->status, ['directorate_approved', 'approved', 'stock_allocated'], true)
+            && ! in_array($application->current_stage, [Application::STAGE_APPROVED, Application::STAGE_STOCK_ALLOCATED, Application::STAGE_PARTIALLY_DISTRIBUTED], true)) {
             return false;
         }
 

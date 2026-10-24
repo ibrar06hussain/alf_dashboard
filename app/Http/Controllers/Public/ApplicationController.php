@@ -360,6 +360,9 @@ class ApplicationController extends Controller
                 ]);
             }
 
+            // Execute full lifecycle initialization: hierarchy resolution, DD assignment or unassigned queue, immutable audit logs
+            app(\App\Services\ApplicationLifecycleService::class)->onSubmission($application);
+
             return $application;
         });
 
@@ -470,6 +473,77 @@ class ApplicationController extends Controller
             'application' => $application,
             'notFound' => false,
         ]);
+    }
+
+    public function downloadChallan(string $application_no)
+    {
+        $application = Application::with(['scheme.department', 'applicant', 'district'])
+            ->where('application_no', $application_no)
+            ->firstOrFail();
+
+        if (! $application->challan_no) {
+            $bags = $application->allocated_quantity ?: ($application->getBagsRequired() ?: 1);
+            $amount = $application->challan_amount ?: ($bags * 3500);
+
+            $application->challan_no = 'CHL-'.now()->format('Y').'-'.str_pad((string) $application->id, 5, '0', STR_PAD_LEFT);
+            $application->challan_amount = $amount;
+            $application->challan_issued_at = $application->challan_issued_at ?: now();
+            $application->challan_due_date = $application->challan_due_date ?: now()->addDays(14)->toDateString();
+            $application->saveQuietly();
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('public.applications.challan-pdf', [
+            'application' => $application,
+            'scheme' => $application->scheme,
+            'applicant' => $application->applicant,
+            'district' => $application->district,
+        ])->setPaper('a4', 'portrait')
+          ->setOption([
+              'isHtml5ParserEnabled' => true,
+              'isRemoteEnabled' => false,
+              'dpi' => 96,
+              'defaultFont' => 'DejaVu Sans',
+          ]);
+
+        return $pdf->download("Challan-{$application->challan_no}.pdf");
+    }
+
+    public function uploadPaymentProof(Request $request, string $application_no): RedirectResponse
+    {
+        $application = Application::where('application_no', $application_no)->firstOrFail();
+
+        $request->validate([
+            'payment_receipt' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+        ]);
+
+        $file = $request->file('payment_receipt');
+        $path = $file->store('applications/'.$application->application_no.'/receipts', 'public');
+
+        $systemUser = \App\Models\User::first() ?? new \App\Models\User(['id' => 1, 'name' => 'Citizen Portal']);
+        app(\App\Services\ApplicationLifecycleService::class)->transition(
+            $application,
+            Application::STAGE_PAYMENT_PROOF_SUBMITTED,
+            $systemUser,
+            [
+                'payment_receipt_path' => $path,
+                'note' => 'Citizen uploaded bank payment deposit slip/proof.',
+            ]
+        );
+
+        return back()->with('success', 'Payment proof submitted successfully! Awaiting verification by Accounts Officer.');
+    }
+
+    public function submitCorrection(Request $request, string $application_no): RedirectResponse
+    {
+        $application = Application::where('application_no', $application_no)->firstOrFail();
+
+        $data = $request->validate([
+            'correction_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        app(\App\Services\ApplicationLifecycleService::class)->submitCorrection($application, $data);
+
+        return back()->with('success', 'Correction submitted successfully. Application returned to Deputy Director review.');
     }
 
     private function buildValidationRules($fields, $documents, bool $hasUnionCouncils = false): array

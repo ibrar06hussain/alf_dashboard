@@ -101,9 +101,59 @@
 
                             @if($application->status === 'rejected' && $application->rejection_reason)
                                 <dt class="col-sm-4">{{ __('portal.rejection_reason') }}</dt>
-                                <dd class="col-sm-8">{{ $application->rejection_reason }}</dd>
+                                <dd class="col-sm-8 text-danger fw-bold">{{ $application->rejection_reason }}</dd>
+                            @endif
+
+                            @if($application->current_stage === \App\Models\Application::STAGE_CORRECTION_REQUIRED)
+                                <dt class="col-sm-4 text-warning">Required Correction</dt>
+                                <dd class="col-sm-8 text-warning fw-bold">{{ $application->correction_remarks }}</dd>
                             @endif
                         </dl>
+
+                        {{-- Citizen Actions: Challan Download & Payment Proof Upload --}}
+                        @if($application->current_stage === \App\Models\Application::STAGE_CHALLAN_ISSUED && $application->challan_no)
+                            <div class="alert alert-info mt-4 p-3 border-info">
+                                <h6 class="fw-bold text-primary mb-1"><i class="fa-solid fa-file-invoice-dollar me-1"></i> Bank Challan Generated</h6>
+                                <p class="small mb-2">Challan No: <strong>{{ $application->challan_no }}</strong> | Amount: <strong>PKR {{ number_format($application->challan_amount, 2) }}</strong> | Due Date: <strong>{{ optional($application->challan_due_date)->format('d M Y') }}</strong></p>
+                                <div class="d-flex gap-2 align-items-center flex-wrap mb-3">
+                                    <a href="{{ route('applications.challan.download', $application->application_no) }}" class="btn btn-sm btn-primary">
+                                        <i class="fa-solid fa-download me-1"></i> Download Bank Challan (Form 32-A)
+                                    </a>
+                                </div>
+                                <hr class="my-2">
+                                <h6 class="small fw-bold mb-2">Upload Paid Bank Receipt</h6>
+                                <form method="POST" action="{{ route('applications.payment-proof.upload', $application->application_no) }}" enctype="multipart/form-data">
+                                    @csrf
+                                    <div class="input-group input-group-sm">
+                                        <input type="file" name="payment_receipt" class="form-control" accept=".jpg,.jpeg,.png,.pdf" required>
+                                        <button class="btn btn-success" type="submit"><i class="fa-solid fa-cloud-arrow-up me-1"></i> Submit Receipt</button>
+                                    </div>
+                                    <small class="text-muted">Accepted formats: JPG, PNG, PDF (Max: 5MB)</small>
+                                </form>
+                            </div>
+                        @endif
+
+                        @if($application->current_stage === \App\Models\Application::STAGE_PAYMENT_PROOF_SUBMITTED)
+                            <div class="alert alert-success mt-4 p-3">
+                                <h6 class="fw-bold text-success mb-1"><i class="fa-solid fa-check-circle me-1"></i> Payment Proof Submitted</h6>
+                                <p class="small mb-0">Your payment receipt has been received and is currently under verification with the Accounts Officer.</p>
+                            </div>
+                        @endif
+
+                        @if($application->current_stage === \App\Models\Application::STAGE_CORRECTION_REQUIRED)
+                            <div class="alert alert-warning mt-4 p-3 border-warning">
+                                <h6 class="fw-bold text-dark mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i> Correction Requested</h6>
+                                <p class="small mb-3">The Deputy Director has requested updates: <em>"{{ $application->correction_remarks }}"</em></p>
+                                <form method="POST" action="{{ route('applications.correction.submit', $application->application_no) }}">
+                                    @csrf
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold">Correction Response / Clarifications</label>
+                                        <textarea name="correction_notes" class="form-control form-control-sm" rows="3" placeholder="Provide requested corrections or clarifications here..." required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-warning"><i class="fa-solid fa-paper-plane me-1"></i> Resubmit for Review</button>
+                                </form>
+                            </div>
+                        @endif
 
                         @if($application->statusLogs->isNotEmpty())
                             <hr>

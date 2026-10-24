@@ -51,4 +51,39 @@ class ApplicationAssignment extends Model
     {
         return $this->belongsTo(User::class, 'assigned_by');
     }
+
+    public function getGpsPointsListAttribute(): array
+    {
+        if (! empty($this->report_data['gps_points']) && is_array($this->report_data['gps_points'])) {
+            return $this->report_data['gps_points'];
+        }
+
+        return [];
+    }
+
+    public function getPhotosListAttribute(): array
+    {
+        if (! empty($this->report_data['photos']) && is_array($this->report_data['photos'])) {
+            return $this->report_data['photos'];
+        }
+
+        return [];
+    }
+
+    public function getGoogleMapsUrlAttribute(): ?string
+    {
+        $points = $this->gps_points_list;
+        if (empty($points)) {
+            return null;
+        }
+
+        $first = $points[0];
+        $lat = $first['lat'] ?? null;
+        $lng = $first['lng'] ?? null;
+        if ($lat && $lng) {
+            return "https://www.google.com/maps?q={$lat},{$lng}";
+        }
+
+        return null;
+    }
 }

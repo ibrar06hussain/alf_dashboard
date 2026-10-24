@@ -73,6 +73,27 @@ class User extends Authenticatable
     }
 
     /**
+     * Determine if the user has provincial / director-level oversight (Directors, Secretary, Super Admin).
+     */
+    public function isDirectorSecretaryOrAdmin(): bool
+    {
+        return $this->isGlobalScope() || $this->hasAnyRole([
+            'Director Agriculture',
+            'Director Livestock',
+            'Director Fisheries',
+            'Division Director',
+        ]);
+    }
+
+    /**
+     * Determine if the user is an officer other than Directors, Secretary, and Admin (district-level scoped officer).
+     */
+    public function isDistrictScopedOfficer(): bool
+    {
+        return ! $this->isDirectorSecretaryOrAdmin();
+    }
+
+    /**
      * Get authorized division IDs for the user.
      */
     public function authorizedDivisionIds(): array

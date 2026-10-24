@@ -19,6 +19,7 @@ class Scheme extends Model
         'eligibility_criteria', 'eligibility_criteria_ur',
         'terms_conditions', 'terms_conditions_ur',
         'featured_image', 'is_featured', 'display_order',
+        'requires_challan', 'challan_fee_per_unit',
     ];
 
     protected function casts(): array
@@ -29,6 +30,8 @@ class Scheme extends Model
             'last_date' => 'date',
             'is_featured' => 'boolean',
             'display_order' => 'integer',
+            'requires_challan' => 'boolean',
+            'challan_fee_per_unit' => 'decimal:2',
         ];
     }
 

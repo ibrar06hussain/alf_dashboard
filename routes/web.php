@@ -56,6 +56,9 @@ Route::post('/api/cnic/verify', [CnicVerificationController::class, 'verify']);
 
 Route::get('/applications/success/{application_no}', [ApplicationController::class, 'success'])->name('applications.success');
 Route::match(['get', 'post'], '/track', [ApplicationController::class, 'track'])->name('applications.track');
+Route::get('/applications/{application_no}/challan', [ApplicationController::class, 'downloadChallan'])->name('applications.challan.download');
+Route::post('/applications/{application_no}/payment-proof', [ApplicationController::class, 'uploadPaymentProof'])->name('applications.payment-proof.upload');
+Route::post('/applications/{application_no}/correction', [ApplicationController::class, 'submitCorrection'])->name('applications.correction.submit');
 
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
@@ -112,6 +115,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('applications/{application}', [ApplicationReviewController::class, 'show'])->name('applications.show');
         Route::post('applications/{application}/status', [ApplicationReviewController::class, 'updateStatus'])->name('applications.status');
         Route::post('applications/{application}/assign-field-officer', [ApplicationReviewController::class, 'assignFieldOfficer'])->name('applications.assign-field-officer');
+        Route::post('applications/{application}/assign-survey', [ApplicationReviewController::class, 'assignSurvey'])->name('applications.assign-survey');
+        Route::post('applications/surveys/{survey}/schedule', [ApplicationReviewController::class, 'scheduleSurveyVisit'])->name('applications.surveys.schedule');
+        Route::post('applications/surveys/{survey}/complete', [ApplicationReviewController::class, 'completeSurveyVisit'])->name('applications.surveys.complete');
+        Route::post('applications/surveys/{survey}/findings', [ApplicationReviewController::class, 'submitSurveyFindings'])->name('applications.surveys.findings');
+        Route::post('applications/{application}/correction-request', [ApplicationReviewController::class, 'requestCorrection'])->name('applications.correction-request');
+        Route::post('applications/{application}/verify-payment', [ApplicationReviewController::class, 'verifyPayment'])->name('applications.verify-payment');
+        Route::post('applications/{application}/allocate-stock', [ApplicationReviewController::class, 'allocateStock'])->name('applications.allocate-stock');
+        Route::post('applications/{application}/reactivate', [ApplicationReviewController::class, 'reactivateDormant'])->name('applications.reactivate');
+        Route::post('applications/{application}/assign-dd', [ApplicationReviewController::class, 'assignDeputyDirector'])->name('applications.assign-dd');
         Route::post('applications/assignments/{assignment}/report', [ApplicationReviewController::class, 'submitTaskReport'])->name('applications.assignments.report');
         Route::get('applications/{application}/documents/{document}/download', [ApplicationDocumentController::class, 'download'])
             ->name('applications.documents.download');
@@ -119,7 +131,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('interests', [SchemeInterestController::class, 'index'])->name('interests.index');
 
         // Dedicated Scheme MIS: Distribution of Wheat Seed (Cost Sharing 50:50)
-        Route::middleware('role:Super Admin|Secretary|Director Agriculture|District Officer|District Deputy Director|Division Director')->group(function () {
+        Route::middleware('role:Super Admin|Secretary|Director Agriculture|District Officer|District Deputy Director|Division Director|Field Officer|Accounts Officer|Distribution Officer')->group(function () {
             Route::get('schemes/wheat-mis', [WheatSeedMisController::class, 'index'])->name('wheat-mis.index');
             Route::get('schemes/wheat-mis/analytics', [WheatSeedMisController::class, 'analytics'])->name('wheat-mis.analytics');
             Route::get('schemes/wheat-mis/beneficiaries', [WheatSeedMisController::class, 'beneficiaries'])->name('wheat-mis.beneficiaries');

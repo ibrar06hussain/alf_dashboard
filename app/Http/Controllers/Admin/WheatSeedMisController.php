@@ -31,10 +31,18 @@ class WheatSeedMisController extends Controller
         $user = auth()->user();
         $this->authorizeAccess($user);
 
-        $filters = $this->extractFilters($request);
+        $filters = $this->extractFilters($request, $user);
 
-        $districts = District::orderBy('name')->get();
-        $divisions = array_keys(WheatSeedMisService::DIVISIONS);
+        if ($user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            $districts = District::whereIn('id', $userDistricts)->orderBy('name')->get();
+            $userDivisions = $districts->map(fn ($d) => WheatSeedMisService::divisionForDistrict($d->name))->unique()->values()->all();
+            $divisions = ! empty($userDivisions) ? $userDivisions : array_keys(WheatSeedMisService::DIVISIONS);
+        } else {
+            $districts = District::orderBy('name')->get();
+            $divisions = array_keys(WheatSeedMisService::DIVISIONS);
+        }
+
         $statuses = Application::STATUSES;
 
         // Reviewing officers who have logged status changes
@@ -52,7 +60,7 @@ class WheatSeedMisController extends Controller
         $dataDictionary = $this->misService->getDataDictionary();
         $seedSettings = $this->misService->getSeedDataSettings();
         $configuredRate = $seedSettings['bag_rate'];
-        $districtRatesTable = $this->misService->getAllDistrictRatesTable();
+        $districtRatesTable = $this->misService->getAllDistrictRatesTable($user);
 
         $canUnmask = $user->hasAnyRole(['Super Admin', 'Secretary']);
         $maskPii = ! ($canUnmask && $request->boolean('unmask'));
@@ -91,7 +99,7 @@ class WheatSeedMisController extends Controller
         $user = auth()->user();
         $this->authorizeAccess($user);
 
-        $filters = $this->extractFilters($request);
+        $filters = $this->extractFilters($request, $user);
 
         $kpis = $this->misService->getKpis($filters, $user);
         $demandSupplyGap = $this->misService->getDemandSupplyGap($filters, $user);
@@ -169,7 +177,7 @@ class WheatSeedMisController extends Controller
         $user = auth()->user();
         $this->authorizeAccess($user);
 
-        $filters = $this->extractFilters($request);
+        $filters = $this->extractFilters($request, $user);
         $canUnmask = $user->hasAnyRole(['Super Admin', 'Secretary']);
         $maskPii = ! ($canUnmask && $request->boolean('unmask'));
 
@@ -199,7 +207,7 @@ class WheatSeedMisController extends Controller
         $user = auth()->user();
         $this->authorizeAccess($user);
 
-        $filters = $this->extractFilters($request);
+        $filters = $this->extractFilters($request, $user);
         $format = strtolower($request->string('format', 'xlsx')->toString());
 
         $maskPii = false; // Unmasked as requested
@@ -208,12 +216,12 @@ class WheatSeedMisController extends Controller
             ->with(['applicant', 'district', 'statusLogs.user', 'fieldValues.formField'])
             ->latest('applications.id');
 
-        $rows = $query->limit(5000)->get();
         $filename = 'wheat-seed-beneficiaries-' . now()->format('Ymd_His');
         $generatedAt = now()->format('d M Y, h:i A');
         $generatedBy = $user->name . ' (' . ($user->getRoleNames()->first() ?? 'Officer') . ')';
 
         if ($format === 'csv') {
+            $rows = $query->limit(5000)->get();
             return Excel::download(
                 new WheatSeedBeneficiariesExport($rows, $maskPii, $generatedAt, $generatedBy),
                 $filename . '.csv',
@@ -222,17 +230,67 @@ class WheatSeedMisController extends Controller
         }
 
         if ($format === 'pdf') {
+            ini_set('memory_limit', '512M');
+            set_time_limit(180);
+
+            $totalCount = (clone $query)->count();
+            $requestedLimit = (int) $request->input('per_page', 500);
+            $limit = ($requestedLimit > 0 && $requestedLimit <= 500) ? $requestedLimit : 500;
+
+            $apps = $query->limit($limit)->get();
+            $service = $this->misService;
+
+            $rowsData = $apps->map(function ($app) use ($service) {
+                $parsed = $service->extractAppAttributes($app);
+                $applicant = $app->applicant;
+                $apprBags = in_array($app->status, ['directorate_approved', 'disbursed'], true) ? $parsed['requested_bags'] : 0;
+                $statusClass = match($app->status) {
+                    'pending' => 'badge-pending',
+                    'district_verified' => 'badge-verified',
+                    'directorate_approved' => 'badge-approved',
+                    'disbursed' => 'badge-disbursed',
+                    'rejected' => 'badge-rejected',
+                    default => 'badge-pending',
+                };
+
+                return [
+                    'application_no' => $app->application_no,
+                    'full_name' => $applicant?->full_name ?? '—',
+                    'father_name' => $applicant?->father_name ?? '—',
+                    'cnic' => \App\Support\Cnic::dashed($applicant?->cnic),
+                    'phone' => $applicant?->phone ?: '—',
+                    'district' => $app->district?->name ?? '—',
+                    'tehsil' => $applicant?->tehsil ?: '—',
+                    'village' => $applicant?->village ?: '—',
+                    'land_kanals' => $parsed['land_kanals'] !== null ? number_format($parsed['land_kanals'], 1) : '—',
+                    'requested_bags' => $parsed['requested_bags'],
+                    'approved_bags' => $apprBags,
+                    'status_label' => $app->statusLabel(),
+                    'status_class' => $statusClass,
+                    'submitted_at' => optional($app->submitted_at ?? $app->created_at)?->format('d M Y') ?? '—',
+                ];
+            });
+
             $pdf = Pdf::loadView('admin.schemes.wheat-mis.pdf', [
-                'applications' => $rows,
+                'rowsData' => $rowsData,
+                'totalCount' => $totalCount,
+                'limit' => $limit,
                 'filters' => $filters,
                 'maskPii' => $maskPii,
                 'generatedAt' => $generatedAt,
                 'generatedBy' => $generatedBy,
-            ])->setPaper('a4', 'landscape');
+            ])->setPaper('a4', 'landscape')
+              ->setOption([
+                  'isHtml5ParserEnabled' => true,
+                  'isRemoteEnabled' => false,
+                  'dpi' => 96,
+                  'defaultFont' => 'DejaVu Sans',
+              ]);
 
             return $pdf->download($filename . '.pdf');
         }
 
+        $rows = $query->limit(5000)->get();
         return Excel::download(
             new WheatSeedBeneficiariesExport($rows, $maskPii, $generatedAt, $generatedBy),
             $filename . '.xlsx'
@@ -400,12 +458,7 @@ class WheatSeedMisController extends Controller
      */
     private function authorizeAccess(User $user): void
     {
-        $allowed = $user->hasAnyRole([
-            'Super Admin',
-            'Secretary',
-            'Director Agriculture',
-            'District Officer',
-        ]);
+        $allowed = $user->isDirectorSecretaryOrAdmin() || $user->isDistrictScopedOfficer();
 
         if (! $allowed) {
             abort(403, 'Unauthorized access to Wheat Seed MIS dashboard.');
@@ -415,7 +468,7 @@ class WheatSeedMisController extends Controller
     /**
      * Sanitize and extract incoming request filters.
      */
-    private function extractFilters(Request $request): array
+    private function extractFilters(Request $request, ?User $user = null): array
     {
         $filters = [];
 
@@ -466,6 +519,18 @@ class WheatSeedMisController extends Controller
         }
         if ($request->filled('per_page')) {
             $filters['per_page'] = $request->input('per_page');
+        }
+
+        // Restrict district-level officers to their authorized district(s) only
+        if ($user && $user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            if (! empty($filters['district_id'])) {
+                if (! in_array($filters['district_id'], $userDistricts, true)) {
+                    $filters['district_id'] = $userDistricts[0] ?? null;
+                }
+            } else {
+                $filters['district_id'] = $userDistricts[0] ?? null;
+            }
         }
 
         return $filters;

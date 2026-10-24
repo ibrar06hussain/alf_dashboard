@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 60
+Total Prompts Logged: 70
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-10-24T17:52:33+05:00 (UTC: 2026-10-24T12:52:33Z)
-File Last Updated  : 2026-10-24 14:58:47 (PKT)
+Latest Prompt Date : 2026-10-24T23:49:34+05:00 (UTC: 2026-10-24T18:49:34Z)
+File Last Updated  : 2026-10-24 23:49:34 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -903,6 +903,113 @@ Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
 --------------------------------------------------------------------------------
 show a list of all my prompts in this project in a notepad file and keep the record in that file in future
 
+--------------------------------------------------------------------------------
+PROMPT #061
+Date & Time (Local) : 2026-10-24T18:15:39+05:00
+Date & Time (UTC)   : 2026-10-24T13:15:39Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+Implement the complete application lifecycle inside the EXISTING Laravel ALF portal, reusing current schemes, form submissions, users, and database records. Inspect current application status names and state transitions before modifying anything.
+
+On successful submission:
+1. Preserve the original application, applicant, form version, field values, district, tehsil, UC/village and documents.
+2. Identify scheme department and applicant district from trusted persisted records.
+3. Resolve division using the configured organizational hierarchy.
+4. Automatically assign to the active Deputy Director with matching department/district scope, or place in an audited unassigned queue for manual resolution.
+5. Record application received_at, assigned_at, current stage, responsible user/office and complete immutable history.
+
+WORKFLOW:
+Submitted → DD Review → [Correction Required OR Field Survey OR Rejected OR Approved].
+
+Survey: DD assigns officer → Visit Scheduled → Visit Completed → Findings Submitted → DD Final Decision.
+
+Approved → Scheme-specific challan if applicable → Payment Proof Received → Payment Verification → Eligible Beneficiary → Allocation → Partial/Fully Distributed → Completed.
+
+Unpaid challans expire after the approved default of 14 calendar days, producing Dormant status; reactivation requires documented DD decision. Support fee-free schemes that bypass challan only according to configured scheme rules.
+
+Never equate Approved, Paid, Eligible and Distributed.
+
+Implement atomic state transitions, legal transition validation, timestamped remarks, event histories, correction workflow, assignment/reassignment, evidence records, notifications through existing integration hooks, and audit logs.
+
+DD alone makes final administrative decisions unless delegation is configured by competent authority. Field officers cannot approve cases. Accounts officers alone verify payments.
+
+Implement stage ageing and SLA clocks from actual events; do not infer history or auto-approve old cases. Build robust unit/feature tests covering cross-district access, concurrent updates, invalid transitions, and duplicate job delivery.
+
+Do not change existing public forms or overwrite production data. Provide files changed, migrations, tests and rollout instructions.
+
+--------------------------------------------------------------------------------
+PROMPT #062
+Date & Time (Local) : 2026-10-24T19:04:30+05:00
+Date & Time (UTC)   : 2026-10-24T14:04:30Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+continue and don't push code to repository
+
+--------------------------------------------------------------------------------
+PROMPT #063
+Date & Time (Local) : 2026-10-24T20:21:02+05:00
+Date & Time (UTC)   : 2026-10-24T15:21:02Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+I mistakenly updated database from server, please fix the database related issues according to current state don't remove any data
+
+--------------------------------------------------------------------------------
+PROMPT #064
+Date & Time (Local) : 2026-10-24T21:02:00+05:00
+Date & Time (UTC)   : 2026-10-24T16:02:00Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+In case of field survey assigned task the field officer should be able to take gps points of the land ( 3 or more) from his mobile device and gps  and add 3 photos of the land max 5 mb each
+
+--------------------------------------------------------------------------------
+PROMPT #065
+Date & Time (Local) : 2026-10-24T21:44:38+05:00
+Date & Time (UTC)   : 2026-10-24T16:44:38Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+In The dashboards of officers other than Directors and Secretary and admin each officer should see the list and statistics of its respective district only
+
+--------------------------------------------------------------------------------
+PROMPT #066
+Date & Time (Local) : 2026-10-24T22:20:11+05:00
+Date & Time (UTC)   : 2026-10-24T17:20:11Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+the pdf generation options are not working check all of them
+
+--------------------------------------------------------------------------------
+PROMPT #067
+Date & Time (Local) : 2026-10-24T22:22:07+05:00
+Date & Time (UTC)   : 2026-10-24T17:22:07Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+continue
+
+--------------------------------------------------------------------------------
+PROMPT #068
+Date & Time (Local) : 2026-10-24T23:30:33+05:00
+Date & Time (UTC)   : 2026-10-24T18:30:33Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+continue
+
+--------------------------------------------------------------------------------
+PROMPT #069
+Date & Time (Local) : 2026-10-24T23:41:49+05:00
+Date & Time (UTC)   : 2026-10-24T18:41:49Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+CONTINUE
+
+--------------------------------------------------------------------------------
+PROMPT #070
+Date & Time (Local) : 2026-10-24T23:49:34+05:00
+Date & Time (UTC)   : 2026-10-24T18:49:34Z
+Session ID          : 0393d8ee-7294-4a1c-b199-21b080aadbd1
+--------------------------------------------------------------------------------
+PUSH IT TO GITHUB
+
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             
 ================================================================================
+

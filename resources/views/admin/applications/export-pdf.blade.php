@@ -40,7 +40,8 @@
         }
         .meta-bar table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             margin: 0;
         }
         .meta-bar td {
@@ -52,16 +53,33 @@
             font-size: 8px;
             color: #64748b;
         }
+        .notice-banner {
+            margin-top: 5px;
+            padding: 4px 7px;
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            color: #92400e;
+            font-size: 8px;
+            border-radius: 3px;
+        }
         table.data-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             margin-top: 10px;
             font-size: 8px;
         }
         table.data-table th, table.data-table td {
-            border: 1px solid #cbd5e1;
+            border-right: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
             padding: 4px 5px;
             vertical-align: middle;
+        }
+        table.data-table th:first-child, table.data-table td:first-child {
+            border-left: 1px solid #cbd5e1;
+        }
+        table.data-table tr:first-child th {
+            border-top: 1px solid #cbd5e1;
         }
         table.data-table th {
             background: #0f766e;
@@ -112,15 +130,25 @@
                 <tr>
                     <td width="35%"><strong>Date of Report Generation:</strong> {{ $generatedAt }}</td>
                     <td width="35%"><strong>Officer:</strong> {{ $generatedBy }}</td>
-                    <td width="30%" class="text-end"><strong>Total Records:</strong> {{ number_format($applications->count()) }}</td>
+                    <td width="30%" class="text-end">
+                        <strong>Total Records:</strong> {{ number_format($totalCount ?? count($rowsData)) }}
+                        @if(($totalCount ?? count($rowsData)) > count($rowsData))
+                            <span class="text-muted">(Showing top {{ count($rowsData) }})</span>
+                        @endif
+                    </td>
                 </tr>
             </table>
         </div>
+        @if(($totalCount ?? count($rowsData)) > count($rowsData))
+            <div class="notice-banner">
+                <strong>Note:</strong> Showing top {{ count($rowsData) }} of {{ number_format($totalCount) }} matching records for optimal PDF rendering. For complete unfiltered datasets, please use the <strong>Export Excel</strong> or <strong>Export CSV</strong> option.
+            </div>
+        @endif
         @if(!empty(array_filter($filters ?? [])))
             <div class="filter-tags">
                 <strong>Active Filters:</strong>
                 @if(!empty($filters['q'])) Search: "{{ $filters['q'] }}" | @endif
-                @if(!empty($filters['status'])) Status: {{ ucfirst($filters['status']) }} | @endif
+                @if(!empty($filters['status'])) Status: {{ ucfirst(str_replace('_', ' ', $filters['status'])) }} | @endif
                 @if(!empty($filters['min_land'])) Min Land: {{ $filters['min_land'] }} Kanals | @endif
                 @if(!empty($filters['max_land'])) Max Land: {{ $filters['max_land'] }} Kanals | @endif
                 @if(!empty($filters['min_bags'])) Min Bags: {{ $filters['min_bags'] }} | @endif
@@ -145,67 +173,49 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($applications as $index => $app)
-                @php
-                    $applicant = $app->applicant;
-                    $cnic = $applicant?->cnic;
-                    $phone = $applicant?->phone;
-                    $cnic = \App\Support\Cnic::dashed($cnic);
-                    $phone = $phone ?: '—';
-                    $land = $app->getAvailableLandKanals();
-                    $bags = $app->getBagsRequired();
-                    $statusClass = match($app->status) {
-                        'directorate_approved' => 'badge-approved',
-                        'district_verified' => 'badge-verified',
-                        'disbursed' => 'badge-disbursed',
-                        'rejected' => 'badge-rejected',
-                        default => 'badge-pending',
-                    };
-                @endphp
+            @forelse($rowsData as $index => $row)
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
-                    <td class="fw-bold">{{ $app->application_no }}</td>
+                    <td class="fw-bold">{{ $row['application_no'] }}</td>
                     <td>
-                        <div class="fw-bold">{{ $applicant?->full_name ?? '—' }}</div>
-                        @if($applicant?->father_name)
-                            <div class="text-muted">S/O {{ $applicant->father_name }}</div>
+                        <div class="fw-bold">{{ $row['full_name'] }}</div>
+                        @if(!empty($row['father_name']))
+                            <div class="text-muted">S/O {{ $row['father_name'] }}</div>
                         @endif
                     </td>
                     <td>
-                        <div>{{ $cnic ?? '—' }}</div>
-                        <div class="text-muted">{{ $phone ?? '—' }}</div>
+                        <div>{{ $row['cnic'] }}</div>
+                        <div class="text-muted">{{ $row['phone'] }}</div>
                     </td>
                     <td>
-                        <div class="fw-bold">{{ $app->district?->name ?? '—' }}</div>
-                        <div class="text-muted">
-                            {{ $applicant?->tehsil ?: '' }}@if($applicant?->tehsil && $applicant?->village), @endif{{ $applicant?->village ?: '' }}
-                        </div>
+                        <div class="fw-bold">{{ $row['district'] }}</div>
+                        <div class="text-muted">{{ $row['location'] }}</div>
                     </td>
                     <td>
-                        <div>{{ $app->scheme?->title ?? '—' }}</div>
-                        <div class="text-muted" style="font-size: 7px;">{{ $app->scheme?->department?->name ?? '' }}</div>
+                        <div>{{ $row['scheme'] }}</div>
+                        <div class="text-muted" style="font-size: 7px;">{{ $row['department'] }}</div>
                     </td>
                     <td class="text-end">
-                        @if($land !== null)
-                            <span class="fw-bold">{{ number_format($land, 1) }}</span> <span class="text-muted">Kanals</span>
+                        @if($row['land'] !== null)
+                            <span class="fw-bold">{{ $row['land'] }}</span> <span class="text-muted">Kanals</span>
                         @else
                             <span class="text-muted">—</span>
                         @endif
                     </td>
                     <td class="text-center">
-                        @if($bags !== null)
-                            <span class="fw-bold text-success">{{ $bags }}</span>
+                        @if($row['bags'] !== null)
+                            <span class="fw-bold text-success">{{ $row['bags'] }}</span>
                         @else
                             <span class="text-muted">—</span>
                         @endif
                     </td>
                     <td class="text-center">
-                        <span class="badge {{ $statusClass }}">
-                            {{ $app->statusLabel() }}
+                        <span class="badge {{ $row['status_class'] }}">
+                            {{ $row['status_label'] }}
                         </span>
                     </td>
                     <td class="text-center text-muted">
-                        {{ optional($app->submitted_at ?? $app->created_at)->format('d M Y') }}
+                        {{ $row['submitted_at'] }}
                     </td>
                 </tr>
             @empty

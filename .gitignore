@@ -2,3 +2,4 @@
 /public/storage
 .phpunit.result.cache
 .phpunit.cache
+/scratch

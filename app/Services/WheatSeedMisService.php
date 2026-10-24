@@ -214,9 +214,13 @@ class WheatSeedMisService
     /**
      * Get district rates bundle for all districts in the system.
      */
-    public function getAllDistrictRatesTable(): Collection
+    public function getAllDistrictRatesTable(?User $user = null): Collection
     {
-        $districts = District::orderBy('name')->get();
+        $districtsQuery = District::orderBy('name');
+        if ($user && $user->isDistrictScopedOfficer()) {
+            $districtsQuery->whereIn('id', $user->authorizedDistrictIds());
+        }
+        $districts = $districtsQuery->get();
         $baseRate = $this->getConfiguredBagRate();
         $rawRates = $this->getRawDistrictRates();
         $govPct = $this->getConfiguredGovtSharePct();
@@ -282,11 +286,10 @@ class WheatSeedMisService
             ->where('applications.scheme_id', $schemeId)
             ->with(['applicant', 'district', 'statusLogs.user']);
 
-        // Staff role scoping
-        if ($user) {
-            if ($user->hasRole('District Officer') && $user->district_id) {
-                $query->where('applications.district_id', $user->district_id);
-            }
+        // Staff role scoping: officers other than Directors, Secretary, and Admin see their respective district only
+        if ($user && $user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            $query->whereIn('applications.district_id', $userDistricts);
         }
 
         // Filter: Date range
@@ -304,7 +307,15 @@ class WheatSeedMisService
 
         // Filter: District
         if (! empty($filters['district_id'])) {
-            $query->where('applications.district_id', (int) $filters['district_id']);
+            $filterDistrictId = (int) $filters['district_id'];
+            if ($user && $user->isDistrictScopedOfficer()) {
+                $userDistricts = $user->authorizedDistrictIds();
+                if (in_array($filterDistrictId, $userDistricts, true)) {
+                    $query->where('applications.district_id', $filterDistrictId);
+                }
+            } else {
+                $query->where('applications.district_id', $filterDistrictId);
+            }
         }
 
         // Filter: Division
@@ -525,10 +536,15 @@ class WheatSeedMisService
         $schemeId = $this->getScheme()?->id ?? self::SCHEME_ID;
         $quotaQuery = SchemeDistrict::query()->where('scheme_id', $schemeId);
 
-        if (! empty($filters['district_id'])) {
+        if ($user && $user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            if (! empty($filters['district_id']) && in_array((int) $filters['district_id'], $userDistricts, true)) {
+                $quotaQuery->where('district_id', (int) $filters['district_id']);
+            } else {
+                $quotaQuery->whereIn('district_id', $userDistricts);
+            }
+        } elseif (! empty($filters['district_id'])) {
             $quotaQuery->where('district_id', (int) $filters['district_id']);
-        } elseif ($user && $user->hasRole('District Officer') && $user->district_id) {
-            $quotaQuery->where('district_id', $user->district_id);
         } elseif (! empty($filters['division'])) {
             $divisionDistricts = self::DIVISIONS[$filters['division']] ?? [];
             if (! empty($divisionDistricts)) {
@@ -685,7 +701,13 @@ class WheatSeedMisService
     public function getDemandSupplyGap(array $filters = [], ?User $user = null): Collection
     {
         $schemeId = $this->getScheme()?->id ?? self::SCHEME_ID;
-        $districts = District::orderBy('name')->get();
+        $districtsQuery = District::orderBy('name');
+        if ($user && $user->isDistrictScopedOfficer()) {
+            $districtsQuery->whereIn('id', $user->authorizedDistrictIds());
+        } elseif (! empty($filters['district_id'])) {
+            $districtsQuery->where('id', (int) $filters['district_id']);
+        }
+        $districts = $districtsQuery->get();
 
         $apps = $this->getFilteredQuery($filters, $user)
             ->with(['fieldValues.formField'])

@@ -20,7 +20,12 @@ class CmDashboardController extends Controller
     {
         $user = auth()->user();
         $departments = $this->departmentsFor($user);
-        $districts = District::orderBy('name')->get();
+        if ($user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            $districts = District::whereIn('id', $userDistricts)->orderBy('name')->get();
+        } else {
+            $districts = District::orderBy('name')->get();
+        }
         $schemes = Scheme::query()
             ->when($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries']) && $user->department_id,
                 fn ($q) => $q->where('department_id', $user->department_id))
@@ -106,26 +111,44 @@ class CmDashboardController extends Controller
     public function export(Request $request): BinaryFileResponse|\Illuminate\Http\Response
     {
         $format = $request->string('format', 'xlsx')->toString();
-        $rows = $this->filteredQuery($request)
+        $query = $this->filteredQuery($request)
             ->with(['scheme.department', 'applicant', 'district'])
-            ->latest()
-            ->get();
+            ->latest();
 
         $filename = 'alf-applications-'.now()->format('Ymd_His');
 
         if ($format === 'csv') {
+            $rows = $query->limit(5000)->get();
             return Excel::download(new ApplicationsExport($rows), $filename.'.csv', \Maatwebsite\Excel\Excel::CSV);
         }
 
         if ($format === 'pdf') {
+            ini_set('memory_limit', '512M');
+            set_time_limit(180);
+
+            $totalCount = (clone $query)->count();
+            $requestedLimit = (int) $request->input('per_page', 500);
+            $limit = ($requestedLimit > 0 && $requestedLimit <= 500) ? $requestedLimit : 500;
+
+            $rows = $query->limit($limit)->get();
+
             $pdf = Pdf::loadView('admin.cm-dashboard.export-pdf', [
                 'applications' => $rows,
+                'totalCount' => $totalCount,
+                'limit' => $limit,
                 'filters' => $this->filters($request),
-            ])->setPaper('a4', 'landscape');
+            ])->setPaper('a4', 'landscape')
+              ->setOption([
+                  'isHtml5ParserEnabled' => true,
+                  'isRemoteEnabled' => false,
+                  'dpi' => 96,
+                  'defaultFont' => 'DejaVu Sans',
+              ]);
 
             return $pdf->download($filename.'.pdf');
         }
 
+        $rows = $query->limit(5000)->get();
         return Excel::download(new ApplicationsExport($rows), $filename.'.xlsx');
     }
 
@@ -140,7 +163,14 @@ class CmDashboardController extends Controller
             $query->whereHas('scheme', fn ($q) => $q->where('department_id', $request->integer('department_id')));
         }
 
-        if ($request->filled('district_id')) {
+        if ($user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            if ($request->filled('district_id') && in_array($request->integer('district_id'), $userDistricts, true)) {
+                $query->where('district_id', $request->integer('district_id'));
+            } else {
+                $query->whereIn('district_id', $userDistricts);
+            }
+        } elseif ($request->filled('district_id')) {
             $query->where('district_id', $request->integer('district_id'));
         }
         if ($request->filled('scheme_id')) {
@@ -161,9 +191,19 @@ class CmDashboardController extends Controller
 
     private function filters(Request $request): array
     {
-        return $request->only([
+        $user = auth()->user();
+        $filters = $request->only([
             'department_id', 'district_id', 'scheme_id', 'status', 'from_date', 'to_date',
         ]);
+
+        if ($user && $user->isDistrictScopedOfficer()) {
+            $userDistricts = $user->authorizedDistrictIds();
+            if (empty($filters['district_id']) || ! in_array((int) $filters['district_id'], $userDistricts, true)) {
+                $filters['district_id'] = $userDistricts[0] ?? null;
+            }
+        }
+
+        return $filters;
     }
 
     private function departmentsFor($user)
