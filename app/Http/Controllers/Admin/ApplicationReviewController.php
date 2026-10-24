@@ -65,12 +65,12 @@ class ApplicationReviewController extends Controller
         $rows = $this->filteredQuery($request)->limit(5000)->get();
         $filename = 'alf-applications-'.now()->format('Ymd_His');
 
-        $masked = ! $user->can('beneficiaries.export_unmasked');
+        $masked = false;
 
         AccessAuditLog::log('beneficiaries_exported', Application::class, null, [
             'count' => $rows->count(),
             'format' => $format,
-            'is_masked' => $masked,
+            'is_masked' => false,
         ]);
 
         $generatedAt = now()->format('d M Y, h:i A');

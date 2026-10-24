@@ -150,12 +150,8 @@
                     $applicant = $app->applicant;
                     $cnic = $applicant?->cnic;
                     $phone = $applicant?->phone;
-                    if ($masked) {
-                        $cnic = \App\Support\Cnic::mask($cnic);
-                        $phone = \App\Support\Cnic::maskPhone($phone);
-                    } else {
-                        $cnic = \App\Support\Cnic::dashed($cnic);
-                    }
+                    $cnic = \App\Support\Cnic::dashed($cnic);
+                    $phone = $phone ?: '—';
                     $land = $app->getAvailableLandKanals();
                     $bags = $app->getBagsRequired();
                     $statusClass = match($app->status) {

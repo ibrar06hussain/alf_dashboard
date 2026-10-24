@@ -66,12 +66,8 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
         $cnic = $applicant?->cnic;
         $phone = $applicant?->phone;
 
-        if ($this->masked) {
-            $cnic = Cnic::mask($cnic);
-            $phone = Cnic::maskPhone($phone);
-        } else {
-            $cnic = Cnic::dashed($cnic);
-        }
+        $cnic = Cnic::dashed($cnic);
+        $phone = $phone ?: '—';
 
         $land = $application->getAvailableLandKanals();
         $bags = $application->getBagsRequired();

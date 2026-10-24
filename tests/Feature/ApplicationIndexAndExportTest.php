@@ -193,6 +193,8 @@ class ApplicationIndexAndExportTest extends TestCase
         $this->assertStringContainsString('Available Land (Kanals)', $content);
         $this->assertStringContainsString('Bags Required (50kg)', $content);
         $this->assertStringContainsString('ALF-TEST-0001', $content);
+        $this->assertStringContainsString('71501-1111111-1', $content);
+        $this->assertStringContainsString('03451111111', $content);
         $this->assertStringContainsString('12', $content);
         $this->assertStringContainsString('3', $content);
     }
