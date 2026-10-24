@@ -363,6 +363,105 @@ class WheatSeedMisDashboardTest extends TestCase
             ->assertSee('PKR 27,200');
     }
 
+    public function test_beneficiaries_ajax_endpoint_returns_rendered_html_and_pagination(): void
+    {
+        $this->createWheatApplication($this->districtGilgit, '7150199999991', '03009999991', 8, 'pending');
+        $this->createWheatApplication($this->districtSkardu, '7150299999992', '03009999992', 16, 'district_verified');
+
+        $response = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', ['per_page' => 25]));
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'html',
+                'total',
+                'current_page',
+                'last_page',
+                'per_page',
+                'count',
+            ]);
+
+        $json = $response->json();
+        $this->assertEquals(2, $json['total']);
+        $this->assertStringContainsString('Wheat Beneficiary 9991', $json['html']);
+        $this->assertStringContainsString('Wheat Beneficiary 9992', $json['html']);
+    }
+
+    public function test_beneficiaries_ajax_filters_by_district_tehsil_land_and_bags(): void
+    {
+        $app1 = $this->createWheatApplication($this->districtGilgit, '7150111111111', '03001111111', 4, 'pending'); // 1 bag
+        $app2 = $this->createWheatApplication($this->districtGilgit, '7150122222222', '03002222222', 20, 'district_verified'); // 5 bags
+        $app3 = $this->createWheatApplication($this->districtSkardu, '7150233333333', '03003333333', 40, 'directorate_approved'); // 10 bags
+
+        // Filter by District
+        $resDist = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', [
+            'district_id' => $this->districtSkardu->id,
+        ]));
+        $this->assertEquals(1, $resDist->json('total'));
+        $this->assertStringContainsString('Wheat Beneficiary 3333', $resDist->json('html'));
+        $this->assertStringNotContainsString('Wheat Beneficiary 1111', $resDist->json('html'));
+
+        // Filter by Min Land (Kanals >= 15)
+        $resLand = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', [
+            'min_land' => 15,
+        ]));
+        $this->assertEquals(2, $resLand->json('total'));
+        $this->assertStringContainsString('Wheat Beneficiary 2222', $resLand->json('html'));
+        $this->assertStringContainsString('Wheat Beneficiary 3333', $resLand->json('html'));
+        $this->assertStringNotContainsString('Wheat Beneficiary 1111', $resLand->json('html'));
+
+        // Filter by Min Bags (Min Bags >= 6)
+        $resBags = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', [
+            'min_bags' => 6,
+        ]));
+        $this->assertEquals(1, $resBags->json('total'));
+        $this->assertStringContainsString('Wheat Beneficiary 3333', $resBags->json('html'));
+
+        // Filter by Tehsil
+        $resTehsil = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', [
+            'tehsil' => 'Gilgit Tehsil',
+        ]));
+        $this->assertEquals(2, $resTehsil->json('total'));
+    }
+
+    public function test_beneficiaries_ajax_supports_per_page_all(): void
+    {
+        for ($i = 1; $i <= 30; $i++) {
+            $cnic = sprintf('71501%08d', $i);
+            $phone = sprintf('0300%07d', $i);
+            $this->createWheatApplication($this->districtGilgit, $cnic, $phone, 8, 'pending');
+        }
+
+        // 25 per page has 2 pages
+        $res25 = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', ['per_page' => 25]));
+        $this->assertEquals(25, $res25->json('count'));
+        $this->assertEquals(2, $res25->json('last_page'));
+
+        // "all" shows all 30 records in 1 page
+        $resAll = $this->actingAs($this->superAdmin)->getJson(route('admin.wheat-mis.beneficiaries', ['per_page' => 'all']));
+        $this->assertEquals(30, $resAll->json('count'));
+        $this->assertEquals(1, $resAll->json('last_page'));
+        $this->assertStringContainsString('Showing all', $resAll->json('html'));
+    }
+
+    public function test_wheat_mis_export_downloads_excel_csv_and_pdf(): void
+    {
+        $this->createWheatApplication($this->districtGilgit, '7150188888881', '03008888881', 12, 'pending');
+
+        // CSV export
+        $csvRes = $this->actingAs($this->superAdmin)->get(route('admin.wheat-mis.export', ['format' => 'csv']));
+        $csvRes->assertStatus(200);
+        $this->assertStringContainsString('text/csv', $csvRes->headers->get('content-type'));
+
+        // Excel export
+        $xlsxRes = $this->actingAs($this->superAdmin)->get(route('admin.wheat-mis.export', ['format' => 'xlsx']));
+        $xlsxRes->assertStatus(200);
+
+        // PDF export
+        $pdfRes = $this->actingAs($this->superAdmin)->get(route('admin.wheat-mis.export', ['format' => 'pdf']));
+        $pdfRes->assertStatus(200);
+        $this->assertStringContainsString('application/pdf', $pdfRes->headers->get('content-type'));
+    }
+
     private function createWheatApplication(District $district, string $cnic, string $phone, float $kanals, string $status): Application
     {
         $applicant = Applicant::create([

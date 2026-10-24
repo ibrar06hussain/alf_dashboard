@@ -57,7 +57,8 @@ class WheatSeedMisController extends Controller
         $canUnmask = $user->hasAnyRole(['Super Admin', 'Secretary']);
         $maskPii = ! ($canUnmask && $request->boolean('unmask'));
 
-        $beneficiaries = $this->misService->getBeneficiaryList($filters, $user, 15, $maskPii);
+        $perPage = $request->input('per_page', 25);
+        $beneficiaries = $this->misService->getBeneficiaryList($filters, $user, $perPage, $maskPii);
 
         return view('admin.schemes.wheat-mis.index', compact(
             'filters',
@@ -77,7 +78,8 @@ class WheatSeedMisController extends Controller
             'districtRatesTable',
             'beneficiaries',
             'canUnmask',
-            'maskPii'
+            'maskPii',
+            'perPage'
         ));
     }
 
@@ -171,14 +173,21 @@ class WheatSeedMisController extends Controller
         $canUnmask = $user->hasAnyRole(['Super Admin', 'Secretary']);
         $maskPii = ! ($canUnmask && $request->boolean('unmask'));
 
-        $beneficiaries = $this->misService->getBeneficiaryList($filters, $user, 20, $maskPii);
+        $perPage = $request->input('per_page', 25);
+        $beneficiaries = $this->misService->getBeneficiaryList($filters, $user, $perPage, $maskPii);
+
+        $html = view('admin.schemes.wheat-mis.partials.beneficiary-grid', compact('beneficiaries', 'maskPii', 'perPage'))->render();
 
         return response()->json([
+            'html' => $html,
             'data' => $beneficiaries->items(),
             'current_page' => $beneficiaries->currentPage(),
             'last_page' => $beneficiaries->lastPage(),
             'total' => $beneficiaries->total(),
             'per_page' => $beneficiaries->perPage(),
+            'count' => $beneficiaries->count(),
+            'first_item' => $beneficiaries->firstItem() ?? 0,
+            'last_item' => $beneficiaries->lastItem() ?? 0,
         ]);
     }
 
@@ -193,42 +202,41 @@ class WheatSeedMisController extends Controller
         $filters = $this->extractFilters($request);
         $format = strtolower($request->string('format', 'xlsx')->toString());
 
-        $canUnmask = $user->hasAnyRole(['Super Admin', 'Secretary']);
-        $maskPii = ! ($canUnmask && $request->boolean('unmask'));
+        $maskPii = false; // Unmasked as requested
 
         $query = $this->misService->getFilteredQuery($filters, $user)
             ->with(['applicant', 'district', 'statusLogs.user', 'fieldValues.formField'])
             ->latest('applications.id');
 
-        $rows = $query->get();
-        $filename = 'wheat-seed-mis-' . now()->format('Ymd_His');
+        $rows = $query->limit(5000)->get();
+        $filename = 'wheat-seed-beneficiaries-' . now()->format('Ymd_His');
+        $generatedAt = now()->format('d M Y, h:i A');
+        $generatedBy = $user->name . ' (' . ($user->getRoleNames()->first() ?? 'Officer') . ')';
 
         if ($format === 'csv') {
-            return Excel::download(new WheatSeedBeneficiariesExport($rows, $maskPii), $filename . '.csv', \Maatwebsite\Excel\Excel::CSV);
+            return Excel::download(
+                new WheatSeedBeneficiariesExport($rows, $maskPii, $generatedAt, $generatedBy),
+                $filename . '.csv',
+                \Maatwebsite\Excel\Excel::CSV
+            );
         }
 
         if ($format === 'pdf') {
-            $kpis = $this->misService->getKpis($filters, $user);
-            $demandSupplyGap = $this->misService->getDemandSupplyGap($filters, $user);
-            $landBands = $this->misService->getLandholdingBands($filters, $user);
-            $waterRoad = $this->misService->getWaterRoadBreakdowns($filters, $user);
-
             $pdf = Pdf::loadView('admin.schemes.wheat-mis.pdf', [
                 'applications' => $rows,
-                'kpis' => $kpis,
-                'demandSupplyGap' => $demandSupplyGap,
-                'landBands' => $landBands,
-                'waterRoad' => $waterRoad,
                 'filters' => $filters,
                 'maskPii' => $maskPii,
-                'generatedAt' => now()->format('d M Y H:i:s'),
-                'generatedBy' => $user->name . ' (' . $user->getRoleNames()->first() . ')',
+                'generatedAt' => $generatedAt,
+                'generatedBy' => $generatedBy,
             ])->setPaper('a4', 'landscape');
 
             return $pdf->download($filename . '.pdf');
         }
 
-        return Excel::download(new WheatSeedBeneficiariesExport($rows, $maskPii), $filename . '.xlsx');
+        return Excel::download(
+            new WheatSeedBeneficiariesExport($rows, $maskPii, $generatedAt, $generatedBy),
+            $filename . '.xlsx'
+        );
     }
 
     /**
@@ -443,6 +451,21 @@ class WheatSeedMisController extends Controller
         }
         if ($request->filled('q')) {
             $filters['q'] = $request->string('q')->toString();
+        }
+        if ($request->filled('min_land')) {
+            $filters['min_land'] = $request->input('min_land');
+        }
+        if ($request->filled('max_land')) {
+            $filters['max_land'] = $request->input('max_land');
+        }
+        if ($request->filled('min_bags')) {
+            $filters['min_bags'] = $request->input('min_bags');
+        }
+        if ($request->filled('max_bags')) {
+            $filters['max_bags'] = $request->input('max_bags');
+        }
+        if ($request->filled('per_page')) {
+            $filters['per_page'] = $request->input('per_page');
         }
 
         return $filters;

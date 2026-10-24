@@ -345,6 +345,66 @@ class WheatSeedMisService
             }
         }
 
+        // Filter: Available Land (Kanals)
+        $minLand = $filters['min_land'] ?? $filters['land_kanals'] ?? null;
+        if ($minLand !== null && $minLand !== '' && is_numeric($minLand)) {
+            $val = (float) $minLand;
+            $query->whereHas('fieldValues', function ($fq) use ($val) {
+                $fq->where(function ($sub) {
+                    $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                        ->orWhere('form_field_id', 8);
+                })->whereRaw('CAST(value AS DECIMAL(10,2)) >= ?', [$val]);
+            });
+        }
+        if (! empty($filters['max_land']) && is_numeric($filters['max_land'])) {
+            $val = (float) $filters['max_land'];
+            $query->whereHas('fieldValues', function ($fq) use ($val) {
+                $fq->where(function ($sub) {
+                    $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                        ->orWhere('form_field_id', 8);
+                })->whereRaw('CAST(value AS DECIMAL(10,2)) <= ?', [$val]);
+            });
+        }
+
+        // Filter: Bags Required (50kg)
+        $minBags = $filters['min_bags'] ?? $filters['bags_required'] ?? null;
+        if ($minBags !== null && $minBags !== '' && is_numeric($minBags)) {
+            $val = (int) $minBags;
+            $kanalsPerBag = $this->getConfiguredKanalsPerBag();
+            $minLandForBags = max(0, ($val - 1) * $kanalsPerBag + 0.01);
+            $query->where(function ($bq) use ($val, $minLandForBags) {
+                $bq->whereHas('fieldValues', function ($fq) use ($val) {
+                    $fq->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['bags_required', 'seed_bags', 'seed_bags_required', 'wheat_seed_bags']))
+                       ->whereRaw('CAST(value AS UNSIGNED) >= ?', [$val]);
+                })->orWhere(function ($wheatQ) use ($minLandForBags) {
+                    $wheatQ->whereHas('fieldValues', function ($fq) use ($minLandForBags) {
+                        $fq->where(function ($sub) {
+                            $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                                ->orWhere('form_field_id', 8);
+                        })->whereRaw('CAST(value AS DECIMAL(10,2)) >= ?', [$minLandForBags]);
+                    });
+                });
+            });
+        }
+        if (! empty($filters['max_bags']) && is_numeric($filters['max_bags'])) {
+            $val = (int) $filters['max_bags'];
+            $kanalsPerBag = $this->getConfiguredKanalsPerBag();
+            $maxLandForBags = $val * $kanalsPerBag;
+            $query->where(function ($bq) use ($val, $maxLandForBags) {
+                $bq->whereHas('fieldValues', function ($fq) use ($val) {
+                    $fq->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['bags_required', 'seed_bags', 'seed_bags_required', 'wheat_seed_bags']))
+                       ->whereRaw('CAST(value AS UNSIGNED) <= ?', [$val]);
+                })->orWhere(function ($wheatQ) use ($maxLandForBags) {
+                    $wheatQ->whereHas('fieldValues', function ($fq) use ($maxLandForBags) {
+                        $fq->where(function ($sub) {
+                            $sub->whereHas('formField', fn ($ff) => $ff->whereIn('field_key', ['land_kanals', 'available_land']))
+                                ->orWhere('form_field_id', 8);
+                        })->whereRaw('CAST(value AS DECIMAL(10,2)) <= ?', [$maxLandForBags]);
+                    });
+                });
+            });
+        }
+
         // Filter: Search Keyword (Application No, CNIC, Name, Phone, Village)
         if (! empty($filters['q'])) {
             $q = trim($filters['q']);
@@ -935,12 +995,19 @@ class WheatSeedMisService
     /**
      * Beneficiary list with normalized attributes, PII masking, and pagination.
      */
-    public function getBeneficiaryList(array $filters = [], ?User $user = null, int $perPage = 25, bool $maskPii = true): LengthAwarePaginator
+    public function getBeneficiaryList(array $filters = [], ?User $user = null, int|string $perPage = 25, bool $maskPii = false): LengthAwarePaginator
     {
+        $resolvedPerPage = 25;
+        if ($perPage === 'all' || (is_numeric($perPage) && (int) $perPage === -1)) {
+            $resolvedPerPage = 5000;
+        } elseif (is_numeric($perPage) && (int) $perPage > 0) {
+            $resolvedPerPage = min(5000, (int) $perPage);
+        }
+
         $paginator = $this->getFilteredQuery($filters, $user)
-            ->with(['applicant', 'district', 'statusLogs.user'])
+            ->with(['applicant', 'district', 'statusLogs.user', 'fieldValues.formField'])
             ->latest('applications.id')
-            ->paginate($perPage)
+            ->paginate($resolvedPerPage)
             ->withQueryString();
 
         $bagRate = $this->getConfiguredBagRate();

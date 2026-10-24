@@ -716,127 +716,106 @@
     </div>
 </div>
 
-{{-- BENEFICIARY REGISTRY & FIELD AUDIT TABLE --}}
-<div class="card alf-panel mb-4">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <div>
-            <i class="fa-solid fa-id-card text-primary me-2"></i>
-            <span class="fw-bold">Wheat Seed Beneficiary Registry</span>
-            <span class="text-muted small ms-2">({{ $beneficiaries->total() }} matching records)</span>
+{{-- BENEFICIARY REGISTRY & FIELD AUDIT TABLE WITH AJAX FILTERING, FLEXIBLE PER-PAGE, AND DIRECT EXPORTS --}}
+<div class="card alf-panel mb-4 shadow-sm" id="wheat-beneficiaries-card">
+    <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center py-2 px-3 gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-id-card text-primary fs-5"></i>
+            <div>
+                <span class="fw-bold text-dark">Wheat Seed Beneficiary Registry</span>
+                <span class="badge bg-primary text-white ms-2" id="grid-total-badge">{{ number_format($beneficiaries->total()) }} matching records</span>
+                <span class="spinner-border spinner-border-sm text-primary ms-2 d-none" id="grid-loading-spinner" role="status" aria-hidden="true" title="Loading matching records..."></span>
+            </div>
         </div>
-        <div class="small text-muted">
-            @if($maskPii)
-                <span class="badge bg-light text-secondary border" title="PII Masked for Privacy Protection">
-                    <i class="fa-solid fa-shield-halved me-1"></i> CNIC & Phone Masked
-                </span>
-            @else
-                <span class="badge bg-warning text-dark" title="Full PII Visible to Authorized Staff">
-                    <i class="fa-solid fa-unlock me-1"></i> Full PII Unmasked
-                </span>
-            @endif
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="small text-muted d-none d-md-inline me-1">Export Grid:</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Export Beneficiaries">
+                <a href="{{ route('admin.wheat-mis.export', array_merge($filters, ['format' => 'xlsx'])) }}" class="btn btn-outline-success grid-export-btn" id="grid-export-excel" title="Download Excel (.xlsx)">
+                    <i class="fa-solid fa-file-excel me-1"></i>Excel
+                </a>
+                <a href="{{ route('admin.wheat-mis.export', array_merge($filters, ['format' => 'csv'])) }}" class="btn btn-outline-info grid-export-btn" id="grid-export-csv" title="Download CSV (.csv)">
+                    <i class="fa-solid fa-file-csv me-1"></i>CSV
+                </a>
+                <a href="{{ route('admin.wheat-mis.export', array_merge($filters, ['format' => 'pdf'])) }}" class="btn btn-outline-danger grid-export-btn" id="grid-export-pdf" title="Download PDF Report (.pdf)">
+                    <i class="fa-solid fa-file-pdf me-1"></i>PDF
+                </a>
+            </div>
         </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="beneficiaries-table">
-            <thead class="table-light small">
-                <tr>
-                    <th>App No</th>
-                    <th>Applicant Name</th>
-                    <th>Father / Husband</th>
-                    <th>CNIC</th>
-                    <th>Phone</th>
-                    <th>District</th>
-                    <th>Village</th>
-                    <th class="text-end">Land (Kanals)</th>
-                    <th class="text-end">Last Yr Cultiv</th>
-                    <th class="text-end">Req Bags</th>
-                    <th class="text-end">Appr Bags</th>
-                    <th class="text-center">Survey Status</th>
-                    <th class="text-center">Decision</th>
-                    <th>Reviewing Officer</th>
-                    <th class="text-center">Action</th>
-                </tr>
-            </thead>
-            <tbody class="small">
-                @forelse($beneficiaries as $ben)
-                    <tr>
-                        <td>
-                            <a href="{{ route('admin.applications.show', $ben->id) }}" class="fw-bold text-decoration-none text-primary">
-                                {{ $ben->application_no }}
-                            </a>
-                        </td>
-                        <td class="fw-semibold text-dark">{{ $ben->applicant_name }}</td>
-                        <td>{{ $ben->father_name }}</td>
-                        <td><code>{{ $ben->cnic }}</code></td>
-                        <td><code>{{ $ben->phone }}</code></td>
-                        <td>{{ $ben->district_name }}</td>
-                        <td>{{ $ben->village }}</td>
-                        <td class="text-end fw-semibold">
-                            {{ $ben->land_kanals !== null ? number_format($ben->land_kanals, 1) : '—' }}
-                            @if($ben->land_acres !== null)
-                                <span class="text-muted" style="font-size: 0.72rem;">({{ $ben->land_acres }} ac)</span>
-                            @endif
-                        </td>
-                        <td class="text-end">
-                            @if($ben->cultivated_kanals_last_year !== null)
-                                {{ number_format($ben->cultivated_kanals_last_year, 1) }} k
-                            @else
-                                <span class="text-muted">Not yet captured</span>
-                            @endif
-                        </td>
-                        <td class="text-end fw-bold">{{ $ben->requested_bags }}</td>
-                        <td class="text-end fw-bold {{ $ben->approved_bags > 0 ? 'text-primary' : 'text-muted' }}">
-                            {{ $ben->approved_bags }}
-                            @if($ben->approved_bags > 0 && $ben->rate_per_bag !== null)
-                                <div class="text-muted fw-normal" style="font-size: 0.70rem;" title="Delivered Rate: PKR {{ number_format($ben->rate_per_bag, 0) }} / bag (Transport: PKR {{ number_format($ben->transport_cost, 0) }})">
-                                    PKR {{ number_format($ben->approved_bags * $ben->rate_per_bag, 0) }}
-                                </div>
-                            @endif
-                        </td>
-                        <td class="text-center">
-                            <span class="badge {{ str_contains($ben->survey_status, 'Verified') ? 'bg-success' : 'bg-warning text-dark' }}">
-                                {{ $ben->survey_status }}
-                            </span>
-                        </td>
-                        <td class="text-center">
-                            @php
-                                $statusBadge = match($ben->status) {
-                                    'pending' => 'bg-warning text-dark',
-                                    'district_verified' => 'bg-info text-white',
-                                    'directorate_approved' => 'bg-primary',
-                                    'disbursed' => 'bg-success',
-                                    'rejected' => 'bg-danger',
-                                    default => 'bg-secondary',
-                                };
-                            @endphp
-                            <span class="badge {{ $statusBadge }}">{{ $ben->status_label }}</span>
-                        </td>
-                        <td class="text-muted">{{ $ben->reviewing_officer }}</td>
-                        <td class="text-center">
-                            <a href="{{ route('admin.applications.show', $ben->id) }}" class="btn btn-outline-primary btn-sm py-0 px-2" title="Review Application">
-                                Review
-                            </a>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="15" class="text-center text-muted py-4">
-                            <i class="fa-solid fa-folder-open fs-3 d-block mb-2"></i>
-                            No applications found matching the selected filters.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+    {{-- DEDICATED INLINE AJAX FILTER TOOLBAR --}}
+    <div class="card-body bg-light-subtle border-bottom p-3">
+        <form id="beneficiary-grid-filter-form" class="row g-2 align-items-end" onsubmit="return false;">
+            {{-- District --}}
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="fa-solid fa-map-location-dot text-primary me-1"></i>District
+                </label>
+                <select name="district_id" class="form-select form-select-sm grid-filter-input" id="grid-district-id">
+                    <option value="">All Districts</option>
+                    @foreach($districts as $district)
+                        <option value="{{ $district->id }}" @selected(($filters['district_id'] ?? null) == $district->id)>{{ $district->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            {{-- Tehsil --}}
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="fa-solid fa-location-dot text-info me-1"></i>Tehsil
+                </label>
+                <input type="text" name="tehsil" class="form-control form-control-sm grid-filter-input" id="grid-tehsil" placeholder="e.g. Gilgit / Danyore" value="{{ $filters['tehsil'] ?? '' }}">
+            </div>
+
+            {{-- Available Land (Min Kanals) --}}
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="fa-solid fa-chart-area text-success me-1"></i>Min Land (Kanals)
+                </label>
+                <input type="number" step="0.5" min="0" name="min_land" class="form-control form-control-sm grid-filter-input" id="grid-min-land" placeholder="Min Kanals" value="{{ $filters['min_land'] ?? '' }}">
+            </div>
+
+            {{-- Bags Required (Min Bags) --}}
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="fa-solid fa-wheat-awn text-warning me-1"></i>Min Bags (50kg)
+                </label>
+                <input type="number" min="1" name="min_bags" class="form-control form-control-sm grid-filter-input" id="grid-min-bags" placeholder="Min Bags" value="{{ $filters['min_bags'] ?? '' }}">
+            </div>
+
+            {{-- Search Keyword (App No, Name, CNIC, Phone) --}}
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="fa-solid fa-magnifying-glass text-secondary me-1"></i>Search Keyword
+                </label>
+                <input type="text" name="q" class="form-control form-control-sm grid-filter-input" id="grid-search-q" placeholder="App No, CNIC, Name..." value="{{ $filters['q'] ?? '' }}">
+            </div>
+
+            {{-- Records Per Page (25, 50, 100, 500, all) --}}
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="fa-solid fa-list-ol text-dark me-1"></i>Show Records
+                </label>
+                <div class="d-flex gap-1">
+                    <select name="per_page" class="form-select form-select-sm grid-filter-input flex-grow-1" id="grid-per-page">
+                        <option value="25" @selected(($perPage ?? 25) == 25)>25 per page</option>
+                        <option value="50" @selected(($perPage ?? 25) == 50)>50 per page</option>
+                        <option value="100" @selected(($perPage ?? 25) == 100)>100 per page</option>
+                        <option value="500" @selected(($perPage ?? 25) == 500)>500 per page</option>
+                        <option value="all" @selected(($perPage ?? 25) === 'all')>Show All Records</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-grid-filter-reset" title="Reset Grid Filters">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
 
-    @if($beneficiaries->hasPages())
-        <div class="card-footer bg-light d-flex justify-content-between align-items-center">
-            <span class="small text-muted">Showing {{ $beneficiaries->firstItem() }} to {{ $beneficiaries->lastItem() }} of {{ $beneficiaries->total() }} records</span>
-            {{ $beneficiaries->links() }}
-        </div>
-    @endif
+    {{-- TABLE AND PAGINATION DYNAMIC CONTAINER --}}
+    <div id="beneficiary-grid-container" class="position-relative">
+        @include('admin.schemes.wheat-mis.partials.beneficiary-grid')
+    </div>
 </div>
 
 @endsection
@@ -1430,6 +1409,173 @@ document.addEventListener('DOMContentLoaded', function () {
                 dictCounter.textContent = `${visible} of ${rows.length} Entries`;
             }
         });
+    }
+
+    // --- WHEAT SEED BENEFICIARY REGISTRY AJAX FILTER & DYNAMIC EXPORT ---
+    const gridFilterForm = document.getElementById('beneficiary-grid-filter-form');
+    const gridContainer = document.getElementById('beneficiary-grid-container');
+    const gridTotalBadge = document.getElementById('grid-total-badge');
+    const gridSpinner = document.getElementById('grid-loading-spinner');
+    const beneficiariesUrl = @json(route('admin.wheat-mis.beneficiaries'));
+    const exportBaseUrl = @json(route('admin.wheat-mis.export'));
+
+    const exportExcelBtn = document.getElementById('grid-export-excel');
+    const exportCsvBtn = document.getElementById('grid-export-csv');
+    const exportPdfBtn = document.getElementById('grid-export-pdf');
+
+    let gridAbortController = null;
+    let gridDebounceTimer = null;
+    let currentGridPage = 1;
+
+    function getGridFilterParams(page = 1) {
+        const params = new URLSearchParams();
+        if (!gridFilterForm) return params;
+
+        const formData = new FormData(gridFilterForm);
+        for (const [key, val] of formData.entries()) {
+            const trimmed = String(val).trim();
+            if (trimmed !== '') {
+                params.append(key, trimmed);
+            }
+        }
+
+        const perPage = params.get('per_page') || '25';
+        if (perPage !== 'all' && page && Number(page) > 1) {
+            params.set('page', page);
+        }
+
+        return params;
+    }
+
+    function syncGridExportUrls() {
+        const baseParams = getGridFilterParams(1);
+
+        if (exportExcelBtn) {
+            const p = new URLSearchParams(baseParams);
+            p.set('format', 'xlsx');
+            exportExcelBtn.href = exportBaseUrl + '?' + p.toString();
+        }
+        if (exportCsvBtn) {
+            const p = new URLSearchParams(baseParams);
+            p.set('format', 'csv');
+            exportCsvBtn.href = exportBaseUrl + '?' + p.toString();
+        }
+        if (exportPdfBtn) {
+            const p = new URLSearchParams(baseParams);
+            p.set('format', 'pdf');
+            exportPdfBtn.href = exportBaseUrl + '?' + p.toString();
+        }
+    }
+
+    async function fetchBeneficiaries(page = 1) {
+        if (!gridContainer) return;
+
+        currentGridPage = page;
+        const params = getGridFilterParams(page);
+        syncGridExportUrls();
+
+        if (gridAbortController) {
+            gridAbortController.abort();
+        }
+        gridAbortController = new AbortController();
+
+        if (gridSpinner) gridSpinner.classList.remove('d-none');
+        gridContainer.style.opacity = '0.55';
+        gridContainer.style.pointerEvents = 'none';
+
+        try {
+            const response = await fetch(beneficiariesUrl + '?' + params.toString(), {
+                signal: gridAbortController.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Server returned HTTP ' + response.status);
+            }
+
+            const data = await response.json();
+
+            if (data.html) {
+                gridContainer.innerHTML = data.html;
+            }
+
+            if (gridTotalBadge && typeof data.total !== 'undefined') {
+                gridTotalBadge.textContent = Number(data.total).toLocaleString('en-US') + ' matching records';
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Failed to filter beneficiary grid:', err);
+            }
+        } finally {
+            if (gridSpinner) gridSpinner.classList.add('d-none');
+            gridContainer.style.opacity = '1';
+            gridContainer.style.pointerEvents = '';
+        }
+    }
+
+    if (gridFilterForm) {
+        // Dropdown changes trigger immediate AJAX fetch
+        gridFilterForm.querySelectorAll('select.grid-filter-input').forEach(sel => {
+            sel.addEventListener('change', function () {
+                fetchBeneficiaries(1);
+            });
+        });
+
+        // Text & Number inputs debounced
+        gridFilterForm.querySelectorAll('input.grid-filter-input').forEach(inp => {
+            inp.addEventListener('input', function () {
+                clearTimeout(gridDebounceTimer);
+                gridDebounceTimer = setTimeout(() => {
+                    fetchBeneficiaries(1);
+                }, 350);
+            });
+
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    clearTimeout(gridDebounceTimer);
+                    fetchBeneficiaries(1);
+                }
+            });
+        });
+
+        // Reset button
+        const resetBtn = document.getElementById('btn-grid-filter-reset');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function () {
+                gridFilterForm.reset();
+                const perPageSelect = document.getElementById('grid-per-page');
+                if (perPageSelect) perPageSelect.value = '25';
+                fetchBeneficiaries(1);
+            });
+        }
+
+        // Intercept pagination clicks inside dynamic grid container
+        gridContainer.addEventListener('click', function (e) {
+            const link = e.target.closest('.wheat-grid-pagination-links a, .pagination a');
+            if (!link || !link.href) return;
+
+            e.preventDefault();
+            try {
+                const url = new URL(link.href, window.location.origin);
+                const page = url.searchParams.get('page') || 1;
+                fetchBeneficiaries(page);
+
+                // Smooth scroll to grid top
+                const card = document.getElementById('wheat-beneficiaries-card');
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } catch (err) {
+                console.error('Error handling pagination click:', err);
+            }
+        });
+
+        // Sync initial export links
+        syncGridExportUrls();
     }
 
     function initWhenReady(tries = 40) {
