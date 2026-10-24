@@ -19,7 +19,7 @@
                 <a href="{{ route('admin.stock.demand') }}" class="btn btn-outline-primary mr-2 shadow-sm">
                     <i class="fa-solid fa-chart-pie mr-1"></i> Demand vs Stock Analysis
                 </a>
-                <a href="{{ route('admin.stock.receipts') }}" class="btn btn-success shadow-sm">
+                <a href="{{ route('admin.stock.receipts') }}?action=record" class="btn btn-success shadow-sm font-weight-bold">
                     <i class="fa-solid fa-plus-circle mr-1"></i> Record Stock In
                 </a>
             </div>

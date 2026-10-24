@@ -4,7 +4,7 @@
 <div class="app-page-title">
     <div class="page-title-wrapper">
         <div class="page-title-heading">
-            <div class="page-title-icon bg-success text-white">
+            <div class="page-title-icon bg-success text-white shadow-sm">
                 <i class="fa-solid fa-truck-ramp-box"></i>
             </div>
             <div>
@@ -15,7 +15,7 @@
             </div>
         </div>
         <div class="page-title-actions">
-            <button type="button" class="btn btn-success shadow-sm" data-toggle="modal" data-target="#createReceiptModal">
+            <button type="button" class="btn btn-success btn-lg shadow font-weight-bold px-3" onclick="openReceiptModal()" data-toggle="modal" data-target="#createReceiptModal">
                 <i class="fa-solid fa-plus-circle mr-1"></i> Record Stock In
             </button>
         </div>
@@ -51,8 +51,13 @@
 
 {{-- Receipts Table --}}
 <div class="main-card mb-4 card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <span class="font-weight-bold text-dark"><i class="fa-solid fa-file-invoice mr-2 text-success"></i> Stock Consignment Ledger ({{ $receipts->total() }})</span>
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <span class="font-weight-bold text-dark font-size-md">
+            <i class="fa-solid fa-file-invoice mr-2 text-success"></i> Stock Consignment Ledger ({{ $receipts->total() }})
+        </span>
+        <button type="button" class="btn btn-success btn-sm shadow-sm font-weight-bold px-3" onclick="openReceiptModal()" data-toggle="modal" data-target="#createReceiptModal">
+            <i class="fa-solid fa-plus-circle mr-1"></i> Record Stock In
+        </button>
     </div>
     <div class="table-responsive">
         <table class="align-middle mb-0 table table-borderless table-striped table-hover">
@@ -116,7 +121,20 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">No stock receipts recorded yet. Click "Record Stock In" above to register incoming shipments.</td>
+                    <td colspan="9" class="text-center py-5">
+                        <div class="py-4">
+                            <div class="avatar-icon-wrapper rounded-circle bg-light text-success p-3 mb-3 mx-auto" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fa-solid fa-truck-ramp-box fa-2x"></i>
+                            </div>
+                            <h5 class="font-weight-bold text-dark mb-1">No Stock Receipts Recorded Yet</h5>
+                            <p class="text-muted small mb-3" style="max-width: 480px; margin: 0 auto;">
+                                Register incoming consignments of wheat seed, fertilizers, fingerlings, or scheme items into your district or tehsil collection centers to track physical inventory.
+                            </p>
+                            <button type="button" class="btn btn-success btn-lg shadow font-weight-bold px-4" onclick="openReceiptModal()" data-toggle="modal" data-target="#createReceiptModal">
+                                <i class="fa-solid fa-plus-circle mr-2"></i> Record Stock In Now
+                            </button>
+                        </div>
+                    </td>
                 </tr>
                 @endforelse
             </tbody>
@@ -127,74 +145,136 @@
         {{ $receipts->links() }}
     </div>
 </div>
+@endsection
 
+@push('modals')
 {{-- Create Receipt Modal --}}
-<div class="modal fade" id="createReceiptModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
+<div class="modal fade" id="createReceiptModal" tabindex="-1" role="dialog" aria-labelledby="createReceiptModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0">
             <form method="POST" action="{{ route('admin.stock.receipts.store') }}" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title font-weight-bold"><i class="fa-solid fa-truck-ramp-box mr-2"></i> Record Stock In (Items Received)</h5>
-                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    <h5 class="modal-title font-weight-bold" id="createReceiptModalTitle">
+                        <i class="fa-solid fa-truck-ramp-box mr-2"></i> Record Stock In (Items Received)
+                    </h5>
+                    <button type="button" class="close text-white" onclick="closeReceiptModal()" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border-left border-success py-2 mb-3 small text-dark">
+                        <i class="fa-solid fa-circle-check text-success mr-1"></i>
+                        Recording stock in increments the available inventory balance in the selected collection depot in real time.
+                    </div>
                     <div class="form-row">
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Destination Collection Center *</label>
+                            <label class="font-weight-bold text-dark">Destination Collection Center *</label>
                             <select name="collection_center_id" class="form-control" required>
                                 <option value="">Select Receiving Depot / Center</option>
                                 @foreach($centers as $c)
-                                    <option value="{{ $c->id }}" {{ request('center_id') == $c->id ? 'selected' : '' }}>{{ $c->name }} ({{ $c->level }} - {{ $c->code }})</option>
+                                    <option value="{{ $c->id }}" {{ request('center_id') == $c->id ? 'selected' : '' }}>
+                                        {{ $c->name }} ({{ ucfirst($c->level) }} - {{ $c->code }})
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Scheme Stock Item *</label>
+                            <label class="font-weight-bold text-dark">Scheme Stock Item *</label>
                             <select name="scheme_stock_item_id" class="form-control" required>
                                 <option value="">Select Scheme Item</option>
                                 @foreach($items as $item)
-                                    <option value="{{ $item->id }}" {{ request('item_id') == $item->id ? 'selected' : '' }}>{{ $item->item_name }} ({{ $item->unit }}) - {{ $item->scheme->title ?? '' }}</option>
+                                    <option value="{{ $item->id }}" {{ request('item_id') == $item->id ? 'selected' : '' }}>
+                                        {{ $item->item_name }} ({{ $item->unit }}) - {{ $item->scheme->title ?? '' }}
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Quantity Received *</label>
+                            <label class="font-weight-bold text-dark">Quantity Received *</label>
                             <input type="number" step="any" min="0.01" name="quantity_received" class="form-control form-control-lg font-weight-bold text-success" placeholder="e.g. 500" required>
                         </div>
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Received Date *</label>
+                            <label class="font-weight-bold text-dark">Received Date *</label>
                             <input type="date" name="received_date" class="form-control" value="{{ date('Y-m-d') }}" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Supplier / Source Organization</label>
+                            <label class="font-weight-bold text-dark">Supplier / Source Organization</label>
                             <input type="text" name="supplier_source" class="form-control" placeholder="e.g. Punjab Seed Corporation / FSC&RD">
                         </div>
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Batch / Lot Number</label>
+                            <label class="font-weight-bold text-dark">Batch / Lot Number</label>
                             <input type="text" name="batch_no" class="form-control" placeholder="e.g. LOT-WHT-2026-9B">
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="font-weight-bold">Proof Attachment (Delivery Note / Gate Pass / Challan / Photo)</label>
+                        <label class="font-weight-bold text-dark">Proof Attachment (Delivery Note / Gate Pass / Challan / Photo)</label>
                         <input type="file" name="proof_file" class="form-control-file" accept=".jpg,.jpeg,.png,.pdf">
                         <small class="text-muted">Upload scanned delivery receipt or physical consignment photo (Max: 10MB)</small>
                     </div>
-                    <div class="form-group">
-                        <label class="font-weight-bold">Notes / Verification Remarks</label>
+                    <div class="form-group mb-0">
+                        <label class="font-weight-bold text-dark">Notes / Verification Remarks</label>
                         <textarea name="notes" rows="2" class="form-control" placeholder="Condition of bags on arrival, delivery truck number, driver contact..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success font-weight-bold"><i class="fa-solid fa-check mr-1"></i> Confirm & Add to Inventory</button>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary px-3" onclick="closeReceiptModal()" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success font-weight-bold px-4 shadow-sm">
+                        <i class="fa-solid fa-check mr-1"></i> Confirm & Add to Inventory
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-@endsection
+@endpush
+
+@push('scripts')
+<script>
+function openReceiptModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#createReceiptModal').modal('show');
+    } else {
+        var m = document.getElementById('createReceiptModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+            if (!document.getElementById('receiptModalBackdrop')) {
+                var backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                backdrop.id = 'receiptModalBackdrop';
+                backdrop.onclick = closeReceiptModal;
+                document.body.appendChild(backdrop);
+            }
+        }
+    }
+}
+
+function closeReceiptModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#createReceiptModal').modal('hide');
+    } else {
+        var m = document.getElementById('createReceiptModal');
+        if (m) {
+            m.classList.remove('show');
+            m.style.display = 'none';
+            document.body.classList.remove('modal-open');
+            var backdrop = document.getElementById('receiptModalBackdrop');
+            if (backdrop) backdrop.remove();
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'record' || params.get('record') === '1' || window.location.hash === '#record' || window.location.hash === '#createReceiptModal') {
+        setTimeout(openReceiptModal, 200);
+    }
+});
+</script>
+@endpush

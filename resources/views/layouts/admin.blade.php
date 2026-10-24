@@ -194,7 +194,7 @@
                             </li>
                             <li class="{{ request()->routeIs('admin.stock.receipts*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.stock.receipts') }}">
-                                    <i class="metismenu-icon fa-solid fa-truck-ramp-box"></i> Stock Received
+                                    <i class="metismenu-icon fa-solid fa-truck-ramp-box"></i> Stock Received (Stock In)
                                 </a>
                             </li>
                             <li class="{{ request()->routeIs('admin.stock.transfers*') ? 'mm-active' : '' }}">

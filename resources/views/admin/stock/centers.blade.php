@@ -15,7 +15,7 @@
             </div>
         </div>
         <div class="page-title-actions">
-            <button type="button" class="btn btn-success shadow-sm" data-toggle="modal" data-target="#createCenterModal">
+            <button type="button" class="btn btn-success btn-lg shadow font-weight-bold px-3" onclick="openCenterModal()" data-toggle="modal" data-target="#createCenterModal">
                 <i class="fa-solid fa-plus-circle mr-1"></i> Add Collection Center
             </button>
         </div>
@@ -51,8 +51,13 @@
 
 {{-- Centers Table --}}
 <div class="main-card mb-4 card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <span class="font-weight-bold text-dark"><i class="fa-solid fa-list mr-2 text-primary"></i> Registered Collection Centers ({{ $centers->total() }})</span>
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <span class="font-weight-bold text-dark font-size-md">
+            <i class="fa-solid fa-list mr-2 text-primary"></i> Registered Collection Centers ({{ $centers->total() }})
+        </span>
+        <button type="button" class="btn btn-success btn-sm shadow-sm font-weight-bold px-3" onclick="openCenterModal()" data-toggle="modal" data-target="#createCenterModal">
+            <i class="fa-solid fa-plus-circle mr-1"></i> Add Collection Center
+        </button>
     </div>
     <div class="table-responsive">
         <table class="align-middle mb-0 table table-borderless table-striped table-hover">
@@ -204,7 +209,20 @@
                 </div>
                 @empty
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">No collection centers found.</td>
+                    <td colspan="7" class="text-center py-5">
+                        <div class="py-4">
+                            <div class="avatar-icon-wrapper rounded-circle bg-light text-primary p-3 mb-3 mx-auto" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fa-solid fa-warehouse fa-2x"></i>
+                            </div>
+                            <h5 class="font-weight-bold text-dark mb-1">No Collection Centers Found</h5>
+                            <p class="text-muted small mb-3" style="max-width: 460px; margin: 0 auto;">
+                                Create district depots, tehsil centers, or village distribution points to manage scheme item supplies and dispatch points.
+                            </p>
+                            <button type="button" class="btn btn-success btn-lg shadow font-weight-bold px-4" onclick="openCenterModal()" data-toggle="modal" data-target="#createCenterModal">
+                                <i class="fa-solid fa-plus-circle mr-2"></i> Add Collection Center Now
+                            </button>
+                        </div>
+                    </td>
                 </tr>
                 @endforelse
             </tbody>
@@ -215,32 +233,38 @@
         {{ $centers->links() }}
     </div>
 </div>
+@endsection
 
+@push('modals')
 {{-- Create Modal --}}
-<div class="modal fade" id="createCenterModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
+<div class="modal fade" id="createCenterModal" tabindex="-1" role="dialog" aria-labelledby="createCenterModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0">
             <form method="POST" action="{{ route('admin.stock.centers.store') }}">
                 @csrf
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title font-weight-bold"><i class="fa-solid fa-plus-circle mr-2"></i> Register New Collection Center</h5>
-                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    <h5 class="modal-title font-weight-bold" id="createCenterModalTitle">
+                        <i class="fa-solid fa-plus-circle mr-2"></i> Register New Collection Center
+                    </h5>
+                    <button type="button" class="close text-white" onclick="closeCenterModal()" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="form-row">
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Center Name *</label>
+                            <label class="font-weight-bold text-dark">Center Name *</label>
                             <input type="text" name="name" class="form-control" placeholder="e.g. Danyore Seed Distribution Center" required>
                         </div>
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Center Code *</label>
+                            <label class="font-weight-bold text-dark">Center Code *</label>
                             <input type="text" name="code" class="form-control" placeholder="e.g. CC-GLT-DNY-01" required>
                             <small class="text-muted">Unique identifier for this facility</small>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="col-md-4 form-group">
-                            <label class="font-weight-bold">Administrative Level *</label>
+                            <label class="font-weight-bold text-dark">Administrative Level *</label>
                             <select name="level" class="form-control" required>
                                 <option value="district">District Central Depot</option>
                                 <option value="tehsil" selected>Tehsil Center</option>
@@ -248,7 +272,7 @@
                             </select>
                         </div>
                         <div class="col-md-4 form-group">
-                            <label class="font-weight-bold">District *</label>
+                            <label class="font-weight-bold text-dark">District *</label>
                             <select name="district_id" class="form-control" required>
                                 @foreach($districts as $d)
                                     <option value="{{ $d->id }}" {{ $districtId == $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
@@ -256,7 +280,7 @@
                             </select>
                         </div>
                         <div class="col-md-4 form-group">
-                            <label class="font-weight-bold">Tehsil</label>
+                            <label class="font-weight-bold text-dark">Tehsil</label>
                             <select name="tehsil_id" class="form-control">
                                 <option value="">Select Tehsil (if applicable)</option>
                                 @foreach($tehsils as $t)
@@ -267,35 +291,77 @@
                     </div>
                     <div class="form-row">
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Village / Ward / Location</label>
+                            <label class="font-weight-bold text-dark">Village / Ward / Location</label>
                             <input type="text" name="village_name" class="form-control" placeholder="e.g. Village Danyore, Near Jamia Masjid">
                         </div>
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Storage Capacity (Units)</label>
+                            <label class="font-weight-bold text-dark">Storage Capacity (Units)</label>
                             <input type="number" step="any" name="capacity_units" class="form-control" placeholder="e.g. 5000">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Focal Person Name</label>
+                            <label class="font-weight-bold text-dark">Focal Person Name</label>
                             <input type="text" name="focal_person_name" class="form-control" placeholder="e.g. Muhammad Ali">
                         </div>
                         <div class="col-md-6 form-group">
-                            <label class="font-weight-bold">Focal Person Phone</label>
+                            <label class="font-weight-bold text-dark">Focal Person Phone</label>
                             <input type="text" name="focal_person_phone" class="form-control" placeholder="e.g. 0345-1234567">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="font-weight-bold">Full Address & Location Details</label>
+                    <div class="form-group mb-0">
+                        <label class="font-weight-bold text-dark">Full Address & Location Details</label>
                         <textarea name="address" rows="2" class="form-control" placeholder="Physical location, road landmarks, building description..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success font-weight-bold"><i class="fa-solid fa-check mr-1"></i> Save Collection Center</button>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary px-3" onclick="closeCenterModal()" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success font-weight-bold px-4 shadow-sm">
+                        <i class="fa-solid fa-check mr-1"></i> Save Collection Center
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-@endsection
+@endpush
+
+@push('scripts')
+<script>
+function openCenterModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#createCenterModal').modal('show');
+    } else {
+        var m = document.getElementById('createCenterModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+            if (!document.getElementById('centerModalBackdrop')) {
+                var backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                backdrop.id = 'centerModalBackdrop';
+                backdrop.onclick = closeCenterModal;
+                document.body.appendChild(backdrop);
+            }
+        }
+    }
+}
+
+function closeCenterModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#createCenterModal').modal('hide');
+    } else {
+        var m = document.getElementById('createCenterModal');
+        if (m) {
+            m.classList.remove('show');
+            m.style.display = 'none';
+            document.body.classList.remove('modal-open');
+            var backdrop = document.getElementById('centerModalBackdrop');
+            if (backdrop) backdrop.remove();
+        }
+    }
+}
+</script>
+@endpush
+
