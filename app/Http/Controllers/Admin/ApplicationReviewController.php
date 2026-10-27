@@ -373,6 +373,7 @@ class ApplicationReviewController extends Controller
 
         $data = $request->validate([
             'status' => ['required', 'string'],
+            'approved_quantity' => ['nullable', 'numeric', 'min:0.01'],
             'note' => ['nullable', 'string', 'max:2000'],
             'rejection_reason' => ['required_if:status,rejected', 'nullable', 'string', 'max:2000'],
             'verification_note' => ['nullable', 'string', 'max:2000'],
@@ -405,6 +406,7 @@ class ApplicationReviewController extends Controller
                 'note' => $data['note'] ?? $data['verification_note'] ?? null,
                 'rejection_reason' => $data['rejection_reason'] ?? null,
                 'verification_note' => $data['verification_note'] ?? null,
+                'approved_quantity' => $data['approved_quantity'] ?? null,
             ], $expectedLock);
 
             return back()->with('success', 'Application transitioned to ' . Application::translateStatus($targetStatus) . '.');

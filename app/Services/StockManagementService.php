@@ -7,7 +7,10 @@ use App\Models\CenterInventory;
 use App\Models\CollectionCenter;
 use App\Models\Scheme;
 use App\Models\SchemeStockItem;
+use App\Models\AccessAuditLog;
+use App\Models\ApplicationStatusLog;
 use App\Models\StockDamage;
+use App\Models\StockDisbursement;
 use App\Models\StockReceipt;
 use App\Models\StockTransfer;
 use App\Models\User;
@@ -299,5 +302,199 @@ class StockManagementService
                 'collection_center_id' => 'You do not have administrative authority over collection centers in this district.',
             ]);
         }
+    }
+
+    /**
+     * Disburse stock to an approved/eligible applicant from a collection center.
+     */
+    public function disburseStock(array $data, User $actor, ?UploadedFile $proofFile = null): StockDisbursement
+    {
+        return DB::transaction(function () use ($data, $actor, $proofFile) {
+            $application = Application::with(['applicant', 'scheme', 'district'])->lockForUpdate()->findOrFail($data['application_id']);
+
+            // 1. Cross-district isolation check: Actor must have jurisdiction over the applicant's district
+            if (! $actor->isGlobalScope() && ! $actor->hasRole('Super Admin')) {
+                $authorizedDistricts = $actor->authorizedDistrictIds();
+                if (! empty($authorizedDistricts) && ! in_array($application->district_id, $authorizedDistricts, true)) {
+                    throw ValidationException::withMessages([
+                        'application_id' => 'You are only authorized to disburse stock to applicants within your assigned district.',
+                    ]);
+                }
+            }
+
+            // 2. Eligibility check
+            if (! $application->isEligibleForDisbursement()) {
+                throw ValidationException::withMessages([
+                    'application_id' => "This application (#{$application->application_no}) is not eligible for disbursement (current stage: " . Application::translateStatus($application->current_stage) . ').',
+                ]);
+            }
+
+            // 3. Collection Center check
+            $center = CollectionCenter::findOrFail($data['collection_center_id']);
+            $this->validateUserCenterAccess($actor, $center);
+
+            if ($center->district_id !== $application->district_id && ! $actor->isGlobalScope()) {
+                throw ValidationException::withMessages([
+                    'collection_center_id' => "Stock must be disbursed from a collection center located in the applicant's district ({$application->district->name}).",
+                ]);
+            }
+
+            // 4. Scheme stock item
+            $item = SchemeStockItem::findOrFail($data['scheme_stock_item_id']);
+            if ($item->scheme_id !== $application->scheme_id) {
+                throw ValidationException::withMessages([
+                    'scheme_stock_item_id' => 'The selected stock item does not belong to the application scheme.',
+                ]);
+            }
+
+            // 5. Quantity validation
+            $qty = (float) $data['quantity_disbursed'];
+            if ($qty <= 0) {
+                throw ValidationException::withMessages([
+                    'quantity_disbursed' => 'Quantity disbursed must be greater than zero.',
+                ]);
+            }
+
+            $remainingQuota = $application->getRemainingDisbursementQuantity();
+            if ($qty > $remainingQuota) {
+                throw ValidationException::withMessages([
+                    'quantity_disbursed' => "Disbursement quantity ({$qty}) exceeds the applicant's remaining approved quota ({$remainingQuota} {$item->unit}).",
+                ]);
+            }
+
+            // 6. Physical Inventory balance check
+            $inventory = $center->getInventoryForItem($item->id);
+            if ((float) $inventory->current_balance < $qty) {
+                throw ValidationException::withMessages([
+                    'quantity_disbursed' => "Insufficient physical stock in {$center->name}. Available: {$inventory->current_balance} {$item->unit}, Requested: {$qty} {$item->unit}.",
+                ]);
+            }
+
+            // 7. Store proof file if uploaded
+            $proofPath = null;
+            if ($proofFile) {
+                $proofPath = $proofFile->store('stock/disbursements', 'public');
+            }
+
+            // 8. Generate unique voucher number
+            $dsbNo = 'DSB-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -5));
+
+            // 9. Create StockDisbursement record
+            $disbursement = StockDisbursement::create([
+                'disbursement_no' => $dsbNo,
+                'application_id' => $application->id,
+                'collection_center_id' => $center->id,
+                'scheme_stock_item_id' => $item->id,
+                'district_id' => $application->district_id,
+                'quantity_disbursed' => $qty,
+                'recipient_name' => $data['recipient_name'] ?? $application->applicant?->name ?? 'Beneficiary',
+                'recipient_cnic' => $data['recipient_cnic'] ?? $application->applicant?->cnic ?? '',
+                'recipient_phone' => $data['recipient_phone'] ?? $application->applicant?->phone ?? null,
+                'is_original_applicant' => filter_var($data['is_original_applicant'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'representative_relationship' => $data['representative_relationship'] ?? null,
+                'challan_no' => $data['challan_no'] ?? $application->challan_no ?? null,
+                'challan_verified' => true,
+                'disbursement_date' => $data['disbursement_date'] ?? now()->toDateString(),
+                'disbursed_by' => $actor->id,
+                'proof_attachment_path' => $proofPath,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            // 10. Update Center Inventory (Debit distributed stock)
+            $inventory->quantity_distributed = (float) $inventory->quantity_distributed + $qty;
+            $inventory->recalculate();
+
+            // 11. Update Application lifecycle stage and status
+            $previousDistributed = (float) ($application->distributed_quantity ?? 0);
+            $newDistributedTotal = $previousDistributed + $qty;
+            $totalQuota = (float) ($application->allocated_quantity ?: ($application->getBagsRequired() ?: 1));
+
+            $isFullyDistributed = $newDistributedTotal >= $totalQuota;
+            $targetStage = $isFullyDistributed ? Application::STAGE_FULLY_DISTRIBUTED : Application::STAGE_PARTIALLY_DISTRIBUTED;
+            $targetStatus = $isFullyDistributed ? 'disbursed' : $application->status;
+
+            $oldStage = $application->current_stage;
+            $application->update([
+                'distributed_quantity' => $newDistributedTotal,
+                'distributed_at' => now(),
+                'current_stage' => $targetStage,
+                'status' => $targetStatus,
+            ]);
+
+            // 12. Create ApplicationStatusLog
+            ApplicationStatusLog::create([
+                'application_id' => $application->id,
+                'from_status' => $oldStage,
+                'to_status' => $targetStage,
+                'user_id' => $actor->id,
+                'note' => "Disbursed {$qty} {$item->unit} at {$center->name} under voucher #{$dsbNo}." . (! empty($data['notes']) ? " Remarks: {$data['notes']}" : ''),
+            ]);
+
+            // 13. Audit log
+            AccessAuditLog::log('stock_disbursed', StockDisbursement::class, (string) $disbursement->id, [
+                'disbursement_no' => $dsbNo,
+                'application_no' => $application->application_no,
+                'collection_center' => $center->name,
+                'quantity' => $qty,
+                'item' => $item->item_name,
+                'actor_id' => $actor->id,
+                'actor_name' => $actor->name,
+            ]);
+
+            return $disbursement;
+        });
+    }
+
+    /**
+     * Query for eligible applications awaiting stock disbursement.
+     */
+    public function getEligibleApplicationsQuery(?int $districtId = null, ?string $search = null)
+    {
+        $eligibleStages = [
+            Application::STAGE_PAYMENT_VERIFIED,
+            Application::STAGE_ELIGIBLE_BENEFICIARY,
+            Application::STAGE_STOCK_ALLOCATED,
+            Application::STAGE_PARTIALLY_DISTRIBUTED,
+        ];
+
+        $query = Application::query()
+            ->with(['applicant', 'scheme.stockItems', 'district', 'division'])
+            ->where(function ($q) use ($eligibleStages) {
+                $q->whereIn('current_stage', $eligibleStages)
+                  ->orWhere(function ($sq) {
+                      $sq->where('status', Application::STATUS_DIRECTORATE_APPROVED)
+                         ->where(function ($ssq) {
+                             $ssq->whereNotNull('payment_verified_at')
+                                 ->orWhereNotNull('challan_paid_at')
+                                 ->orWhereNull('challan_no');
+                         });
+                  });
+            })
+            ->whereNotIn('status', [Application::STATUS_REJECTED, Application::STATUS_DISBURSED])
+            ->whereNotIn('current_stage', [
+                Application::STAGE_REJECTED,
+                Application::STAGE_FULLY_DISTRIBUTED,
+                Application::STAGE_COMPLETED,
+                Application::STAGE_DORMANT,
+            ]);
+
+        if ($districtId) {
+            $query->where('district_id', $districtId);
+        }
+
+        if ($search) {
+            $s = trim($search);
+            $query->where(function ($q) use ($s) {
+                $q->where('application_no', 'like', "%{$s}%")
+                  ->orWhere('challan_no', 'like', "%{$s}%")
+                  ->orWhereHas('applicant', function ($aq) use ($s) {
+                      $aq->where('name', 'like', "%{$s}%")
+                         ->orWhere('cnic', 'like', "%{$s}%")
+                         ->orWhere('phone', 'like', "%{$s}%");
+                  });
+            });
+        }
+
+        return $query->latest();
     }
 }

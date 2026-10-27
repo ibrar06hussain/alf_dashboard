@@ -108,6 +108,27 @@
                 @endforelse
             </ul>
         </div>
+        <div class="card alf-panel mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Assigned Challan Template</span>
+                <a href="{{ route('admin.challan-templates.index') }}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;">Manage</a>
+            </div>
+            <div class="card-body">
+                @if($scheme->requires_challan)
+                    @php $tpl = $scheme->getChallanTemplate(); @endphp
+                    <div class="fw-bold text-dark mb-1">{{ $tpl->name }}</div>
+                    <div class="small text-muted mb-1"><strong>Bank:</strong> {{ $tpl->bank_name }} ({{ $tpl->account_no }})</div>
+                    <div class="small text-muted mb-2"><strong>Account Head:</strong> {{ $tpl->account_head }}</div>
+                    @if($tpl->exists)
+                        <a href="{{ route('admin.challan-templates.preview', $tpl) }}" target="_blank" class="btn btn-sm btn-outline-info w-100">
+                            <i class="fa-solid fa-eye me-1"></i> Preview Challan PDF
+                        </a>
+                    @endif
+                @else
+                    <div class="text-muted small">Fee-free scheme (no bank deposit challan required).</div>
+                @endif
+            </div>
+        </div>
     </div>
 </div>
 @endsection

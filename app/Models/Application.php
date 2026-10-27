@@ -75,6 +75,7 @@ class Application extends Model
         'challan_no', 'challan_amount', 'challan_due_date', 'challan_issued_at', 'challan_paid_at',
         'challan_file_path', 'payment_receipt_path', 'payment_verified_at', 'payment_verified_by',
         'reactivated_at', 'reactivated_by', 'reactivation_reason',
+        'demanded_quantity', 'approved_quantity',
         'allocated_quantity', 'distributed_quantity', 'distributed_at',
         'lock_version',
     ];
@@ -94,6 +95,8 @@ class Application extends Model
             'reactivated_at' => 'datetime',
             'distributed_at' => 'datetime',
             'is_unassigned' => 'boolean',
+            'demanded_quantity' => 'decimal:2',
+            'approved_quantity' => 'decimal:2',
             'challan_amount' => 'decimal:2',
             'lock_version' => 'integer',
         ];
@@ -208,6 +211,156 @@ class Application extends Model
     public function reactivatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reactivated_by');
+    }
+
+    public function disbursements(): HasMany
+    {
+        return $this->hasMany(StockDisbursement::class)->latest();
+    }
+
+    /**
+     * Determine if applicant is eligible for stock disbursement.
+     */
+    public function isEligibleForDisbursement(): bool
+    {
+        if (in_array($this->status, [self::STATUS_REJECTED, self::STATUS_DISBURSED], true)) {
+            return false;
+        }
+
+        if (in_array($this->current_stage, [self::STAGE_REJECTED, self::STAGE_FULLY_DISTRIBUTED, self::STAGE_COMPLETED, self::STAGE_DORMANT], true)) {
+            return false;
+        }
+
+        $isApprovedOrPaid = in_array($this->current_stage, [
+            self::STAGE_PAYMENT_VERIFIED,
+            self::STAGE_ELIGIBLE_BENEFICIARY,
+            self::STAGE_STOCK_ALLOCATED,
+            self::STAGE_PARTIALLY_DISTRIBUTED,
+        ], true) || (
+            $this->status === self::STATUS_DIRECTORATE_APPROVED && (
+                $this->payment_verified_at !== null ||
+                $this->challan_paid_at !== null ||
+                empty($this->challan_no)
+            )
+        );
+
+        return $isApprovedOrPaid && $this->getRemainingDisbursementQuantity() > 0;
+    }
+
+    /**
+     * Get demanded quantity requested by applicant.
+     */
+    public function getDemandedQuantity(): float
+    {
+        return (float) ($this->demanded_quantity ?: ($this->getBagsRequired() ?: 1));
+    }
+
+    /**
+     * Get approved quantity authorized by reviewing officer.
+     */
+    public function getApprovedQuantity(): ?float
+    {
+        if ($this->approved_quantity !== null) {
+            return (float) $this->approved_quantity;
+        }
+
+        if ($this->allocated_quantity !== null && $this->allocated_quantity > 0) {
+            return (float) $this->allocated_quantity;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get remaining quantity of stock yet to be disbursed.
+     */
+    public function getRemainingDisbursementQuantity(): float
+    {
+        $approvedOrAllocated = $this->getApprovedQuantity() ?? $this->getDemandedQuantity();
+        $distributed = (float) ($this->distributed_quantity ?: 0);
+        return max(0.0, round($approvedOrAllocated - $distributed, 2));
+    }
+
+    /**
+     * Resolve the effective unit rate (PKR) for this application's challan fee.
+     * Calculated as Configure Seed data rate for the applicant's district (delivered rate with 50% subsidy discount),
+     * or falls back to the scheme's default challan_fee_per_unit.
+     */
+    public function getEffectiveUnitRate(): float
+    {
+        $misService = app(\App\Services\WheatSeedMisService::class);
+        $scheme = $this->scheme ?: ($this->scheme_id ? \App\Models\Scheme::find($this->scheme_id) : null);
+
+        if ($misService->isWheatSeedScheme($scheme?->id ?? $this->scheme_id, $scheme?->slug, $scheme?->title)) {
+            $districtRate = $misService->getPayableRateForDistrict($this->district_id);
+            if ($districtRate !== null && $districtRate > 0) {
+                return (float) $districtRate;
+            }
+        }
+
+        return (float) ($scheme?->challan_fee_per_unit ?: 3000.00);
+    }
+
+    /**
+     * Compute comprehensive challan fee breakdown, rounded to nearest upper integer,
+     * including digits and English figures/words representation.
+     */
+    public function getChallanBreakdown(): array
+    {
+        $scheme = $this->scheme ?: ($this->scheme_id ? Scheme::find($this->scheme_id) : null);
+        $template = $scheme?->getChallanTemplate() ?? ChallanTemplate::getDefault();
+        $misService = app(\App\Services\WheatSeedMisService::class);
+
+        $isWheat = $misService->isWheatSeedScheme($scheme?->id ?? $this->scheme_id, $scheme?->slug, $scheme?->title);
+
+        $approvedBags = (float) ($this->getApprovedQuantity() ?? $this->getDemandedQuantity());
+        if ($approvedBags <= 0) {
+            $approvedBags = 1.0;
+        }
+
+        $feeMode = $template->fee_mode ?: 'seed_configured';
+        $costOfOneBag = null;
+
+        if ($feeMode === 'free') {
+            $costOfOneBag = 0.0;
+        } elseif ($feeMode === 'seed_configured' || $isWheat) {
+            $costOfOneBag = $misService->getRateForDistrict($this->district_id);
+        } elseif (in_array($feeMode, ['fixed_unit', 'fixed_total'], true) && $scheme?->challan_fee_per_unit > 0) {
+            $costOfOneBag = (float) $scheme->challan_fee_per_unit;
+        }
+
+        if ($costOfOneBag === null || ($feeMode !== 'free' && $costOfOneBag <= 0)) {
+            $costOfOneBag = (float) ($scheme?->challan_fee_per_unit ? $scheme->challan_fee_per_unit * 2 : 6000.00);
+        }
+
+        $rawTotal = ($feeMode === 'fixed_total') ? $costOfOneBag : ($costOfOneBag * $approvedBags);
+        $totalBill = (int) ceil($rawTotal);
+
+        $govtSharePct = (float) ($template->govt_share_pct ?? $misService->getConfiguredGovtSharePct() ?? 50.0);
+        $farmerSharePct = (float) ($template->farmer_share_pct ?? $misService->getConfiguredFarmerSharePct() ?? 50.0);
+
+        if ($feeMode === 'free') {
+            $govtSharePct = 100.0;
+            $farmerSharePct = 0.0;
+        }
+
+        $govtShare = (int) ceil($totalBill * ($govtSharePct / 100));
+        $finalBill = (int) ceil($totalBill * ($farmerSharePct / 100));
+
+        $words = \App\Support\NumberToWords::toCurrencyWords($finalBill);
+
+        return [
+            'template' => $template,
+            'cost_of_1_bag' => (float) $costOfOneBag,
+            'approved_bags' => $approvedBags,
+            'total_bill' => $totalBill,
+            'govt_share_pct' => $govtSharePct,
+            'farmer_share_pct' => $farmerSharePct,
+            'govt_share' => $govtShare,
+            'final_bill' => $finalBill,
+            'amount_digits' => 'Rs. ' . number_format($finalBill),
+            'amount_words' => $words,
+        ];
     }
 
     /**

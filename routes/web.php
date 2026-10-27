@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Admin\ApplicationReviewController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CarouselSlideController;
+use App\Http\Controllers\Admin\ChallanTemplateController;
 use App\Http\Controllers\Admin\CmDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DepartmentController as AdminDepartmentController;
@@ -164,6 +165,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
             // Scheme Stock Items
             Route::post('items', [StockManagementController::class, 'itemsStore'])->name('items.store');
+
+            // Disbursements (Stock Out to Eligible Beneficiaries)
+            Route::get('disbursements', [StockManagementController::class, 'disbursementsIndex'])->name('disbursements');
+            Route::post('disbursements', [StockManagementController::class, 'disbursementsStore'])->name('disbursements.store');
+            Route::get('disbursements/{disbursement}/voucher', [StockManagementController::class, 'disbursementVoucher'])->name('disbursements.voucher');
         });
 
         // CM Executive Analytics Dashboard
@@ -176,6 +182,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Scheme & Form Configuration (Super Admin & Directorate Heads ONLY - Secretary is executive oversight, not web modification)
         Route::middleware('role:Super Admin|Director Agriculture|Director Livestock|Director Fisheries')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
+            Route::resource('challan-templates', ChallanTemplateController::class)->names('challan-templates');
+            Route::get('challan-templates/{challan_template}/preview', [ChallanTemplateController::class, 'preview'])->name('challan-templates.preview');
             Route::get('forms', [FormBuilderController::class, 'index'])->name('form-builder.index');
             Route::get('application-forms', [FormBuilderController::class, 'index'])->name('application-forms.index');
             Route::get('schemes/{scheme}/form-builder', [FormBuilderController::class, 'edit'])->name('form-builder.edit');

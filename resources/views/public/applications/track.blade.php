@@ -112,12 +112,26 @@
 
                         {{-- Citizen Actions: Challan Download & Payment Proof Upload --}}
                         @if($application->current_stage === \App\Models\Application::STAGE_CHALLAN_ISSUED && $application->challan_no)
+                            @php
+                                $challanBreakdown = $application->getChallanBreakdown();
+                                $challanTpl = $challanBreakdown['template'];
+                            @endphp
                             <div class="alert alert-info mt-4 p-3 border-info">
-                                <h6 class="fw-bold text-primary mb-1"><i class="fa-solid fa-file-invoice-dollar me-1"></i> Bank Challan Generated</h6>
-                                <p class="small mb-2">Challan No: <strong>{{ $application->challan_no }}</strong> | Amount: <strong>PKR {{ number_format($application->challan_amount, 2) }}</strong> | Due Date: <strong>{{ optional($application->challan_due_date)->format('d M Y') }}</strong></p>
+                                <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-file-invoice-dollar me-1"></i> {{ $challanTpl->challan_title ?: 'FEE DEPOSIT CHALLAN' }}</h6>
+                                <div class="small mb-2">
+                                    <div><strong>Department:</strong> {{ $challanTpl->department_name }}</div>
+                                    <div><strong>Bank Name:</strong> {{ $challanTpl->bank_name }} | <strong>Account No:</strong> {{ $challanTpl->account_no }}</div>
+                                    <div><strong>Account Title:</strong> {{ $challanTpl->account_title }} | <strong>Account Head:</strong> {{ $challanTpl->account_head }}</div>
+                                    <div><strong>Challan No:</strong> #{{ $application->challan_no }} | <strong>Generated Date:</strong> {{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : date('d-M-Y') }}</div>
+                                    <hr class="my-2">
+                                    <div><strong>Cost of 1 Bag (including transport charges):</strong> Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }} | <strong>Approved Bags:</strong> {{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</div>
+                                    <div><strong>Total Bill:</strong> Rs. {{ number_format($challanBreakdown['total_bill']) }} | <strong>Government Share ({{ (int) $challanBreakdown['govt_share_pct'] }}%):</strong> Rs. {{ number_format($challanBreakdown['govt_share']) }}</div>
+                                    <div class="fw-bold text-dark mt-1">Final Payable Bill ({{ (int) $challanBreakdown['farmer_share_pct'] }}% Rounded): Rs. {{ number_format($challanBreakdown['final_bill']) }}/- ({{ $challanBreakdown['amount_words'] }})</div>
+                                    <div class="text-muted mt-1"><strong>Directions:</strong> {{ $challanTpl->directions }}</div>
+                                </div>
                                 <div class="d-flex gap-2 align-items-center flex-wrap mb-3">
                                     <a href="{{ route('applications.challan.download', $application->application_no) }}" class="btn btn-sm btn-primary">
-                                        <i class="fa-solid fa-download me-1"></i> Download Bank Challan (Form 32-A)
+                                        <i class="fa-solid fa-download me-1"></i> Download Fee Deposit Challan (PDF)
                                     </a>
                                 </div>
                                 <hr class="my-2">

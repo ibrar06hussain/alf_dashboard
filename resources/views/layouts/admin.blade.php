@@ -135,6 +135,11 @@
                                     <i class="metismenu-icon fa-solid fa-file-lines"></i> Schemes
                                 </a>
                             </li>
+                            <li class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.challan-templates.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-receipt"></i> Challan Templates
+                                </a>
+                            </li>
                             <li class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.form-builder.index') }}">
                                     <i class="metismenu-icon fa-solid fa-file-pen"></i> Application Forms
@@ -195,6 +200,11 @@
                             <li class="{{ request()->routeIs('admin.stock.receipts*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.stock.receipts') }}">
                                     <i class="metismenu-icon fa-solid fa-truck-ramp-box"></i> Stock Received (Stock In)
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.stock.disbursements*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.stock.disbursements') }}">
+                                    <i class="metismenu-icon fa-solid fa-hand-holding-dollar"></i> Stock Disbursement (Stock Out)
                                 </a>
                             </li>
                             <li class="{{ request()->routeIs('admin.stock.transfers*') ? 'mm-active' : '' }}">

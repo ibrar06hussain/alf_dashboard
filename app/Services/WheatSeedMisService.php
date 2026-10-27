@@ -212,6 +212,39 @@ class WheatSeedMisService
     }
 
     /**
+     * Check if a scheme ID, slug, or title corresponds to the Wheat Seed scheme.
+     */
+    public function isWheatSeedScheme(?int $schemeId, ?string $slug = null, ?string $title = null): bool
+    {
+        if ($schemeId === self::SCHEME_ID) {
+            return true;
+        }
+        if ($slug && ($slug === self::SCHEME_SLUG || str_contains(strtolower($slug), 'wheat') || str_contains(strtolower($slug), 'seed'))) {
+            return true;
+        }
+        if ($title && (str_contains(strtolower($title), 'wheat') || str_contains(strtolower($title), 'seed'))) {
+            return true;
+        }
+        $wheatScheme = $this->getScheme();
+        return $wheatScheme && $schemeId === $wheatScheme->id;
+    }
+
+    /**
+     * Get the subsidized payable farmer per-bag rate (PKR) for a given district.
+     * Incorporates delivered rate (base + carriage transport) and farmer cost-share percentage (e.g. 50% discount).
+     */
+    public function getPayableRateForDistrict(?int $districtId): ?float
+    {
+        $deliveredRate = $this->getRateForDistrict($districtId);
+        if ($deliveredRate === null || $deliveredRate <= 0) {
+            return null;
+        }
+
+        $farmerPct = $this->getConfiguredFarmerSharePct(); // e.g. 50%
+        return round($deliveredRate * ($farmerPct / 100), 2);
+    }
+
+    /**
      * Get district rates bundle for all districts in the system.
      */
     public function getAllDistrictRatesTable(?User $user = null): Collection
@@ -732,10 +765,10 @@ class WheatSeedMisService
             $appAggregates[$dId]['available_kanals'] += ($parsed['land_kanals'] ?? 0);
 
             if (in_array($app->status, ['directorate_approved', 'disbursed'], true)) {
-                $appAggregates[$dId]['approved_bags'] += $parsed['requested_bags'];
+                $appAggregates[$dId]['approved_bags'] += ($app->getApprovedQuantity() ?? $parsed['requested_bags']);
             }
             if ($app->status === 'disbursed') {
-                $appAggregates[$dId]['disbursed_bags'] += $parsed['requested_bags'];
+                $appAggregates[$dId]['disbursed_bags'] += ($app->distributed_quantity ?: ($app->getApprovedQuantity() ?? $parsed['requested_bags']));
             }
         }
 
@@ -1086,8 +1119,8 @@ class WheatSeedMisService
                 'cultivated_kanals_last_year' => $parsed['cultivated_kanals'],
                 'cultivated_display' => $parsed['cultivated_kanals'] !== null ? $parsed['cultivated_kanals'] . ' Kanals' : 'Not yet captured',
                 'requested_bags' => $parsed['requested_bags'],
-                'approved_bags' => in_array($app->status, ['directorate_approved', 'disbursed'], true) ? $parsed['requested_bags'] : 0,
-                'disbursed_bags' => $app->status === 'disbursed' ? $parsed['requested_bags'] : 0,
+                'approved_bags' => in_array($app->status, ['directorate_approved', 'disbursed'], true) ? ($app->getApprovedQuantity() ?? $parsed['requested_bags']) : 0,
+                'disbursed_bags' => $app->status === 'disbursed' ? ($app->distributed_quantity ?: ($app->getApprovedQuantity() ?? $parsed['requested_bags'])) : 0,
                 'weight_kg' => $parsed['requested_bags'] * $bagWeight,
                 'weight_mt' => round(($parsed['requested_bags'] * $bagWeight) / 1000, 2),
                 'rate_per_bag' => $distRate,

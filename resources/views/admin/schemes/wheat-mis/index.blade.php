@@ -1033,6 +1033,44 @@
                             </div>
                         </div>
                     </div>
+
+                    {{-- Security Password Authorization Requirement --}}
+                    <div class="col-12 mt-2">
+                        <div class="card border border-danger border-opacity-50 bg-danger-subtle rounded-3 p-3 shadow-none">
+                            <div class="d-flex align-items-center mb-1 text-danger">
+                                <i class="fa-solid fa-shield-halved fs-5 me-2"></i>
+                                <span class="fw-bold">Security Password Verification Required</span>
+                            </div>
+                            <p class="small text-muted mb-2">
+                                Changes to seed data configuration and district delivery rates directly impact budget subsidies and beneficiary challan fees. Please enter your account login password to authorize this modification.
+                            </p>
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-7">
+                                    <label class="form-label fw-bold small text-dark mb-1">
+                                        Your Login Password <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white"><i class="fa-solid fa-lock text-muted"></i></span>
+                                        <input type="password" 
+                                               name="password" 
+                                               id="input_config_password" 
+                                               class="form-control" 
+                                               placeholder="Enter your account password..." 
+                                               required 
+                                               autocomplete="current-password">
+                                    </div>
+                                    @error('password')
+                                        <div class="text-danger small mt-1">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="col-md-5">
+                                    <span class="small text-muted d-block mt-md-4">
+                                        <i class="fa-solid fa-circle-check text-success me-1"></i> Identity verification required per ALFGB security policy.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer bg-light">

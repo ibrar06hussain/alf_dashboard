@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Application;
 use App\Models\CollectionCenter;
 use App\Models\District;
 use App\Models\Scheme;
 use App\Models\SchemeStockItem;
 use App\Models\StockDamage;
+use App\Models\StockDisbursement;
 use App\Models\StockReceipt;
 use App\Models\StockTransfer;
 use App\Models\Tehsil;
@@ -400,5 +402,161 @@ class StockManagementController extends Controller
         $item = SchemeStockItem::create($validated);
 
         return back()->with('success', "Scheme Item '{$item->item_name}' created successfully.");
+    }
+
+    /**
+     * Stock Disbursement Dashboard & Ledger.
+     * Displays a dedicated tab for Eligible Applicants awaiting disbursement
+     * and a tab for Historical Disbursements with proof and printable vouchers.
+     */
+    public function disbursementsIndex(Request $request): View
+    {
+        $districtId = $this->getEffectiveDistrictId($request);
+        $tab = $request->get('tab', 'eligible');
+        $search = trim($request->get('search', ''));
+        $schemeId = $request->filled('scheme_id') ? (int) $request->scheme_id : null;
+
+        // 1. Eligible Applicants waiting for disbursement
+        $eligibleQuery = $this->stockService->getEligibleApplicationsQuery($districtId, $search);
+        if ($schemeId) {
+            $eligibleQuery->where('scheme_id', $schemeId);
+        }
+        $eligibleApplications = $eligibleQuery->paginate(15, ['*'], 'eligible_page')->withQueryString();
+        $eligibleCount = (clone $eligibleQuery)->count();
+
+        // 2. Historical Disbursements ledger
+        $historyQuery = StockDisbursement::with([
+            'application.applicant',
+            'center.district',
+            'item.scheme',
+            'district',
+            'disbursedBy',
+        ])->latest();
+
+        if ($districtId) {
+            $historyQuery->where('district_id', $districtId);
+        }
+
+        if ($request->filled('center_id')) {
+            $historyQuery->where('collection_center_id', $request->center_id);
+        }
+
+        if ($schemeId) {
+            $historyQuery->whereHas('item', fn($q) => $q->where('scheme_id', $schemeId));
+        }
+
+        if ($search) {
+            $historyQuery->where(function ($q) use ($search) {
+                $q->where('disbursement_no', 'like', "%{$search}%")
+                    ->orWhere('recipient_name', 'like', "%{$search}%")
+                    ->orWhere('recipient_cnic', 'like', "%{$search}%")
+                    ->orWhere('challan_no', 'like', "%{$search}%");
+            });
+        }
+
+        $disbursements = $historyQuery->paginate(15, ['*'], 'history_page')->withQueryString();
+        $historyCount = (clone $historyQuery)->count();
+
+        // 3. Collection Centers scoped to the user's district with live inventory balances
+        $centersQuery = CollectionCenter::with(['inventories.item'])->where('is_active', true);
+        if ($districtId) {
+            $centersQuery->where('district_id', $districtId);
+        }
+        $centers = $centersQuery->orderBy('name')->get();
+
+        $schemes = Scheme::where('status', 'active')->orderBy('title')->get();
+        $items = SchemeStockItem::with('scheme')->where('is_active', true)->get();
+        $districts = District::orderBy('name')->get();
+
+        // Specific pre-selected application if passed via query (e.g. from review page)
+        $preselectedApplication = null;
+        if ($request->filled('app_id')) {
+            $preselectedApplication = Application::with(['applicant', 'scheme.stockItems', 'district'])->find($request->app_id);
+        }
+
+        return view('admin.stock.disbursements', compact(
+            'tab',
+            'eligibleApplications',
+            'eligibleCount',
+            'disbursements',
+            'historyCount',
+            'centers',
+            'schemes',
+            'items',
+            'districts',
+            'districtId',
+            'schemeId',
+            'search',
+            'preselectedApplication'
+        ));
+    }
+
+    /**
+     * Execute a stock disbursement to an eligible beneficiary.
+     */
+    public function disbursementsStore(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'application_id' => 'required|exists:applications,id',
+            'collection_center_id' => 'required|exists:collection_centers,id',
+            'scheme_stock_item_id' => 'required|exists:scheme_stock_items,id',
+            'quantity_disbursed' => 'required|numeric|min:0.01',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_cnic' => 'required|string|max:20',
+            'recipient_phone' => 'nullable|string|max:50',
+            'is_original_applicant' => 'sometimes|boolean',
+            'representative_relationship' => 'nullable|string|max:100',
+            'challan_no' => 'nullable|string|max:100',
+            'disbursement_date' => 'required|date',
+            'proof_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $user = $request->user();
+
+        // Cross-district validation for officer
+        if (! $user->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
+            $districts = $user->authorizedDistrictIds();
+            $app = Application::findOrFail($validated['application_id']);
+            if (! in_array($app->district_id, $districts, true)) {
+                return back()->with('error', 'You can only disburse stock to applicants within your assigned district.');
+            }
+        }
+
+        $disbursement = $this->stockService->disburseStock(
+            $validated,
+            $user,
+            $request->file('proof_file')
+        );
+
+        return redirect()->route('admin.stock.disbursements', ['tab' => 'history'])
+            ->with('success', "Stock successfully disbursed under Voucher #{$disbursement->disbursement_no}. Inventory updated.")
+            ->with('voucher_id', $disbursement->id);
+    }
+
+    /**
+     * Official Printable Stock Handover Slip / Gate Pass Voucher.
+     */
+    public function disbursementVoucher(StockDisbursement $disbursement): View
+    {
+        $user = auth()->user();
+
+        if (! $user->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
+            $districts = $user->authorizedDistrictIds();
+            if (! in_array($disbursement->district_id, $districts, true)) {
+                abort(403, 'Unauthorized to view disbursement voucher from another district.');
+            }
+        }
+
+        $disbursement->load([
+            'application.applicant',
+            'center.district',
+            'center.tehsil',
+            'item.scheme',
+            'district',
+            'disbursedBy',
+        ]);
+
+        return view('admin.stock.disbursement_voucher', compact('disbursement'));
     }
 }

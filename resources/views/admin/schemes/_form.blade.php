@@ -119,6 +119,44 @@
                 {{ old('is_featured', $scheme->is_featured ?? (($defaultType ?? 'running') === 'proposed')) ? 'checked' : '' }}>
             <label class="form-check-label" for="is_featured" id="is_featured_label">Featured on home</label>
         </div>
+
+        <div class="card alf-panel mb-3 border-primary-subtle">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="fa-solid fa-receipt text-primary me-1"></i> Challan &amp; Fee Settings</span>
+                <a href="{{ route('admin.challan-templates.index') }}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;">
+                    Manage Templates
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="form-check form-switch mb-3">
+                    <input type="checkbox" class="form-check-input" name="requires_challan" value="1" id="requires_challan"
+                        {{ old('requires_challan', $scheme->requires_challan ?? true) ? 'checked' : '' }}>
+                    <label class="form-check-label fw-bold" for="requires_challan">Requires Bank Deposit Challan</label>
+                    <div class="form-text small text-muted">Generate a bank fee challan upon application approval.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Assigned Challan Template</label>
+                    <select name="challan_template_id" class="form-control">
+                        <option value="">— Use System Default Template —</option>
+                        @foreach($challanTemplates ?? [] as $tpl)
+                            <option value="{{ $tpl->id }}" @selected(old('challan_template_id', $scheme->challan_template_id ?? '') == $tpl->id)>
+                                {{ $tpl->name }} ({{ $tpl->bank_name }} - {{ $tpl->account_no }})
+                            </option>
+                        @endforeach
+                    </select>
+                    <small class="text-muted d-block mt-1">
+                        Select which challan template &amp; fee formula this scheme prints when a challan is generated.
+                    </small>
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label">Fallback Unit Fee (PKR)</label>
+                    <input type="number" step="0.01" min="0" name="challan_fee_per_unit" class="form-control" value="{{ old('challan_fee_per_unit', $scheme->challan_fee_per_unit ?? 3000) }}">
+                    <small class="text-muted">Used only if district seed configuration rate is not applicable.</small>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

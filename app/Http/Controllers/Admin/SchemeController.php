@@ -21,7 +21,7 @@ class SchemeController extends Controller
 {
     public function index(Request $request): View
     {
-        $query = Scheme::with('department')->withCount(['applications', 'interests'])->latest();
+        $query = Scheme::with(['department', 'challanTemplate'])->withCount(['applications', 'interests'])->latest();
 
         if ($request->filled('department_id')) {
             $query->where('department_id', $request->integer('department_id'));
@@ -72,11 +72,12 @@ class SchemeController extends Controller
     {
         $departments = Department::where('is_active', true)->orderBy('display_order')->get();
         $districts = District::where('is_active', true)->orderBy('name')->get();
+        $challanTemplates = \App\Models\ChallanTemplate::where('is_active', true)->orderBy('name')->get();
         $defaultType = in_array($request->string('type')->toString(), ['running', 'proposed'], true)
             ? $request->string('type')->toString()
             : 'running';
 
-        return view('admin.schemes.create', compact('departments', 'districts', 'defaultType'));
+        return view('admin.schemes.create', compact('departments', 'districts', 'challanTemplates', 'defaultType'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -84,6 +85,7 @@ class SchemeController extends Controller
         $data = $this->validated($request);
         $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
+        $data['requires_challan'] = $request->boolean('requires_challan');
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
         if ($request->hasFile('featured_image')) {
@@ -124,7 +126,7 @@ class SchemeController extends Controller
 
     public function show(Scheme $scheme, QuotaService $quotas): View
     {
-        $scheme->load(['department', 'schemeDistricts.district', 'forms.fields', 'forms.documents']);
+        $scheme->load(['department', 'challanTemplate', 'schemeDistricts.district', 'forms.fields', 'forms.documents']);
 
         $quotaUsage = [];
         foreach ($scheme->schemeDistricts as $sd) {
@@ -136,13 +138,14 @@ class SchemeController extends Controller
 
     public function edit(Scheme $scheme): View
     {
-        $scheme->load('schemeDistricts');
+        $scheme->load(['schemeDistricts', 'challanTemplate']);
         $departments = Department::orderBy('display_order')->get();
         $districts = District::where('is_active', true)->orderBy('name')->get();
+        $challanTemplates = \App\Models\ChallanTemplate::where('is_active', true)->orderBy('name')->get();
         $quotas = $scheme->schemeDistricts->pluck('quota', 'district_id');
         $defaultType = $scheme->type;
 
-        return view('admin.schemes.edit', compact('scheme', 'departments', 'districts', 'quotas', 'defaultType'));
+        return view('admin.schemes.edit', compact('scheme', 'departments', 'districts', 'challanTemplates', 'quotas', 'defaultType'));
     }
 
     public function update(Request $request, Scheme $scheme): RedirectResponse
@@ -150,6 +153,7 @@ class SchemeController extends Controller
         $data = $this->validated($request, $scheme->id);
         $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
+        $data['requires_challan'] = $request->boolean('requires_challan');
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
         if ($request->hasFile('featured_image')) {
@@ -206,6 +210,9 @@ class SchemeController extends Controller
             'terms_conditions' => ['nullable', 'string'],
             'terms_conditions_ur' => ['nullable', 'string'],
             'is_featured' => ['nullable'],
+            'requires_challan' => ['nullable'],
+            'challan_fee_per_unit' => ['nullable', 'numeric', 'min:0'],
+            'challan_template_id' => ['nullable', 'exists:challan_templates,id'],
             'display_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'featured_image' => ['nullable', 'image', 'max:5120'],
             'district_quotas' => ['nullable', 'array'],

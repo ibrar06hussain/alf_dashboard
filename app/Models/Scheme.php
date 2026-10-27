@@ -19,7 +19,7 @@ class Scheme extends Model
         'eligibility_criteria', 'eligibility_criteria_ur',
         'terms_conditions', 'terms_conditions_ur',
         'featured_image', 'is_featured', 'display_order',
-        'requires_challan', 'challan_fee_per_unit',
+        'requires_challan', 'challan_fee_per_unit', 'challan_template_id',
     ];
 
     protected function casts(): array
@@ -32,6 +32,7 @@ class Scheme extends Model
             'display_order' => 'integer',
             'requires_challan' => 'boolean',
             'challan_fee_per_unit' => 'decimal:2',
+            'challan_template_id' => 'integer',
         ];
     }
 
@@ -73,6 +74,11 @@ class Scheme extends Model
         return $this->hasMany(Form::class);
     }
 
+    public function stockItems(): HasMany
+    {
+        return $this->hasMany(SchemeStockItem::class);
+    }
+
     public function publishedForm(): HasOne
     {
         return $this->hasOne(Form::class)->where('is_published', true)->latestOfMany();
@@ -86,6 +92,16 @@ class Scheme extends Model
     public function interests(): HasMany
     {
         return $this->hasMany(SchemeInterest::class);
+    }
+
+    public function challanTemplate(): BelongsTo
+    {
+        return $this->belongsTo(ChallanTemplate::class, 'challan_template_id');
+    }
+
+    public function getChallanTemplate(): ChallanTemplate
+    {
+        return $this->challanTemplate ?? ChallanTemplate::getDefault();
     }
 
     public function isOpenForApplications(): bool

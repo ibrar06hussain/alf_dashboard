@@ -28,4 +28,9 @@ class Applicant extends Model
     {
         return $this->hasMany(Application::class);
     }
+
+    public function getNameAttribute(): string
+    {
+        return $this->full_name ?? '';
+    }
 }

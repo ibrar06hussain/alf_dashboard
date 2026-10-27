@@ -54,7 +54,9 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
             'Department',
             'Scheme',
             'Available Land (Kanals)',
-            'Bags Required (50kg)',
+            'Bags Required (50kg) / Demanded Quantity',
+            'Approved Quantity',
+            'Disbursed Quantity',
             'Application Status',
             'Submitted At',
         ];
@@ -70,7 +72,9 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
         $phone = $phone ?: '—';
 
         $land = $application->getAvailableLandKanals();
-        $bags = $application->getBagsRequired();
+        $demanded = $application->getDemandedQuantity();
+        $approved = $application->getApprovedQuantity();
+        $disbursed = (float) ($application->distributed_quantity ?: 0);
 
         return [
             $application->application_no,
@@ -85,7 +89,9 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
             $application->scheme?->department?->name ?? '—',
             $application->scheme?->title ?? '—',
             $land !== null ? $land : '—',
-            $bags !== null ? $bags : '—',
+            $demanded,
+            $approved !== null ? $approved : 'Pending',
+            $disbursed,
             $application->statusLabel(),
             optional($application->submitted_at ?? $application->created_at)->format('Y-m-d H:i'),
         ];
@@ -96,7 +102,7 @@ class ApplicationsExport implements FromCollection, ShouldAutoSize, WithHeadings
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastCol = 'O'; // 15 columns (A to O)
+                $lastCol = 'Q'; // 17 columns (A to Q)
 
                 $sheet->mergeCells("A1:{$lastCol}1");
                 $sheet->mergeCells("A2:{$lastCol}2");

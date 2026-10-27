@@ -234,6 +234,7 @@ class WheatSeedMisDashboardTest extends TestCase
     public function test_authorized_executive_can_update_rate(): void
     {
         $response = $this->actingAs($this->directorAgri)->post(route('admin.wheat-mis.rate'), [
+            'password' => 'password',
             'wheat_seed_bag_rate' => 6500,
         ]);
 
@@ -241,9 +242,21 @@ class WheatSeedMisDashboardTest extends TestCase
         $this->assertEquals('6500', SiteSetting::getValue('wheat_seed_bag_rate'));
     }
 
+    public function test_updating_seed_data_fails_without_correct_password(): void
+    {
+        $response = $this->actingAs($this->directorAgri)->post(route('admin.wheat-mis.rate'), [
+            'password' => 'wrong-password',
+            'wheat_seed_bag_rate' => 9999,
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertNotEquals('9999', SiteSetting::getValue('wheat_seed_bag_rate'));
+    }
+
     public function test_district_officer_cannot_update_rate(): void
     {
         $response = $this->actingAs($this->districtOfficer)->post(route('admin.wheat-mis.rate'), [
+            'password' => 'password',
             'wheat_seed_bag_rate' => 6500,
         ]);
 
@@ -253,6 +266,7 @@ class WheatSeedMisDashboardTest extends TestCase
     public function test_authorized_executive_can_configure_comprehensive_seed_data(): void
     {
         $response = $this->actingAs($this->directorAgri)->post(route('admin.wheat-mis.rate'), [
+            'password' => 'password',
             'wheat_seed_bag_rate' => 7200,
             'wheat_seed_bag_weight_kg' => 50,
             'wheat_seed_govt_share_pct' => 60,
@@ -294,6 +308,7 @@ class WheatSeedMisDashboardTest extends TestCase
     {
         // 1. Authorized executive configures base rate and district-specific transport surcharges
         $response = $this->actingAs($this->directorAgri)->post(route('admin.wheat-mis.rate'), [
+            'password' => 'password',
             'wheat_seed_bag_rate' => 6500,
             'wheat_seed_bag_weight_kg' => 50,
             'wheat_seed_govt_share_pct' => 50,

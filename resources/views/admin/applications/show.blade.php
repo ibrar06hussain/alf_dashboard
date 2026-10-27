@@ -610,6 +610,63 @@
     </div>
 
     <div class="col-lg-4">
+        {{-- Demanded vs Approved Quantity Overview Card --}}
+        <div class="card alf-panel mb-3 border-primary-subtle">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-boxes-stacked me-1 text-primary"></i> Quota & Demanded Stock</span>
+                @if($application->approved_quantity !== null)
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Authorized</span>
+                @else
+                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Pending Approval</span>
+                @endif
+            </div>
+            <div class="card-body">
+                <div class="row text-center g-2 mb-2">
+                    <div class="col-6">
+                        <div class="p-2 border rounded bg-light">
+                            <div class="small text-muted text-uppercase fw-semibold" style="font-size: 11px;">Demanded</div>
+                            <div class="h5 mb-0 text-dark fw-bold">
+                                {{ $application->getDemandedQuantity() }}
+                                <small class="text-muted fs-6">{{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 border rounded {{ $application->approved_quantity !== null ? 'bg-success-subtle border-success-subtle' : 'bg-light' }}">
+                            <div class="small text-muted text-uppercase fw-semibold" style="font-size: 11px;">Approved</div>
+                            <div class="h5 mb-0 fw-bold {{ $application->approved_quantity !== null ? 'text-success' : 'text-muted' }}">
+                                {{ $application->getApprovedQuantity() ?? '—' }}
+                                <small class="fs-6">{{ $application->approved_quantity !== null ? ($application->scheme?->stockItems?->first()?->unit ?? 'Bags') : '' }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if($application->approved_quantity !== null)
+                    @php
+                        $demanded = $application->getDemandedQuantity();
+                        $approved = (float) $application->approved_quantity;
+                        $diff = round($approved - $demanded, 2);
+                    @endphp
+                    @if($diff != 0)
+                        <div class="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Adjusted by Officer: <strong>{{ $diff > 0 ? '+'.$diff : $diff }} {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong> vs demand.</span>
+                        </div>
+                    @endif
+                @endif
+
+                <div class="small text-muted mt-2 d-flex justify-content-between">
+                    <span>Disbursed so far:</span>
+                    <strong class="text-dark">{{ (float) ($application->distributed_quantity ?: 0) }} {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong>
+                </div>
+                <div class="small text-muted d-flex justify-content-between">
+                    <span>Remaining to disburse:</span>
+                    <strong class="text-primary">{{ $application->getRemainingDisbursementQuantity() }} {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong>
+                </div>
+            </div>
+        </div>
+
         @if(!empty($quotaStatus))
             <div class="card alf-panel mb-3">
                 <div class="card-header">District Quota</div>
@@ -677,12 +734,45 @@
                     @endif
                 </div>
                 <div class="card-body">
+                    @php
+                        $challanBreakdown = $application->getChallanBreakdown();
+                        $challanTpl = $challanBreakdown['template'];
+                    @endphp
                     <div class="small mb-2">
-                        <div><strong>Challan No:</strong> {{ $application->challan_no ?: 'Generated on Approval' }}</div>
-                        <div><strong>Amount:</strong> PKR {{ number_format($application->challan_amount ?: 0, 2) }}</div>
-                        <div><strong>Due Date:</strong> {{ optional($application->challan_due_date)->format('d M Y') ?: '14 calendar days' }}</div>
+                        <div><strong>Challan No:</strong> #{{ $application->challan_no ?: 'Generated on Approval' }}</div>
+                        <div><strong>Challan Generated Date:</strong> {{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : '—' }}</div>
+                        <div><strong>Due Date:</strong> {{ optional($application->challan_due_date)->format('d M Y') ?: ($challanTpl->validity_days . ' calendar days') }}</div>
+                        <hr class="my-2">
+                        <div><strong>Bank Name:</strong> {{ $challanTpl->bank_name }}</div>
+                        <div><strong>Account No:</strong> {{ $challanTpl->account_no }}</div>
+                        <div><strong>Account Title:</strong> {{ $challanTpl->account_title }}</div>
+                        <div><strong>Account Head:</strong> {{ $challanTpl->account_head }}</div>
+                        <hr class="my-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Cost of 1 Bag (incl. transport):</span>
+                            <strong>Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>No of Wheat bags approved:</span>
+                            <strong>{{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Total Bill:</span>
+                            <strong>Rs. {{ number_format($challanBreakdown['total_bill']) }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted">
+                            <span>Government Share ({{ (int) $challanBreakdown['govt_share_pct'] }}%):</span>
+                            <span>Rs. {{ number_format($challanBreakdown['govt_share']) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between text-primary fw-bold border-top pt-1 mt-1">
+                            <span>Final Bill ({{ (int) $challanBreakdown['farmer_share_pct'] }}% Rounded):</span>
+                            <span>Rs. {{ number_format($challanBreakdown['final_bill']) }}/-</span>
+                        </div>
+                        <div class="text-muted fst-italic mt-1" style="font-size: 11px;">
+                            In Words: {{ $challanBreakdown['amount_words'] }}
+                        </div>
                         @if($application->payment_verified_at)
-                            <div class="text-success mt-1"><strong>Verified By:</strong> {{ $application->paymentVerifiedBy?->name ?? 'Accounts Officer' }} on {{ $application->payment_verified_at->format('d M Y H:i') }}</div>
+                            <div class="text-success mt-2"><strong>Verified By:</strong> {{ $application->paymentVerifiedBy?->name ?? 'Accounts Officer' }} on {{ $application->payment_verified_at->format('d M Y H:i') }}</div>
                         @endif
                     </div>
 
@@ -751,6 +841,24 @@
             </div>
         @endif
 
+        {{-- Stock Disbursement Handover Card for Distribution Officers --}}
+        @if($application->isEligibleForDisbursement() && (auth()->user()->hasAnyRole(['Distribution Officer', 'District Deputy Director', 'District Officer', 'Super Admin']) || auth()->user()->can('distribution.confirm_delivery')))
+            <div class="card alf-panel mb-3 border-success">
+                <div class="card-header bg-success-subtle text-success-emphasis d-flex justify-content-between align-items-center">
+                    <span><i class="fa-solid fa-hand-holding-dollar me-1"></i> Stock Disbursement Ready</span>
+                    <span class="badge bg-success">Eligible</span>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">
+                        This applicant has verified payment and is eligible to receive <strong>{{ $application->getRemainingDisbursementQuantity() }} {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong> of {{ $application->scheme?->stockItems?->first()?->item_name ?? 'Scheme Commodity' }}.
+                    </p>
+                    <a href="{{ route('admin.stock.disbursements', ['tab' => 'eligible', 'app_id' => $application->id]) }}" class="btn btn-sm btn-success w-100 font-weight-bold">
+                        <i class="fa-solid fa-truck-ramp-box me-1"></i> Open Disbursement Counter for this Applicant
+                    </a>
+                </div>
+            </div>
+        @endif
+
         @if(count($allowedTransitions))
             <div class="card alf-panel mb-3">
                 <div class="card-header">Update Status / Transition</div>
@@ -765,6 +873,31 @@
                                     <option value="{{ $status }}">{{ \App\Models\Application::translateStatus($status) }}</option>
                                 @endforeach
                             </select>
+                        </div>
+
+                        {{-- Approved Quantity Option during Approval --}}
+                        <div class="mb-3" id="approved-quantity-box">
+                            <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-boxes-stacked me-1 text-success"></i> Approved Quantity</span>
+                                <span class="badge bg-light text-dark border">
+                                    Demanded: {{ $application->getDemandedQuantity() }} {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}
+                                </span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" min="0.01" name="approved_quantity" id="approved-quantity-input" class="form-control"
+                                    value="{{ old('approved_quantity', $application->approved_quantity ?: $application->getDemandedQuantity()) }}"
+                                    placeholder="Enter authorized quantity...">
+                                <span class="input-group-text">{{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</span>
+                            </div>
+                            <div class="form-text small text-muted">
+                                Set authorized quantity for this beneficiary.
+                                @if($application->scheme?->requires_challan)
+                                    @php
+                                        $unitRate = $application->getEffectiveUnitRate();
+                                    @endphp
+                                    Challan billing: <strong>Rs. {{ number_format($unitRate, 2) }} / unit</strong> (based on {{ $application->district?->name ?? 'district' }} delivery bag rate with 50% discount) will be calculated on this approved quantity.
+                                @endif
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Verification note</label>
@@ -913,11 +1046,18 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // Status rejection reason toggle
+    // Status rejection reason and approved quantity toggle
     const select = document.getElementById('status-select');
     const box = document.getElementById('rejection-box');
-    if (select && box) {
-        const toggle = () => { box.style.display = select.value === 'rejected' ? '' : 'none'; };
+    const approvedQtyBox = document.getElementById('approved-quantity-box');
+    if (select) {
+        const toggle = () => {
+            if (box) box.style.display = select.value === 'rejected' ? '' : 'none';
+            if (approvedQtyBox) {
+                const isApproval = ['approved', 'directorate_approved', 'district_verified', 'eligible_beneficiary', 'stock_allocated'].includes(select.value);
+                approvedQtyBox.style.display = isApproval ? '' : 'none';
+            }
+        };
         select.addEventListener('change', toggle);
         toggle();
     }

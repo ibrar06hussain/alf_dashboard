@@ -48,4 +48,9 @@ class SchemeStockItem extends Model
     {
         return $this->hasMany(StockDamage::class);
     }
+
+    public function disbursements(): HasMany
+    {
+        return $this->hasMany(StockDisbursement::class);
+    }
 }

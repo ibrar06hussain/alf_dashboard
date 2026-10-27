@@ -192,6 +192,7 @@ class ApplicationLifecycleService
                 'assigned_at' => $assignedTo ? now() : null,
                 'responsible_office_id' => $responsibleOfficeId,
                 'is_unassigned' => $isUnassigned,
+                'demanded_quantity' => (float) ($application->demanded_quantity ?: ($application->getBagsRequired() ?: 1)),
                 'current_stage' => Application::STAGE_SUBMITTED,
                 'status' => 'pending', // backward compatibility
                 'received_at' => now(),
@@ -355,18 +356,37 @@ class ApplicationLifecycleService
                     $note = $params['note'] ?? $params['verification_note'] ?? 'Approved by competent authority.';
                     $updates['verification_note'] = $note;
 
+                    // Capture demanded and approved quantities
+                    $demandedQty = $locked->getDemandedQuantity();
+                    if ($locked->demanded_quantity === null) {
+                        $updates['demanded_quantity'] = $demandedQty;
+                    }
+
+                    $approvedQty = isset($params['approved_quantity']) && is_numeric($params['approved_quantity']) && (float) $params['approved_quantity'] > 0
+                        ? (float) $params['approved_quantity']
+                        : (float) ($locked->approved_quantity ?: $demandedQty);
+
+                    $updates['approved_quantity'] = $approvedQty;
+                    $updates['allocated_quantity'] = (int) round($approvedQty);
+                    $locked->approved_quantity = $approvedQty;
+                    $locked->allocated_quantity = (int) round($approvedQty);
+
                     // Check if scheme requires challan or is fee-free
                     $scheme = $locked->scheme;
                     if ($scheme?->requires_challan) {
-                        // Issue Challan automatically
-                        $bags = $locked->getBagsRequired() ?? 1;
-                        $rate = (float) ($scheme->challan_fee_per_unit ?: 3000.00);
-                        $amount = (float) ($params['challan_amount'] ?? ($bags * $rate));
+                        $template = $scheme->getChallanTemplate();
+                        $validityDays = (int) ($template->validity_days ?: 10);
+
+                        // Issue Challan automatically based on APPROVED quantity and district seed rate
+                        $breakdown = $locked->getChallanBreakdown();
+                        $amount = isset($params['challan_amount']) && is_numeric($params['challan_amount'])
+                            ? (float) ceil((float) $params['challan_amount'])
+                            : (float) $breakdown['final_bill'];
 
                         $updates['current_stage'] = Application::STAGE_CHALLAN_ISSUED;
                         $updates['challan_no'] = 'CHL-'.date('Y').'-'.str_pad((string) $locked->id, 6, '0', STR_PAD_LEFT);
                         $updates['challan_amount'] = $amount;
-                        $updates['challan_due_date'] = now()->addDays(14)->toDateString();
+                        $updates['challan_due_date'] = now()->addDays($validityDays)->toDateString();
                         $updates['challan_issued_at'] = now();
                     } else {
                         // Fee-free scheme directly advances to eligible beneficiary
@@ -397,8 +417,13 @@ class ApplicationLifecycleService
                     break;
 
                 case Application::STAGE_STOCK_ALLOCATED:
-                    $qty = (int) ($params['allocated_quantity'] ?? $locked->getBagsRequired() ?? 1);
-                    $updates['allocated_quantity'] = $qty;
+                    $qty = isset($params['allocated_quantity']) && is_numeric($params['allocated_quantity'])
+                        ? (float) $params['allocated_quantity']
+                        : (isset($params['approved_quantity']) && is_numeric($params['approved_quantity'])
+                            ? (float) $params['approved_quantity']
+                            : (float) ($locked->approved_quantity ?: $locked->getBagsRequired() ?: 1));
+                    $updates['allocated_quantity'] = (int) round($qty);
+                    $updates['approved_quantity'] = $qty;
                     break;
 
                 case Application::STAGE_PARTIALLY_DISTRIBUTED:
@@ -775,15 +800,17 @@ class ApplicationLifecycleService
                 throw ValidationException::withMessages(['reactivation_reason' => 'Documented administrative decision is required to reactivate a dormant application.']);
             }
 
-            // Generate fresh challan with 14-day expiry
+            // Generate fresh challan with configured validity expiry
             $scheme = $application->scheme;
-            $bags = $application->getBagsRequired() ?: 1;
-            $rate = (float) ($scheme?->challan_fee_per_unit ?: 3000.00);
-            $amount = $bags * $rate;
+            $template = $scheme?->getChallanTemplate() ?? \App\Models\ChallanTemplate::getDefault();
+            $validityDays = (int) ($template->validity_days ?: 10);
+
+            $breakdown = $application->getChallanBreakdown();
+            $amount = (float) $breakdown['final_bill'];
 
             $application->update([
                 'current_stage' => Application::STAGE_CHALLAN_ISSUED,
-                'challan_due_date' => now()->addDays(14)->toDateString(),
+                'challan_due_date' => now()->addDays($validityDays)->toDateString(),
                 'challan_issued_at' => now(),
                 'challan_amount' => $amount,
                 'reactivated_at' => now(),

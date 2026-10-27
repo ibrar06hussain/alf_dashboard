@@ -72,6 +72,11 @@ class CollectionCenter extends Model
         return $this->hasMany(StockDamage::class);
     }
 
+    public function disbursements(): HasMany
+    {
+        return $this->hasMany(StockDisbursement::class);
+    }
+
     /**
      * Scope query to the user's authorized district if the user is district-scoped.
      */

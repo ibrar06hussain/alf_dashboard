@@ -477,18 +477,19 @@ class ApplicationController extends Controller
 
     public function downloadChallan(string $application_no)
     {
-        $application = Application::with(['scheme.department', 'applicant', 'district'])
+        $application = Application::with(['scheme.department', 'scheme.challanTemplate', 'applicant', 'district'])
             ->where('application_no', $application_no)
             ->firstOrFail();
 
-        if (! $application->challan_no) {
-            $bags = $application->allocated_quantity ?: ($application->getBagsRequired() ?: 1);
-            $amount = $application->challan_amount ?: ($bags * 3500);
+        $breakdown = $application->getChallanBreakdown();
+        $template = $breakdown['template'];
+        $validityDays = (int) ($template->validity_days ?: 10);
 
+        if (! $application->challan_no) {
             $application->challan_no = 'CHL-'.now()->format('Y').'-'.str_pad((string) $application->id, 5, '0', STR_PAD_LEFT);
-            $application->challan_amount = $amount;
+            $application->challan_amount = (float) $breakdown['final_bill'];
             $application->challan_issued_at = $application->challan_issued_at ?: now();
-            $application->challan_due_date = $application->challan_due_date ?: now()->addDays(14)->toDateString();
+            $application->challan_due_date = $application->challan_due_date ?: now()->addDays($validityDays)->toDateString();
             $application->saveQuietly();
         }
 
@@ -497,7 +498,9 @@ class ApplicationController extends Controller
             'scheme' => $application->scheme,
             'applicant' => $application->applicant,
             'district' => $application->district,
-        ])->setPaper('a4', 'portrait')
+            'template' => $template,
+            'breakdown' => $breakdown,
+        ])->setPaper('a4', 'landscape')
           ->setOption([
               'isHtml5ParserEnabled' => true,
               'isRemoteEnabled' => false,

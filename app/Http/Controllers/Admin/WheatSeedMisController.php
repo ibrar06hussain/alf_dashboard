@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\WheatSeedBeneficiariesExport;
 use App\Http\Controllers\Controller;
+use App\Models\AccessAuditLog;
 use App\Models\Application;
 use App\Models\District;
 use App\Models\SiteSetting;
@@ -243,7 +244,7 @@ class WheatSeedMisController extends Controller
             $rowsData = $apps->map(function ($app) use ($service) {
                 $parsed = $service->extractAppAttributes($app);
                 $applicant = $app->applicant;
-                $apprBags = in_array($app->status, ['directorate_approved', 'disbursed'], true) ? $parsed['requested_bags'] : 0;
+                $apprBags = in_array($app->status, ['directorate_approved', 'disbursed'], true) ? (float) ($app->getApprovedQuantity() ?? $parsed['requested_bags']) : 0;
                 $statusClass = match($app->status) {
                     'pending' => 'badge-pending',
                     'district_verified' => 'badge-verified',
@@ -308,6 +309,7 @@ class WheatSeedMisController extends Controller
         }
 
         $validated = $request->validate([
+            'password' => ['required', 'string'],
             'wheat_seed_bag_rate' => 'nullable|numeric|min:0|max:500000',
             'wheat_seed_bag_weight_kg' => 'nullable|numeric|min:1|max:1000',
             'wheat_seed_govt_share_pct' => 'nullable|numeric|min:0|max:100',
@@ -319,7 +321,13 @@ class WheatSeedMisController extends Controller
             'district_transport.*' => 'nullable|numeric|min:0|max:100000',
             'district_rate' => 'nullable|array',
             'district_rate.*' => 'nullable|numeric|min:0|max:500000',
+        ], [
+            'password.required' => 'Your account password is required to authorize any changes to seed data configuration.',
         ]);
+
+        if (! \Illuminate\Support\Facades\Hash::check($request->input('password'), $user->password)) {
+            return back()->withInput()->with('error', 'Authentication failed: Incorrect account password. Any change in Configure Seed Data requires valid password authorization.');
+        }
 
         // 1. Approved Bag Rate (PKR)
         $rate = array_key_exists('wheat_seed_bag_rate', $validated) ? $validated['wheat_seed_bag_rate'] : null;
@@ -449,6 +457,15 @@ class WheatSeedMisController extends Controller
                 ]
             );
         }
+
+        AccessAuditLog::log('seed_data_configured', SiteSetting::class, 'wheat_seed_rates', [
+            'actor_id' => $user->id,
+            'actor_name' => $user->name,
+            'actor_role' => $user->getRoleNames()->first() ?? 'Executive',
+            'base_rate' => $rate,
+            'govt_share_pct' => $validated['wheat_seed_govt_share_pct'] ?? null,
+            'farmer_share_pct' => $validated['wheat_seed_farmer_share_pct'] ?? null,
+        ]);
 
         return back()->with('success', 'Seed data configuration, district transport charges, and approved rates successfully updated.');
     }
