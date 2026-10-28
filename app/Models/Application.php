@@ -72,7 +72,7 @@ class Application extends Model
         'submitted_at', 'received_at', 'assigned_at', 'stage_updated_at', 'assigned_to',
         'responsible_office_id', 'is_unassigned',
         'correction_remarks', 'correction_submitted_at',
-        'challan_no', 'challan_amount', 'challan_due_date', 'challan_issued_at', 'challan_paid_at',
+        'challan_no', 'psid', 'challan_amount', 'challan_due_date', 'challan_issued_at', 'challan_paid_at', 'gbpay_transaction_id',
         'challan_file_path', 'payment_receipt_path', 'payment_verified_at', 'payment_verified_by',
         'reactivated_at', 'reactivated_by', 'reactivation_reason',
         'demanded_quantity', 'approved_quantity',
@@ -216,6 +216,23 @@ class Application extends Model
     public function disbursements(): HasMany
     {
         return $this->hasMany(StockDisbursement::class)->latest();
+    }
+
+    public function bills(): HasMany
+    {
+        return $this->hasMany(Bill::class, 'application_id')->orderByDesc('bill_id');
+    }
+
+    public function paidBills(): HasMany
+    {
+        return $this->hasMany(Bill::class, 'application_id')->where('status', 'paid');
+    }
+
+    public function activeBill(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Bill::class, 'application_id')
+            ->whereIn('status', ['paid', 'pending'])
+            ->latestOfMany('bill_id');
     }
 
     /**

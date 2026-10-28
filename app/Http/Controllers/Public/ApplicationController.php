@@ -456,7 +456,7 @@ class ApplicationController extends Controller
             $cnic = $data['cnic'];
 
             $application = Application::query()
-                ->with(['scheme.department', 'applicant', 'district', 'statusLogs'])
+                ->with(['scheme.department', 'applicant', 'district', 'statusLogs', 'bills'])
                 ->where('application_no', trim($data['application_no']))
                 ->whereHas('applicant', fn ($q) => $q->where('cnic', $cnic))
                 ->first();
@@ -466,6 +466,11 @@ class ApplicationController extends Controller
                     'application' => null,
                     'notFound' => true,
                 ]);
+            }
+
+            if ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && ! $application->psid) {
+                app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application);
+                $application->load('bills');
             }
         }
 
@@ -493,8 +498,16 @@ class ApplicationController extends Controller
             $application->saveQuietly();
         }
 
+        // Ensure GBPay Bill & 20-digit PSID exist for this application challan
+        $bill = app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application);
+        $psidConfig = \App\Models\PsidConfig::getActive();
+        $qrCodeBase64 = \App\Support\QrCodeGenerator::toBase64Png($bill->psid, 3, 2);
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('public.applications.challan-pdf', [
             'application' => $application,
+            'bill' => $bill,
+            'psidConfig' => $psidConfig,
+            'qrCodeBase64' => $qrCodeBase64,
             'scheme' => $application->scheme,
             'applicant' => $application->applicant,
             'district' => $application->district,

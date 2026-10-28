@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 90
+Total Prompts Logged: 92
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-10-27T17:40:06+05:00 (UTC: 2026-10-27T12:40:06Z)
-File Last Updated  : 2026-10-27 17:40:06 (PKT)
+Latest Prompt Date : 2026-10-28T13:23:57+05:00 (UTC: 2026-10-28T08:23:57Z)
+File Last Updated  : 2026-10-28 13:23:57 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1206,6 +1206,22 @@ Date & Time (UTC)   : 2026-10-27T12:40:06Z
 Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
 --------------------------------------------------------------------------------
 push these changes to git
+
+================================================================================
+PROMPT #091
+Date & Time (Local) : 2026-10-27T17:49:22+05:00
+Date & Time (UTC)   : 2026-10-27T12:49:22Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+write all database changes happened in last 2 days in mysql queries to update in live server database 
+
+================================================================================
+PROMPT #092
+Date & Time (Local) : 2026-10-28T13:23:57+05:00
+Date & Time (UTC)   : 2026-10-28T08:23:57Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+git push these changes
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             

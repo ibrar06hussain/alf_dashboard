@@ -11,6 +11,8 @@ use App\Http\Controllers\Admin\DepartmentController as AdminDepartmentController
 use App\Http\Controllers\Admin\DepartmentStatController;
 use App\Http\Controllers\Admin\DistrictController;
 use App\Http\Controllers\Admin\FormBuilderController;
+use App\Http\Controllers\Admin\GbpayController;
+use App\Http\Controllers\Admin\GbpayWebhookController;
 use App\Http\Controllers\Admin\SchemeController as AdminSchemeController;
 use App\Http\Controllers\Admin\SchemeInterestController;
 use App\Http\Controllers\Admin\SiteMediaController;
@@ -123,6 +125,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('applications/surveys/{survey}/findings', [ApplicationReviewController::class, 'submitSurveyFindings'])->name('applications.surveys.findings');
         Route::post('applications/{application}/correction-request', [ApplicationReviewController::class, 'requestCorrection'])->name('applications.correction-request');
         Route::post('applications/{application}/verify-payment', [ApplicationReviewController::class, 'verifyPayment'])->name('applications.verify-payment');
+        Route::post('applications/{application}/generate-gbpay-bill', [GbpayController::class, 'generateApplicationBill'])->name('applications.generate-gbpay-bill');
         Route::post('applications/{application}/allocate-stock', [ApplicationReviewController::class, 'allocateStock'])->name('applications.allocate-stock');
         Route::post('applications/{application}/reactivate', [ApplicationReviewController::class, 'reactivateDormant'])->name('applications.reactivate');
         Route::post('applications/{application}/assign-dd', [ApplicationReviewController::class, 'assignDeputyDirector'])->name('applications.assign-dd');
@@ -223,5 +226,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('roles-matrix', [UserController::class, 'rolesMatrix'])->name('roles.matrix');
             Route::get('audit-logs', [UserController::class, 'auditLogs'])->name('audit-logs.index');
         });
+
+        // GBPay Payment Gateway Configuration, Credentials & PSID Ledger
+        Route::middleware('role:Super Admin|Accounts Officer|Secretary|Director Agriculture|Director Livestock|Director Fisheries')->prefix('gbpay')->name('gbpay.')->group(function () {
+            Route::get('/', [GbpayController::class, 'index'])->name('index');
+            Route::post('psid-config', [GbpayController::class, 'updatePsidConfig'])->name('psid-config.update');
+            Route::post('credentials', [GbpayController::class, 'storeCredential'])->name('credentials.store');
+            Route::put('credentials/{id}', [GbpayController::class, 'updateCredential'])->name('credentials.update');
+            Route::delete('credentials/{id}', [GbpayController::class, 'destroyCredential'])->name('credentials.destroy');
+        });
     });
 });
+
+// Public GBPay Webhook Route (No Auth Required)
+Route::post('/gbpay/webhook', [GbpayWebhookController::class, 'handle'])->name('gbpay.webhook');

@@ -450,6 +450,27 @@ class ApplicationLifecycleService
 
             $locked->update($updates);
 
+            // Auto-generate or sync GBPay Bill & 20-digit PSID when Challan is issued
+            if (($updates['current_stage'] ?? null) === Application::STAGE_CHALLAN_ISSUED) {
+                app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication(
+                    $locked,
+                    isset($updates['challan_amount']) ? (float) $updates['challan_amount'] : null
+                );
+            }
+
+            // If Accounts Officer manually verifies payment receipt, sync any pending Bill to 'paid'
+            if ($targetStage === Application::STAGE_PAYMENT_VERIFIED) {
+                $pendingBill = $locked->bills()->where('status', 'pending')->first();
+                if ($pendingBill) {
+                    $pendingBill->update([
+                        'status' => 'paid',
+                        'paid_at' => now(),
+                        'transaction_id' => $pendingBill->transaction_id ?: ('MANUAL-' . $locked->id . '-' . time()),
+                        'bank_mnemonic' => 'Manual Receipt',
+                    ]);
+                }
+            }
+
             // Record immutable history log
             ApplicationStatusLog::create([
                 'application_id' => $locked->id,
@@ -766,6 +787,10 @@ class ApplicationLifecycleService
                     'lock_version' => $app->lock_version + 1,
                 ]);
 
+                $app->bills()->where('status', 'pending')->update([
+                    'status' => 'cancelled',
+                ]);
+
                 ApplicationStatusLog::create([
                     'application_id' => $app->id,
                     'from_status' => Application::STAGE_CHALLAN_ISSUED,
@@ -819,6 +844,9 @@ class ApplicationLifecycleService
                 'stage_updated_at' => now(),
                 'lock_version' => $application->lock_version + 1,
             ]);
+
+            // Issue fresh GBPay Bill & 20-digit PSID upon reactivation
+            app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application, $amount);
 
             ApplicationStatusLog::create([
                 'application_id' => $application->id,

@@ -221,6 +221,12 @@
     $applicant = $applicant ?? $application->applicant;
     $district = $district ?? $application->district;
     $scheme = $scheme ?? $application->scheme;
+    $psidConfig = $psidConfig ?? \App\Models\PsidConfig::getActive();
+    $bill = $bill ?? ($application->relationLoaded('bills') ? $application->bills->first() : null);
+    $psidNumber = $bill?->psid ?? $application->psid ?? null;
+    $rcoCode = $template->rco_code ?: ($psidConfig->rco ?: 'GL1800');
+    $headCode = $template->head_code ?: ($psidConfig->head ?: 'C03870');
+    $qrCodeBase64 = $qrCodeBase64 ?? ($psidNumber ? \App\Support\QrCodeGenerator::toBase64Png($psidNumber, 3, 2) : null);
 @endphp
 
 <div class="challan-container">
@@ -235,20 +241,35 @@
         </div>
 
         <div class="bank-box">
-            <div class="bank-row"><strong>Bank Name:</strong> {{ $template->bank_name ?: 'National Bank Of Pakistan' }}</div>
+            @if($psidNumber)
+                <div class="bank-row" style="font-size: 9px; border-bottom: 1px solid #d1d5db; padding-bottom: 2px; margin-bottom: 2px;">
+                    <strong>GBPay / 1Link PSID:</strong> <span style="font-family: monospace; font-size: 9.5px; font-weight: bold; letter-spacing: 0.4px;">{{ $psidNumber }}</span>
+                </div>
+            @endif
+            <div class="bank-row"><strong>Bank Name:</strong> {{ $template->bank_name ?: 'National Bank Of Pakistan' }} (or GBPay / 1Link)</div>
             <div class="bank-row"><strong>Account Title:</strong> {{ $template->account_title ?: 'Agriculture LiveStock and Fishries Department Gilgit Baltistan' }}</div>
-            <div class="bank-row"><strong>Account No:</strong> {{ $template->account_no ?: '4256260305' }}</div>
+            <div class="bank-row"><strong>Account No:</strong> {{ $template->account_no ?: '4256260305' }} &nbsp;|&nbsp; <strong>RCO:</strong> {{ $rcoCode }} &nbsp;|&nbsp; <strong>Head:</strong> {{ $headCode }}</div>
             <div class="bank-row"><strong>Account Head:</strong> {{ $template->account_head ?: 'Application Processing Fee(C03870)' }}</div>
         </div>
 
         <table class="meta-table">
             <tr>
                 <td class="lbl">Challan No:</td>
-                <td class="val"><strong>#{{ $application->challan_no ?: 'PENDING' }}</strong></td>
+                <td class="val">
+                    <strong>#{{ $application->challan_no ?: 'PENDING' }}</strong>
+                    @if($bill?->status === 'paid' || $application->challan_paid_at)
+                        <span style="background: #dcfce7; color: #166534; padding: 1px 4px; font-weight: bold; font-size: 7px; border: 0.5px solid #166534; margin-left: 4px;">PAID</span>
+                    @endif
+                </td>
             </tr>
             <tr>
                 <td class="lbl">Challan Generated Date:</td>
-                <td class="val">{{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : date('d-M-Y') }}</td>
+                <td class="val">
+                    {{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : date('d-M-Y') }}
+                    @if($application->challan_due_date)
+                        &nbsp;(Due: {{ \Carbon\Carbon::parse($application->challan_due_date)->format('d-M-Y') }})
+                    @endif
+                </td>
             </tr>
             <tr>
                 <td class="lbl">Application No:</td>
@@ -315,14 +336,21 @@
             <strong>Challan Fee in Words:</strong> <em>{{ $breakdown['amount_words'] }}</em>
         </div>
 
-        <table class="sig-table">
+        <table class="sig-table" style="margin-top: 8px; margin-bottom: 4px;">
             <tr>
-                <td class="sig-box">
+                <td class="sig-box" style="width: 36%; vertical-align: bottom;">
                     <div class="sig-line"></div>
                     <span>Applicant Signature</span>
                 </td>
-                <td class="sig-space"></td>
-                <td class="sig-box">
+                <td style="width: 28%; text-align: center; vertical-align: middle;">
+                    @if(!empty($qrCodeBase64))
+                        <div style="display: inline-block; border: 1px solid #111827; padding: 2px; background: #fff;">
+                            <img src="{{ $qrCodeBase64 }}" alt="PSID QR" style="width: 48px; height: 48px; display: block;" />
+                            <div style="font-size: 6px; font-weight: bold; margin-top: 1px;">GBPay PSID</div>
+                        </div>
+                    @endif
+                </td>
+                <td class="sig-box" style="width: 36%; vertical-align: bottom;">
                     <div class="sig-line"></div>
                     <span>Bank Cashier</span>
                 </td>

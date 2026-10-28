@@ -115,19 +115,47 @@
                             @php
                                 $challanBreakdown = $application->getChallanBreakdown();
                                 $challanTpl = $challanBreakdown['template'];
+                                $activeBill = $application->bills->firstWhere('status', 'pending') ?? $application->bills->first();
+                                $psidNumber = $activeBill?->psid ?? $application->psid;
+                                $psidConfig = \App\Models\PsidConfig::getActive();
+                                $rcoCode = $challanTpl->rco_code ?: ($psidConfig->rco ?: 'GL1800');
+                                $headCode = $challanTpl->head_code ?: ($psidConfig->head ?: 'C03870');
                             @endphp
                             <div class="alert alert-info mt-4 p-3 border-info">
-                                <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-file-invoice-dollar me-1"></i> {{ $challanTpl->challan_title ?: 'FEE DEPOSIT CHALLAN' }}</h6>
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div>
+                                        <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-file-invoice-dollar me-1"></i> {{ $challanTpl->challan_title ?: 'FEE DEPOSIT CHALLAN' }}</h6>
+                                        @if($psidNumber)
+                                            <div class="p-2 mb-2 bg-white border border-primary rounded d-inline-flex align-items-center gap-2">
+                                                <div>
+                                                    <span class="small text-muted d-block" style="font-size: 11px;">GBPay / 1Link PSID (20 Digits)</span>
+                                                    <strong class="text-dark font-monospace fs-6">{{ $psidNumber }}</strong>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-outline-primary copy-psid-btn" data-psid="{{ $psidNumber }}">
+                                                    <i class="fa-solid fa-copy me-1"></i> Copy PSID
+                                                </button>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    @if($psidNumber)
+                                        <div class="bg-white p-1 border rounded text-center">
+                                            {!! \App\Support\QrCodeGenerator::toSvg($psidNumber, 72, 2) !!}
+                                            <div class="text-muted fw-bold" style="font-size: 9px;">Scan PSID</div>
+                                        </div>
+                                    @endif
+                                </div>
                                 <div class="small mb-2">
                                     <div><strong>Department:</strong> {{ $challanTpl->department_name }}</div>
-                                    <div><strong>Bank Name:</strong> {{ $challanTpl->bank_name }} | <strong>Account No:</strong> {{ $challanTpl->account_no }}</div>
+                                    <div><strong>Bank Name:</strong> {{ $challanTpl->bank_name }} (or Any 1Link / GBPay App) | <strong>Account No:</strong> {{ $challanTpl->account_no }}</div>
                                     <div><strong>Account Title:</strong> {{ $challanTpl->account_title }} | <strong>Account Head:</strong> {{ $challanTpl->account_head }}</div>
+                                    <div><strong>RCO Code:</strong> {{ $rcoCode }} | <strong>Head Code:</strong> {{ $headCode }}</div>
                                     <div><strong>Challan No:</strong> #{{ $application->challan_no }} | <strong>Generated Date:</strong> {{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : date('d-M-Y') }}</div>
                                     <hr class="my-2">
                                     <div><strong>Cost of 1 Bag (including transport charges):</strong> Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }} | <strong>Approved Bags:</strong> {{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</div>
                                     <div><strong>Total Bill:</strong> Rs. {{ number_format($challanBreakdown['total_bill']) }} | <strong>Government Share ({{ (int) $challanBreakdown['govt_share_pct'] }}%):</strong> Rs. {{ number_format($challanBreakdown['govt_share']) }}</div>
                                     <div class="fw-bold text-dark mt-1">Final Payable Bill ({{ (int) $challanBreakdown['farmer_share_pct'] }}% Rounded): Rs. {{ number_format($challanBreakdown['final_bill']) }}/- ({{ $challanBreakdown['amount_words'] }})</div>
                                     <div class="text-muted mt-1"><strong>Directions:</strong> {{ $challanTpl->directions }}</div>
+                                    <div class="text-primary fw-semibold mt-1"><i class="fa-solid fa-bolt me-1"></i> Pay online via GBPay / 1Link using the 20-digit PSID above for instant automatic verification, or deposit at the bank and upload your receipt below.</div>
                                 </div>
                                 <div class="d-flex gap-2 align-items-center flex-wrap mb-3">
                                     <a href="{{ route('applications.challan.download', $application->application_no) }}" class="btn btn-sm btn-primary">
@@ -135,7 +163,7 @@
                                     </a>
                                 </div>
                                 <hr class="my-2">
-                                <h6 class="small fw-bold mb-2">Upload Paid Bank Receipt</h6>
+                                <h6 class="small fw-bold mb-2">Upload Paid Bank Receipt (Optional Fallback for Manual Deposit)</h6>
                                 <form method="POST" action="{{ route('applications.payment-proof.upload', $application->application_no) }}" enctype="multipart/form-data">
                                     @csrf
                                     <div class="input-group input-group-sm">
@@ -144,6 +172,23 @@
                                     </div>
                                     <small class="text-muted">Accepted formats: JPG, PNG, PDF (Max: 5MB)</small>
                                 </form>
+                            </div>
+                        @endif
+
+                        @if($application->gbpay_transaction_id || $application->bills->where('status', 'paid')->isNotEmpty())
+                            @php
+                                $paidBill = $application->bills->firstWhere('status', 'paid');
+                            @endphp
+                            <div class="alert alert-success mt-4 p-3 border-success">
+                                <h6 class="fw-bold text-success mb-1"><i class="fa-solid fa-circle-check me-1"></i> GBPay Payment Verified</h6>
+                                <div class="small mb-0">
+                                    <div><strong>PSID:</strong> <span class="font-monospace">{{ $paidBill?->psid ?? $application->psid }}</span></div>
+                                    <div><strong>Transaction ID:</strong> {{ $paidBill?->transaction_id ?? $application->gbpay_transaction_id }}</div>
+                                    <div><strong>Amount Paid:</strong> Rs. {{ number_format((float) ($paidBill?->bill_amount ?? $application->challan_amount), 2) }}</div>
+                                    @if($paidBill?->paid_at || $application->challan_paid_at)
+                                        <div><strong>Paid Date:</strong> {{ \Carbon\Carbon::parse($paidBill?->paid_at ?? $application->challan_paid_at)->format('d M Y, h:i A') }}</div>
+                                    @endif
+                                </div>
                             </div>
                         @endif
 
@@ -199,6 +244,16 @@
 document.querySelectorAll('.js-cnic').forEach(function (input) {
     input.addEventListener('input', function () {
         this.value = this.value.replace(/\D/g, '').slice(0, 13);
+    });
+});
+document.querySelectorAll('.copy-psid-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        const psid = this.getAttribute('data-psid');
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(psid).then(function () {
+                alert('PSID copied to clipboard: ' + psid);
+            });
+        }
     });
 });
 </script>

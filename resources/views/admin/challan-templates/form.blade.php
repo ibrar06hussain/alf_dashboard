@@ -103,6 +103,22 @@
                                 value="{{ old('account_head', $template->account_head ?: 'Application Processing Fee(C03870)') }}" required>
                             @error('account_head')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">GBPay RCO Code</label>
+                            <input type="text" name="rco_code" class="form-control @error('rco_code') is-invalid @enderror"
+                                value="{{ old('rco_code', $template->rco_code ?: 'GL1800') }}" placeholder="e.g. GL1800">
+                            @error('rco_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <div class="form-text small">Revenue Collection Officer code reported to GBPay (1Link).</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">GBPay Head of Account Code</label>
+                            <input type="text" name="head_code" class="form-control @error('head_code') is-invalid @enderror"
+                                value="{{ old('head_code', $template->head_code ?: 'C03870') }}" placeholder="e.g. C03870">
+                            @error('head_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <div class="form-text small">Treasury Head Code reported in GBPay Bill Inquiry & Payment APIs.</div>
+                        </div>
                     </div>
                 </div>
             </div>

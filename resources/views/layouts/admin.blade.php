@@ -173,6 +173,13 @@
                                 </a>
                             </li>
                         @endif
+                        @if($user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'Accounts Officer']))
+                            <li class="{{ request()->routeIs('admin.gbpay.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.gbpay.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-money-check-dollar"></i> GBPay Gateway (PSID)
+                                </a>
+                            </li>
+                        @endif
                         @if($user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'District Officer', 'District Deputy Director', 'Division Director', 'Field Officer', 'Accounts Officer', 'Distribution Officer']))
                             <li class="{{ request()->routeIs('admin.wheat-mis.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.wheat-mis.index') }}">

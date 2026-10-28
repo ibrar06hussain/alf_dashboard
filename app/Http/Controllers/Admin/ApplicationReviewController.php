@@ -330,6 +330,7 @@ class ApplicationReviewController extends Controller
             'surveys.assignedBy',
             'paymentVerifiedBy',
             'reactivatedBy',
+            'bills',
         ]);
 
         $allowedTransitions = $this->allowedTransitions($user, $application);

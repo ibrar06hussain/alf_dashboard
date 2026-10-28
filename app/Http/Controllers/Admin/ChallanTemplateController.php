@@ -146,6 +146,7 @@ class ChallanTemplateController extends Controller
             'id' => 87,
             'application_no' => 'ALF-20261027-00087',
             'challan_no' => 'CHL-2026-00087',
+            'psid' => '10153015011000000087',
             'challan_amount' => 13000.00,
             'demanded_quantity' => 4.0,
             'approved_quantity' => 4.0,
@@ -156,6 +157,15 @@ class ChallanTemplateController extends Controller
         $sampleApp->setRelation('scheme', $scheme);
         $sampleApp->setRelation('applicant', $applicant);
         $sampleApp->setRelation('district', $district);
+
+        $sampleBill = new \App\Models\Bill([
+            'psid' => '10153015011000000087',
+            'bill_amount' => 13000.00,
+            'status' => 'pending',
+            'generated_at' => now(),
+        ]);
+        $psidConfig = \App\Models\PsidConfig::getActive();
+        $qrCodeBase64 = \App\Support\QrCodeGenerator::toBase64Png('10153015011000000087', 3, 2);
 
         $breakdown = [
             'template' => $challan_template,
@@ -172,6 +182,9 @@ class ChallanTemplateController extends Controller
 
         $pdf = Pdf::loadView('public.applications.challan-pdf', [
             'application' => $sampleApp,
+            'bill' => $sampleBill,
+            'psidConfig' => $psidConfig,
+            'qrCodeBase64' => $qrCodeBase64,
             'scheme' => $scheme,
             'applicant' => $applicant,
             'district' => $district,
@@ -199,6 +212,8 @@ class ChallanTemplateController extends Controller
             'account_title' => ['required', 'string', 'max:255'],
             'account_no' => ['required', 'string', 'max:100'],
             'account_head' => ['required', 'string', 'max:255'],
+            'rco_code' => ['nullable', 'string', 'max:20'],
+            'head_code' => ['nullable', 'string', 'max:20'],
             'validity_days' => ['required', 'integer', 'min:1', 'max:365'],
             'directions' => ['required', 'string', 'max:2000'],
             'fee_mode' => ['required', 'in:seed_configured,fixed_unit,fixed_total,free'],

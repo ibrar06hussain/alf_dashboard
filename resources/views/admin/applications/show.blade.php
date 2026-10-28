@@ -737,8 +737,43 @@
                     @php
                         $challanBreakdown = $application->getChallanBreakdown();
                         $challanTpl = $challanBreakdown['template'];
+                        $activeBill = $application->activeBill;
+                        $psidDisplay = $activeBill?->psid ?: $application->psid;
+                        $psidCfg = \App\Models\PsidConfig::active();
+                        $rcoDisplay = $challanTpl->rco_code ?: ($psidCfg?->rco ?? 'GL1800');
+                        $headDisplay = $challanTpl->head_code ?: ($psidCfg?->head ?? 'C03870');
                     @endphp
                     <div class="small mb-2">
+                        @if($psidDisplay)
+                            <div class="p-2 mb-2 rounded border bg-light">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted fw-bold" style="font-size: 10px; letter-spacing: 0.04em;">GBPAY 20-DIGIT PSID (1LINK)</span>
+                                    @if($activeBill?->status === 'paid')
+                                        <span class="badge bg-success" style="font-size: 10px;"><i class="fa-solid fa-check-circle me-1"></i>PAID VIA GBPAY</span>
+                                    @elseif($activeBill?->status === 'cancelled')
+                                        <span class="badge bg-secondary" style="font-size: 10px;">CANCELLED</span>
+                                    @else
+                                        <span class="badge bg-warning text-dark" style="font-size: 10px;">PENDING PAYMENT</span>
+                                    @endif
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <code class="fw-bold text-dark" style="font-size: 13px; letter-spacing: 0.5px;">{{ $psidDisplay }}</code>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 11px;"
+                                        onclick="navigator.clipboard.writeText('{{ $psidDisplay }}'); this.innerHTML='<i class=\'fa-solid fa-check\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\'fa-regular fa-copy\'></i> Copy', 1800);">
+                                        <i class="fa-regular fa-copy"></i> Copy
+                                    </button>
+                                </div>
+                                <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 11px;">
+                                    <span>RCO: <strong>{{ $rcoDisplay }}</strong></span>
+                                    <span>Head: <strong>{{ $headDisplay }}</strong></span>
+                                </div>
+                                @if($activeBill?->transaction_id || $application->gbpay_transaction_id)
+                                    <div class="text-success mt-1" style="font-size: 11px;">
+                                        <strong>GBPay Txn ID:</strong> {{ $activeBill?->transaction_id ?: $application->gbpay_transaction_id }}
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
                         <div><strong>Challan No:</strong> #{{ $application->challan_no ?: 'Generated on Approval' }}</div>
                         <div><strong>Challan Generated Date:</strong> {{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : '—' }}</div>
                         <div><strong>Due Date:</strong> {{ optional($application->challan_due_date)->format('d M Y') ?: ($challanTpl->validity_days . ' calendar days') }}</div>
@@ -772,7 +807,7 @@
                             In Words: {{ $challanBreakdown['amount_words'] }}
                         </div>
                         @if($application->payment_verified_at)
-                            <div class="text-success mt-2"><strong>Verified By:</strong> {{ $application->paymentVerifiedBy?->name ?? 'Accounts Officer' }} on {{ $application->payment_verified_at->format('d M Y H:i') }}</div>
+                            <div class="text-success mt-2"><strong>Verified By:</strong> {{ $application->paymentVerifiedBy?->name ?? 'Accounts Officer / GBPay Gateway' }} on {{ $application->payment_verified_at->format('d M Y H:i') }}</div>
                         @endif
                     </div>
 
@@ -786,6 +821,14 @@
                             <a href="{{ asset('storage/'.$application->payment_receipt_path) }}" class="btn btn-sm btn-outline-success" target="_blank">
                                 <i class="fa-solid fa-receipt me-1"></i> View Payment Receipt
                             </a>
+                        @endif
+                        @if($activeBill?->status !== 'paid')
+                            <form method="POST" action="{{ route('admin.applications.generate-gbpay-bill', $application) }}" class="d-inline">
+                                @csrf
+                                <button type="submit" class="btn btn-sm btn-outline-dark">
+                                    <i class="fa-solid fa-qrcode me-1"></i> {{ $psidDisplay ? 'Sync GBPay Bill' : 'Generate GBPay PSID' }}
+                                </button>
+                            </form>
                         @endif
                     </div>
 
