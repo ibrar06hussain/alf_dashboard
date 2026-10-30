@@ -1060,6 +1060,58 @@
                 @endforelse
             </ul>
         </div>
+
+        {{-- SMS Notifications History & Manual Trigger --}}
+        <div class="card alf-panel mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-comment-sms me-1 text-primary"></i> SMS Notifications</span>
+                <span class="badge bg-secondary">{{ $application->smsLogs?->count() ?? 0 }}</span>
+            </div>
+            <div class="card-body p-2 border-bottom bg-light">
+                <form method="POST" action="{{ route('admin.applications.send-sms', $application) }}" class="d-flex gap-1 align-items-center">
+                    @csrf
+                    <select name="event_key" class="form-select form-select-sm">
+                        <option value="{{ $application->current_stage ?: $application->status }}">Current Status ({{ \App\Models\Application::translateStatus($application->current_stage ?: $application->status) }})</option>
+                        @foreach(\App\Models\SmsTemplate::eventLabels() as $eventKey => $eventLabel)
+                            <option value="{{ $eventKey }}">{{ $eventLabel }}</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap" title="Send or Resend SMS to Applicant">
+                        <i class="fa-solid fa-paper-plane me-1"></i> Send SMS
+                    </button>
+                </form>
+            </div>
+            <ul class="list-group list-group-flush" style="max-height: 280px; overflow-y: auto;">
+                @forelse($application->smsLogs ?? [] as $sms)
+                    <li class="list-group-item py-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div>
+                                <span class="badge bg-light text-dark border" style="font-size: 10px;">{{ $sms->event_key }}</span>
+                                <span class="badge {{ $sms->language === 'ur' ? 'bg-success-subtle text-success' : 'bg-primary-subtle text-primary' }}" style="font-size: 10px;">
+                                    {{ $sms->language === 'ur' ? 'UR' : 'EN' }}
+                                </span>
+                            </div>
+                            @if($sms->status === 'sent')
+                                <span class="badge bg-success" style="font-size: 10px;">SENT</span>
+                            @elseif($sms->status === 'simulated')
+                                <span class="badge bg-warning text-dark" style="font-size: 10px;">SIMULATED</span>
+                            @else
+                                <span class="badge bg-danger" style="font-size: 10px;">FAILED</span>
+                            @endif
+                        </div>
+                        <div class="small {{ $sms->language === 'ur' ? 'text-end' : '' }}" dir="{{ $sms->language === 'ur' ? 'rtl' : 'ltr' }}" style="font-size: 11.5px; line-height: 1.4;">
+                            {{ $sms->message }}
+                        </div>
+                        <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 10px;">
+                            <span>To: {{ $sms->recipient_phone }}</span>
+                            <span>{{ ($sms->sent_at ?? $sms->created_at)?->format('d M Y H:i') }}</span>
+                        </div>
+                    </li>
+                @empty
+                    <li class="list-group-item text-muted small py-2">No SMS notifications logged yet.</li>
+                @endforelse
+            </ul>
+        </div>
     </div>
 </div>
 @endsection

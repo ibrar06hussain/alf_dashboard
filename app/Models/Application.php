@@ -235,6 +235,11 @@ class Application extends Model
             ->latestOfMany('bill_id');
     }
 
+    public function smsLogs(): HasMany
+    {
+        return $this->hasMany(SmsLog::class, 'application_id')->latest();
+    }
+
     /**
      * Determine if applicant is eligible for stock disbursement.
      */

@@ -88,7 +88,7 @@ class GbpayService
             'head' => $headCode,
         ];
 
-        if (! $forceNew) {
+        if (!$forceNew) {
             // 1. Return existing paid bill if already paid
             $paidBill = $application->bills()->where('status', 'paid')->first();
             if ($paidBill) {
@@ -135,16 +135,16 @@ class GbpayService
         ]);
 
         $application->psid = $psid;
-        if (! $application->challan_no) {
+        if (!$application->challan_no) {
             $application->challan_no = 'CHL-' . now()->format('Y') . '-' . str_pad((string) $application->id, 6, '0', STR_PAD_LEFT);
         }
-        if (! $application->challan_amount) {
+        if (!$application->challan_amount) {
             $application->challan_amount = $billAmount;
         }
-        if (! $application->challan_issued_at) {
+        if (!$application->challan_issued_at) {
             $application->challan_issued_at = now();
         }
-        if (! $application->challan_due_date) {
+        if (!$application->challan_due_date) {
             $application->challan_due_date = $dueDate;
         }
         $application->saveQuietly();
@@ -304,13 +304,13 @@ class GbpayService
     {
         $psid = $webhookData['psid'] ?? $webhookData['voucher_number'] ?? null;
 
-        if (! $psid) {
+        if (!$psid) {
             throw new \InvalidArgumentException('PSID not found in webhook data');
         }
 
         $bill = Bill::where('psid', $psid)->first();
 
-        if (! $bill) {
+        if (!$bill) {
             throw new \RuntimeException('Bill not found for PSID: ' . $psid);
         }
 
@@ -378,7 +378,7 @@ class GbpayService
         string $bankMnemonic = 'GBPay'
     ): void {
         $application = Application::where('id', $bill->application_id)->lockForUpdate()->first();
-        if (! $application) {
+        if (!$application) {
             return;
         }
 
@@ -439,6 +439,25 @@ class GbpayService
                 'amount_paid' => $totalPaid,
                 'from_stage' => $fromStage,
                 'to_stage' => Application::STAGE_ELIGIBLE_BENEFICIARY,
+            ]);
+        }
+
+        // Send automated SMS for GBPay Bill Payment Success (with bill paid amount & PSID)
+        try {
+            $freshApp = $application->fresh(['scheme.stockItems', 'applicant', 'district', 'bills']);
+            if ($freshApp) {
+                app(\App\Services\ZongSmsService::class)->sendForApplicationEvent($freshApp, 'gbpay_payment_success', [
+                    '{amount_paid}' => number_format((float) $totalPaid, 0),
+                    '{psid}' => (string) $bill->psid,
+                    '{transaction_id}' => (string) ($txnId ?: $bill->transaction_id ?: 'N/A'),
+                    '{payment_date}' => now()->format('d-M-Y H:i'),
+                ]);
+            }
+        } catch (\Throwable $smsException) {
+            Log::warning('GBPay payment success SMS dispatch failed', [
+                'application_id' => $application->id,
+                'psid' => $bill->psid,
+                'error' => $smsException->getMessage(),
             ]);
         }
     }

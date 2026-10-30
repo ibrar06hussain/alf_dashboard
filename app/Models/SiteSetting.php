@@ -22,7 +22,31 @@ class SiteSetting extends Model
 
         $row = $settings[$key];
 
-        return $row['value'] ?: ($row['fallback'] ?: ($default ?? $definitionFallback));
+        if ($row['value'] !== null && $row['value'] !== '') {
+            return (string) $row['value'];
+        }
+
+        if ($row['fallback'] !== null && $row['fallback'] !== '') {
+            return (string) $row['fallback'];
+        }
+
+        return $default ?? $definitionFallback;
+    }
+
+    public static function setValue(string $key, ?string $value, string $group = 'general', ?string $label = null): self
+    {
+        $setting = static::updateOrCreate(
+            ['key' => $key],
+            [
+                'value' => $value,
+                'group' => $group,
+                'label' => $label ?? ucwords(str_replace('_', ' ', $key)),
+            ]
+        );
+
+        static::flushCache();
+
+        return $setting;
     }
 
     /**

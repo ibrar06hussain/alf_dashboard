@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Officer Video Tutorial — ALF Gilgit-Baltistan</title>
+<style>
+  :root {
+    --alf-green: #77b122;
+    --alf-dark: #0f172a;
+    --alf-panel: #1e293b;
+    --alf-border: #334155;
+    --alf-amber: #f59e0b;
+    --alf-text: #f8fafc;
+    --alf-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #090d16;
+    color: var(--alf-text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+    border-bottom: 3px solid var(--alf-green);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand-badge {
+    background: var(--alf-green);
+    color: #fff;
+    font-weight: 800;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    letter-spacing: 0.6px;
+  }
+  .brand-title h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .brand-title p {
+    font-size: 12px;
+    color: var(--alf-muted);
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid var(--alf-border);
+    background: var(--alf-panel);
+    color: #fff;
+    transition: all 0.2s;
+  }
+  .btn-action:hover {
+    border-color: var(--alf-green);
+    background: #26354d;
+  }
+  .btn-primary-dl {
+    background: var(--alf-green);
+    border-color: var(--alf-green);
+    color: #fff;
+  }
+  .btn-primary-dl:hover {
+    background: #65991b;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 18px;
+    padding: 18px 24px;
+    flex: 1;
+    max-width: 1680px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  @media (max-width: 1150px) {
+    .workspace { grid-template-columns: 1fr; }
+  }
+
+  /* Video Stage Container */
+  .player-column {
+    display: flex;
+    flex-direction: column;
+    background: var(--alf-dark);
+    border: 1px solid var(--alf-border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  }
+  .stage-header {
+    background: #131c31;
+    padding: 10px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--alf-border);
+  }
+  .step-pill {
+    background: rgba(119, 177, 34, 0.2);
+    color: #9be53d;
+    border: 1px solid var(--alf-green);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .stage-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin-left: 10px;
+  }
+  .stage-title-ur {
+    font-size: 14px;
+    color: #cbd5e1;
+    direction: rtl;
+  }
+
+  /* 16:9 Stage Viewport */
+  .stage-viewport {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    overflow: hidden;
+    user-select: none;
+  }
+  .stage-img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    display: block;
+    transition: opacity 0.25s ease;
+  }
+
+  /* Animated Spotlight Box */
+  .focus-box {
+    position: absolute;
+    border: 3px solid var(--alf-green);
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(9, 13, 22, 0.42), 0 0 25px rgba(119, 177, 34, 0.9);
+    pointer-events: none;
+    transition: all 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 5;
+    animation: pulseBorder 1.5s infinite alternate;
+  }
+  @keyframes pulseBorder {
+    0% { border-color: #77b122; box-shadow: 0 0 0 9999px rgba(9, 13, 22, 0.42), 0 0 18px rgba(119, 177, 34, 0.8); }
+    100% { border-color: #f59e0b; box-shadow: 0 0 0 9999px rgba(9, 13, 22, 0.42), 0 0 28px rgba(245, 158, 11, 0.95); }
+  }
+  .focus-tag {
+    position: absolute;
+    top: -28px;
+    left: -2px;
+    background: var(--alf-green);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  }
+
+  /* Animated Pointer Cursor */
+  .virtual-cursor {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    pointer-events: none;
+    z-index: 10;
+    transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.65));
+  }
+  .cursor-ring {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--alf-amber);
+    border-radius: 50%;
+    animation: cursorRipple 1.3s infinite ease-out;
+  }
+  @keyframes cursorRipple {
+    0% { transform: scale(0.5); opacity: 1; }
+    100% { transform: scale(1.65); opacity: 0; }
+  }
+
+  /* Subtitle Overlay inside Viewport */
+  .subtitle-overlay {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 92%;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(119, 177, 34, 0.5);
+    border-left: 4px solid var(--alf-green);
+    border-radius: 8px;
+    padding: 10px 16px;
+    z-index: 12;
+    backdrop-filter: blur(6px);
+  }
+  .sub-en {
+    font-size: 14px;
+    line-height: 1.45;
+    color: #fff;
+    font-weight: 500;
+  }
+  .sub-ur {
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: #fde68a;
+    margin-top: 4px;
+    direction: rtl;
+    text-align: right;
+    font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif;
+  }
+
+  /* Big Center Play Overlay when Paused at Start */
+  .big-play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(9, 13, 22, 0.55);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    cursor: pointer;
+    transition: opacity 0.25s;
+  }
+  .big-play-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .big-play-btn {
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    background: var(--alf-green);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    box-shadow: 0 0 35px rgba(119, 177, 34, 0.85);
+    margin-bottom: 12px;
+    transition: transform 0.2s;
+  }
+  .big-play-overlay:hover .big-play-btn {
+    transform: scale(1.08);
+  }
+  .big-play-label {
+    background: rgba(15, 23, 42, 0.9);
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--alf-border);
+  }
+
+  /* Player Transport Controls Bar */
+  .controls-bar {
+    background: #131c31;
+    padding: 12px 18px;
+    border-top: 1px solid var(--alf-border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .scrubber {
+    flex: 1;
+    accent-color: var(--alf-green);
+    height: 6px;
+    cursor: pointer;
+  }
+  .time-readout {
+    font-size: 12px;
+    color: var(--alf-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 95px;
+    text-align: right;
+  }
+  .buttons-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ctrl-btn {
+    background: var(--alf-panel);
+    color: #fff;
+    border: 1px solid var(--alf-border);
+    padding: 7px 13px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ctrl-btn:hover {
+    border-color: var(--alf-green);
+    background: #26354d;
+  }
+  .ctrl-btn.primary {
+    background: var(--alf-green);
+    border-color: var(--alf-green);
+  }
+  .ctrl-select {
+    background: var(--alf-panel);
+    color: #fff;
+    border: 1px solid var(--alf-border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  /* Chapter Playlist Sidebar */
+  .playlist-sidebar {
+    background: var(--alf-dark);
+    border: 1px solid var(--alf-border);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .playlist-header {
+    padding: 14px 16px;
+    background: #131c31;
+    border-bottom: 1px solid var(--alf-border);
+  }
+  .playlist-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .playlist-header p {
+    font-size: 12px;
+    color: var(--alf-muted);
+    margin-top: 2px;
+  }
+  .chapter-list {
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .chapter-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--alf-panel);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .chapter-item:hover {
+    border-color: #475569;
+  }
+  .chapter-item.active {
+    background: rgba(119, 177, 34, 0.16);
+    border-color: var(--alf-green);
+  }
+  .chapter-thumb {
+    width: 84px;
+    height: 48px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid var(--alf-border);
+    flex-shrink: 0;
+  }
+  .chapter-meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .chapter-meta h3 {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 3px;
+    line-height: 1.3;
+  }
+  .chapter-meta .ur {
+    font-size: 12px;
+    color: #fde68a;
+    direction: rtl;
+    text-align: right;
+  }
+  .chapter-meta .dur {
+    font-size: 11px;
+    color: var(--alf-muted);
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="brand-badge">FIELD OFFICER TUTORIAL</span>
+    <div class="brand-title">
+      <h1>ALF-GB Portal — Field Officer Screen-by-Screen Video Walkthrough</h1>
+      <p>On-Site Land Verification, 3+ GPS Perimeter Capture &amp; 3-Photo Evidence Submission</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <a href="ALFGB_Complete_User_Manual.html#role-4-field-officer" class="btn-action">📖 Open Written Manual</a>
+    <a href="Field_Officer_Tutorial.avi" download="ALFGB_Field_Officer_Tutorial.avi" class="btn-action btn-primary-dl">⬇ Download Video (.AVI with Voiceover)</a>
+  </div>
+</header>
+
+<div class="workspace">
+  <!-- Main Interactive Video Stage -->
+  <div class="player-column" id="playerContainer">
+    <div class="stage-header">
+      <div>
+        <span class="step-pill" id="stepPill">STEP 1 OF 7</span>
+        <span class="stage-title" id="stageTitle">Step 1: Field Officer Portal Login</span>
+      </div>
+      <div class="stage-title-ur" id="stageTitleUr">مرحلہ 1: فیلڈ آفیسر پورٹل لاگ ان</div>
+    </div>
+
+    <div class="stage-viewport" id="stageViewport">
+      <img id="stageImg" class="stage-img" src="screenshots/fo_01_login.png" alt="Field Officer Screen">
+
+      <!-- Animated Spotlight Highlight Box -->
+      <div id="focusBox" class="focus-box">
+        <div class="focus-tag" id="focusTag">FOCUS AREA · STEP 1</div>
+      </div>
+
+      <!-- Animated Virtual Mouse Cursor -->
+      <div id="virtualCursor" class="virtual-cursor">
+        <div class="cursor-ring"></div>
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="#f59e0b" stroke="#0f172a" stroke-width="1.8">
+          <path d="M4 2l16 10-7 2 4 7-3 1-4-7-6 5z"/>
+        </svg>
+      </div>
+
+      <!-- Bilingual Subtitle Box -->
+      <div class="subtitle-overlay" id="subtitleOverlay">
+        <div class="sub-en" id="subEn"></div>
+        <div class="sub-ur" id="subUr"></div>
+      </div>
+
+      <!-- Big Center Play Button -->
+      <div class="big-play-overlay" id="bigPlayOverlay" onclick="togglePlay()">
+        <div class="big-play-btn">▶</div>
+        <div class="big-play-label">Click to Start Narrated Field Officer Video Tutorial</div>
+      </div>
+    </div>
+
+    <!-- Transport Controls -->
+    <div class="controls-bar">
+      <div class="timeline-row">
+        <input type="range" id="scrubber" class="scrubber" min="0" max="100" value="0" step="0.1" oninput="onScrub(this.value)">
+        <div class="time-readout" id="timeReadout">00:00 / 00:00</div>
+      </div>
+      <div class="buttons-row">
+        <div class="ctrl-group">
+          <button class="ctrl-btn" onclick="prevChapter()">⏮ Prev Step</button>
+          <button class="ctrl-btn primary" id="playPauseBtn" onclick="togglePlay()">▶ Play Tutorial</button>
+          <button class="ctrl-btn" onclick="nextChapter()">Next Step ⏭</button>
+        </div>
+        <div class="ctrl-group">
+          <label style="font-size:12px;color:#94a3b8;">Subtitles:</label>
+          <select class="ctrl-select" id="subModeSelect" onchange="updateSubtitleVisibility()">
+            <option value="both" selected>English + Urdu (اردو)</option>
+            <option value="en">English Only</option>
+            <option value="ur">Urdu Only (صرف اردو)</option>
+            <option value="off">Hide Subtitles</option>
+          </select>
+          <label style="font-size:12px;color:#94a3b8;">Speed:</label>
+          <select class="ctrl-select" id="speedSelect" onchange="changeSpeed(this.value)">
+            <option value="1" selected>1.0x Normal</option>
+            <option value="1.2">1.2x Fast</option>
+            <option value="1.5">1.5x Rapid</option>
+          </select>
+          <button class="ctrl-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Chapter Playlist -->
+  <aside class="playlist-sidebar">
+    <div class="playlist-header">
+      <h2>Field Officer Workflow Chapters (7 Steps)</h2>
+      <p>Click any step below to jump directly to that screen</p>
+    </div>
+    <div class="chapter-list" id="chapterList"></div>
+  </aside>
+</div>
+
+<audio id="voicePlayer" preload="auto"></audio>
+
+<script>
+const chapters = [
+    {
+        "id": "01",
+        "shot": "fo_01_login",
+        "title": "Step 1: Field Officer Portal Login",
+        "title_ur": "مرحلہ 1: فیلڈ آفیسر پورٹل لاگ ان",
+        "narration": "Welcome to the Field Officer Video Tutorial for the Agriculture, Livestock and Fisheries Department, Gilgit Baltistan. To begin, open the Admin Login page, enter your official District Field Officer email and password, and click Sign In.",
+        "subtitle_ur": "محکمہ زراعت، لائیوسٹاک و فشریز گلگت بلتستان کے فیلڈ آفیسر ویڈیو ٹیوٹوریل میں خوش آمدید۔ سب سے پہلے اپنا آفیشل ای میل اور پاس ورڈ درج کر کے لاگ ان کریں۔",
+        "box": [
+            390,
+            140,
+            500,
+            440
+        ],
+        "cursor": [
+            640,
+            475
+        ],
+        "duration": 19
+    },
+    {
+        "id": "02",
+        "shot": "fo_02_dashboard",
+        "title": "Step 2: Field Officer Dashboard & District Scope",
+        "title_ur": "مرحلہ 2: فیلڈ آفیسر ڈیش بورڈ اور ضلعی دائرہ کار",
+        "narration": "After signing in, you land on the Field Officer Dashboard. Your account is automatically scoped to your assigned District and Department. From the left navigation sidebar, click Applications to open your assigned field verification queue.",
+        "subtitle_ur": "لاگ ان ہونے کے بعد آپ کو اپنے ضلع کا ڈیش بورڈ نظر آئے گا۔ بائیں جانب مینو سے Applications پر کلک کر کے اپنی تفویض کردہ درخواستوں کی فہرست کھولیں۔",
+        "box": [
+            12,
+            235,
+            225,
+            48
+        ],
+        "cursor": [
+            110,
+            258
+        ],
+        "duration": 18
+    },
+    {
+        "id": "03",
+        "shot": "fo_03_assigned_queue",
+        "title": "Step 3: Reviewing Your Assigned Field Survey Queue",
+        "title_ur": "مرحلہ 3: تفویض شدہ فیلڈ سروے درخواستوں کی فہرست",
+        "narration": "In the Applications queue, you can see all citizen applications delegated to you by the District Deputy Director for on-site verification. You can filter by status, land area in Kanals, or seed bags demanded, and click View to open an application.",
+        "subtitle_ur": "یہاں ڈپٹی ڈائریکٹر کی جانب سے آپ کو موقع پر تصدیق کے لیے بھیجی گئی تمام درخواستیں موجود ہیں۔ کسی بھی درخواست کو کھولنے کے لیے View پر کلک کریں۔",
+        "box": [
+            255,
+            165,
+            995,
+            510
+        ],
+        "cursor": [
+            1180,
+            490
+        ],
+        "duration": 19
+    },
+    {
+        "id": "04",
+        "shot": "fo_04_schedule_visit",
+        "title": "Step 4: Inspecting Application Details & Scheduling the Site Visit",
+        "title_ur": "مرحلہ 4: درخواست کا جائزہ اور معائنے کی تاریخ کا اندراج",
+        "narration": "Inside the application detail view, review the citizen profile, demanded seed bags, and the Field Survey and Land Verification card at the top. In Step 1, select your planned inspection date and time and click Save Scheduled Visit Date.",
+        "subtitle_ur": "درخواست کی تفصیلات اور مطلوبہ بوریوں کا جائزہ لیں۔ فیلڈ سروے کارڈ میں Step 1 کے تحت معائنے کی تاریخ اور وقت منتخب کر کے Save Scheduled Visit Date پر کلک کریں۔",
+        "box": [
+            268,
+            305,
+            620,
+            105
+        ],
+        "cursor": [
+            720,
+            368
+        ],
+        "duration": 19
+    },
+    {
+        "id": "05",
+        "shot": "fo_05_land_verification",
+        "title": "Step 5: Recording Verified Land (Kanals), Water Source & Recommendation",
+        "title_ur": "مرحلہ 5: قابلِ کاشت رقبہ (کنال)، پانی کے ذرائع اور سفارشات کا اندراج",
+        "narration": "During your physical visit to the farmer land parcel, enter the actual Verified Land Area in Kanals, confirm the Water Source such as Perennial Irrigation Channel, verify Road Access, select your Field Recommendation, and write your detailed field observations.",
+        "subtitle_ur": "موقع پر معائنے کے دوران تصدیق شدہ رقبہ (کنال)، پانی کا ذریعہ، سڑک کی رسائی، اپنی سفارش (Recommended) اور تفصیلی مشاہدات درج کریں۔",
+        "box": [
+            268,
+            175,
+            625,
+            250
+        ],
+        "cursor": [
+            420,
+            240
+        ],
+        "duration": 20
+    },
+    {
+        "id": "06",
+        "shot": "fo_06_gps_and_photos",
+        "title": "Step 6: Capturing 3+ GPS Perimeter Points & Uploading 3 Land Photos",
+        "title_ur": "مرحلہ 6: زمین کے 3 یا زائد GPS پوائنٹس اور 3 تصاویر اپ لوڈ کرنا",
+        "narration": "Next, stand at each corner of the land and click Capture Point from Mobile Device GPS to record at least three boundary coordinates. Then attach three on-site land photos up to 5 megabytes each: General Land View, Water Source, and Road Access, and click Submit Survey Findings.",
+        "subtitle_ur": "اب زمین کے کونوں پر کھڑے ہو کر موبائل GPS سے کم از کم 3 باؤنڈری پوائنٹس ریکارڈ کریں اور زمین، پانی کے ذریعے اور سڑک کی 3 تصاویر اپ لوڈ کر کے Submit Survey Findings پر کلک کریں۔",
+        "box": [
+            268,
+            45,
+            625,
+            650
+        ],
+        "cursor": [
+            580,
+            668
+        ],
+        "duration": 22
+    },
+    {
+        "id": "07",
+        "shot": "fo_07_submitted_findings",
+        "title": "Step 7: Survey Completed — GPS Map Links & Photo Evidence Submitted",
+        "title_ur": "مرحلہ 7: سروے مکمل — ڈپٹی ڈائریکٹر کو رپورٹ اور شواہد کی منتقلی",
+        "narration": "Once submitted, the card status changes to Findings Submitted in green. Your verified land area, GPS boundary points with direct Google Maps links, and inspection photos are permanently recorded and routed to the District Deputy Director for final approval and challan issuance.",
+        "subtitle_ur": "رپورٹ جمع ہونے کے بعد اسٹیٹس Findings Submitted ہو جاتا ہے اور آپ کے GPS پوائنٹس، نقشہ اور تصاویر حتمی منظوری اور چالان کے اجرا کے لیے ڈپٹی ڈائریکٹر کو منتقل ہو جاتی ہیں۔",
+        "box": [
+            255,
+            165,
+            645,
+            535
+        ],
+        "cursor": [
+            780,
+            395
+        ],
+        "duration": 22
+    }
+];
+
+let currentIdx = 0;
+let isPlaying = false;
+let playbackRate = 1.0;
+let fallbackTimer = null;
+let fallbackElapsed = 0;
+
+const audioEl = document.getElementById('voicePlayer');
+const stageImg = document.getElementById('stageImg');
+const focusBox = document.getElementById('focusBox');
+const focusTag = document.getElementById('focusTag');
+const virtualCursor = document.getElementById('virtualCursor');
+const stepPill = document.getElementById('stepPill');
+const stageTitle = document.getElementById('stageTitle');
+const stageTitleUr = document.getElementById('stageTitleUr');
+const subEn = document.getElementById('subEn');
+const subUr = document.getElementById('subUr');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const bigPlayOverlay = document.getElementById('bigPlayOverlay');
+const scrubber = document.getElementById('scrubber');
+const timeReadout = document.getElementById('timeReadout');
+const chapterListEl = document.getElementById('chapterList');
+
+// Calculate cumulative timeline
+let totalDuration = 0;
+chapters.forEach(ch => {
+  ch.startTime = totalDuration;
+  totalDuration += (ch.duration || 10);
+});
+
+function formatTime(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return m + ':' + s;
+}
+
+function buildPlaylist() {
+  chapterListEl.innerHTML = '';
+  chapters.forEach((ch, idx) => {
+    const item = document.createElement('div');
+    item.className = 'chapter-item' + (idx === currentIdx ? ' active' : '');
+    item.onclick = () => selectChapter(idx, true);
+    item.innerHTML = `
+      <img class="chapter-thumb" src="screenshots/${ch.shot}.png" alt="${ch.title}">
+      <div class="chapter-meta">
+        <h3>${ch.title}</h3>
+        <div class="ur">${ch.title_ur}</div>
+        <div class="dur">⏱ ${ch.duration} sec · Step ${idx + 1} of ${chapters.length}</div>
+      </div>
+    `;
+    chapterListEl.appendChild(item);
+  });
+}
+
+function applyStageLayout(ch, idx) {
+  stageImg.src = 'screenshots/' + ch.shot + '.png';
+  stepPill.textContent = `STEP ${idx + 1} OF ${chapters.length}`;
+  stageTitle.textContent = ch.title;
+  stageTitleUr.textContent = ch.title_ur;
+  subEn.textContent = ch.narration;
+  subUr.textContent = ch.subtitle_ur;
+  focusTag.textContent = `FOCUS AREA · STEP ${idx + 1}`;
+
+  // Convert 1280x720 coordinates to percentages
+  const [bx, by, bw, bh] = ch.box;
+  focusBox.style.left = ((bx / 1280) * 100).toFixed(2) + '%';
+  focusBox.style.top = ((by / 720) * 100).toFixed(2) + '%';
+  focusBox.style.width = ((bw / 1280) * 100).toFixed(2) + '%';
+  focusBox.style.height = ((bh / 720) * 100).toFixed(2) + '%';
+
+  const [cx, cy] = ch.cursor;
+  virtualCursor.style.left = ((cx / 1280) * 100).toFixed(2) + '%';
+  virtualCursor.style.top = ((cy / 720) * 100).toFixed(2) + '%';
+
+  Array.from(chapterListEl.children).forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+}
+
+function selectChapter(idx, autoPlay = false) {
+  clearInterval(fallbackTimer);
+  currentIdx = Math.max(0, Math.min(chapters.length - 1, idx));
+  const ch = chapters[currentIdx];
+  applyStageLayout(ch, currentIdx);
+
+  audioEl.src = 'audio/fo_voice_' + ch.id + '.wav';
+  audioEl.playbackRate = playbackRate;
+  fallbackElapsed = 0;
+  updateTimelineUI(0);
+
+  if (autoPlay || isPlaying) {
+    startPlayback();
+  }
+}
+
+function startPlayback() {
+  isPlaying = true;
+  bigPlayOverlay.classList.add('hidden');
+  playPauseBtn.textContent = '⏸ Pause';
+  audioEl.playbackRate = playbackRate;
+
+  audioEl.play().catch(() => {
+    // Fallback timer if browser blocks audio or audio device unavailable
+    runFallbackTimer();
+  });
+}
+
+function runFallbackTimer() {
+  clearInterval(fallbackTimer);
+  const ch = chapters[currentIdx];
+  fallbackTimer = setInterval(() => {
+    if (!isPlaying) return;
+    fallbackElapsed += 0.2 * playbackRate;
+    updateTimelineUI(fallbackElapsed);
+    if (fallbackElapsed >= ch.duration) {
+      clearInterval(fallbackTimer);
+      advanceNextOrFinish();
+    }
+  }, 200);
+}
+
+function pausePlayback() {
+  isPlaying = false;
+  playPauseBtn.textContent = '▶ Resume Tutorial';
+  audioEl.pause();
+  clearInterval(fallbackTimer);
+}
+
+function togglePlay() {
+  if (isPlaying) {
+    pausePlayback();
+  } else {
+    startPlayback();
+  }
+}
+
+function prevChapter() {
+  selectChapter(currentIdx - 1, isPlaying);
+}
+
+function nextChapter() {
+  if (currentIdx < chapters.length - 1) {
+    selectChapter(currentIdx + 1, isPlaying);
+  } else {
+    selectChapter(0, false);
+    pausePlayback();
+    bigPlayOverlay.classList.remove('hidden');
+  }
+}
+
+function advanceNextOrFinish() {
+  if (currentIdx < chapters.length - 1) {
+    selectChapter(currentIdx + 1, true);
+  } else {
+    pausePlayback();
+    playPauseBtn.textContent = '↺ Replay Tutorial';
+    bigPlayOverlay.classList.remove('hidden');
+  }
+}
+
+audioEl.addEventListener('timeupdate', () => {
+  updateTimelineUI(audioEl.currentTime || 0);
+});
+
+audioEl.addEventListener('ended', () => {
+  advanceNextOrFinish();
+});
+
+function updateTimelineUI(chapterSec) {
+  const ch = chapters[currentIdx];
+  const globalSec = ch.startTime + Math.min(ch.duration, chapterSec);
+  const pct = totalDuration > 0 ? (globalSec / totalDuration) * 100 : 0;
+  scrubber.value = pct.toFixed(2);
+  timeReadout.textContent = `${formatTime(globalSec)} / ${formatTime(totalDuration)}`;
+}
+
+function onScrub(pct) {
+  const targetSec = (parseFloat(pct) / 100) * totalDuration;
+  let chosenIdx = 0;
+  for (let i = 0; i < chapters.length; i++) {
+    if (targetSec >= chapters[i].startTime) {
+      chosenIdx = i;
+    }
+  }
+  const offsetInChapter = Math.max(0, targetSec - chapters[chosenIdx].startTime);
+  if (chosenIdx !== currentIdx) {
+    selectChapter(chosenIdx, isPlaying);
+  }
+  if (!isNaN(audioEl.duration)) {
+    audioEl.currentTime = Math.min(audioEl.duration - 0.1, offsetInChapter);
+  }
+  fallbackElapsed = offsetInChapter;
+  updateTimelineUI(offsetInChapter);
+}
+
+function changeSpeed(val) {
+  playbackRate = parseFloat(val) || 1.0;
+  audioEl.playbackRate = playbackRate;
+}
+
+function updateSubtitleVisibility() {
+  const mode = document.getElementById('subModeSelect').value;
+  const overlay = document.getElementById('subtitleOverlay');
+  overlay.style.display = (mode === 'off') ? 'none' : 'block';
+  subEn.style.display = (mode === 'both' || mode === 'en') ? 'block' : 'none';
+  subUr.style.display = (mode === 'both' || mode === 'ur') ? 'block' : 'none';
+}
+
+function toggleFullscreen() {
+  const el = document.getElementById('playerContainer');
+  if (!document.fullscreenElement) {
+    el.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+// Initialize
+buildPlaylist();
+selectChapter(0, false);
+</script>
+</body>
+</html>

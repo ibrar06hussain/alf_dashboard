@@ -331,6 +331,7 @@ class ApplicationReviewController extends Controller
             'paymentVerifiedBy',
             'reactivatedBy',
             'bills',
+            'smsLogs',
         ]);
 
         $allowedTransitions = $this->allowedTransitions($user, $application);

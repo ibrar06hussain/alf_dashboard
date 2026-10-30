@@ -66,7 +66,10 @@
                                 <div class="widget-heading">{{ $user?->name }}</div>
                                 <div class="widget-subheading">{{ $user?->getRoleNames()->first() }}</div>
                             </div>
-                            <div class="widget-content-right header-btn-lg">
+                            <div class="widget-content-right header-btn-lg d-flex align-items-center gap-2">
+                                <a href="{{ route('admin.profile.password.show') }}" class="btn btn-sm btn-outline-secondary" title="Change Password">
+                                    <i class="fa-solid fa-key me-1"></i> Change Password
+                                </a>
                                 <form action="{{ route('admin.logout') }}" method="POST" class="d-inline">
                                     @csrf
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Logout</button>
@@ -138,6 +141,11 @@
                             <li class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.challan-templates.index') }}">
                                     <i class="metismenu-icon fa-solid fa-receipt"></i> Challan Templates
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.sms-templates.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-comment-sms"></i> SMS Templates
                                 </a>
                             </li>
                             <li class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
@@ -243,6 +251,11 @@
                             </li>
                         @endif
                         <li class="app-sidebar__heading">Account</li>
+                        <li class="{{ request()->routeIs('admin.profile.password.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('admin.profile.password.show') }}">
+                                <i class="metismenu-icon fa-solid fa-key"></i> Change Password
+                            </a>
+                        </li>
                         <li>
                             <form action="{{ route('admin.logout') }}" method="POST">
                                 @csrf

@@ -441,6 +441,24 @@ class StockManagementService
                 'actor_name' => $actor->name,
             ]);
 
+            // 14. Send automated SMS notification for stock disbursement
+            try {
+                app(\App\Services\ZongSmsService::class)->sendForApplicationEvent(
+                    $application->fresh(['applicant', 'scheme.department', 'district', 'bills']),
+                    $targetStage,
+                    [
+                        'disbursed_bags' => $newDistributedTotal,
+                        'distributed_quantity' => $newDistributedTotal,
+                    ],
+                    $actor->id
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Stock disbursement SMS dispatch failed', [
+                    'application_id' => $application->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return $disbursement;
         });
     }

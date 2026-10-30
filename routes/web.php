@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Admin\ApplicationReviewController;
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\CarouselSlideController;
 use App\Http\Controllers\Admin\ChallanTemplateController;
 use App\Http\Controllers\Admin\CmDashboardController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Admin\SchemeController as AdminSchemeController;
 use App\Http\Controllers\Admin\SchemeInterestController;
 use App\Http\Controllers\Admin\SiteMediaController;
 use App\Http\Controllers\Admin\SiteInfoController;
+use App\Http\Controllers\Admin\SmsTemplateController;
 use App\Http\Controllers\Admin\StockManagementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WheatSeedMisController;
@@ -96,6 +98,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware(['auth', 'admin.active'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+        Route::get('profile/change-password', [ProfileController::class, 'showChangePassword'])->name('profile.password.show');
+        Route::put('profile/change-password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/fix-storage-link', function () {
             try {
@@ -126,6 +130,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('applications/{application}/correction-request', [ApplicationReviewController::class, 'requestCorrection'])->name('applications.correction-request');
         Route::post('applications/{application}/verify-payment', [ApplicationReviewController::class, 'verifyPayment'])->name('applications.verify-payment');
         Route::post('applications/{application}/generate-gbpay-bill', [GbpayController::class, 'generateApplicationBill'])->name('applications.generate-gbpay-bill');
+        Route::post('applications/{application}/send-sms', [SmsTemplateController::class, 'sendForApplication'])->name('applications.send-sms');
         Route::post('applications/{application}/allocate-stock', [ApplicationReviewController::class, 'allocateStock'])->name('applications.allocate-stock');
         Route::post('applications/{application}/reactivate', [ApplicationReviewController::class, 'reactivateDormant'])->name('applications.reactivate');
         Route::post('applications/{application}/assign-dd', [ApplicationReviewController::class, 'assignDeputyDirector'])->name('applications.assign-dd');
@@ -187,6 +192,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
             Route::resource('challan-templates', ChallanTemplateController::class)->names('challan-templates');
             Route::get('challan-templates/{challan_template}/preview', [ChallanTemplateController::class, 'preview'])->name('challan-templates.preview');
+
+            // SMS Notification Templates & Zong CBS Gateway Configuration
+            Route::post('sms-templates/gateway', [SmsTemplateController::class, 'updateGateway'])->name('sms-templates.gateway.update');
+            Route::post('sms-templates/check-balance', [SmsTemplateController::class, 'checkBalance'])->name('sms-templates.check-balance');
+            Route::post('sms-templates/send-test', [SmsTemplateController::class, 'sendTest'])->name('sms-templates.send-test');
+            Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
+            Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
+
             Route::get('forms', [FormBuilderController::class, 'index'])->name('form-builder.index');
             Route::get('application-forms', [FormBuilderController::class, 'index'])->name('application-forms.index');
             Route::get('schemes/{scheme}/form-builder', [FormBuilderController::class, 'edit'])->name('form-builder.edit');

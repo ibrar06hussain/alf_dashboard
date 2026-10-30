@@ -231,6 +231,16 @@ class ApplicationLifecycleService
                 ]);
             }
 
+            // 4. Send automated Registration SMS (with Application ID & CNIC as Password)
+            try {
+                app(\App\Services\ZongSmsService::class)->sendForApplicationEvent($application, 'submitted');
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Registration SMS dispatch failed', [
+                    'application_id' => $application->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return $application;
         });
     }
@@ -489,6 +499,29 @@ class ApplicationLifecycleService
                 'lock_version' => $locked->lock_version,
                 'params' => $params,
             ]);
+
+            // Send automated SMS notification for the new application status
+            try {
+                $smsEventKey = match ($targetStage) {
+                    Application::STAGE_APPROVED, 'directorate_approved' => 'approved',
+                    Application::STAGE_REJECTED, 'rejected' => 'rejected',
+                    Application::STAGE_FULLY_DISTRIBUTED, 'disbursed' => 'fully_distributed',
+                    default => $targetStage,
+                };
+
+                app(\App\Services\ZongSmsService::class)->sendForApplicationEvent(
+                    $locked->fresh(['applicant', 'scheme.department', 'district', 'bills']),
+                    $smsEventKey,
+                    $params,
+                    $actor->id
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Status transition SMS dispatch failed', [
+                    'application_id' => $locked->id,
+                    'target_stage' => $targetStage,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return $locked;
         });
@@ -802,6 +835,12 @@ class ApplicationLifecycleService
                     'due_date' => $app->challan_due_date,
                     'challan_no' => $app->challan_no,
                 ]);
+
+                try {
+                    app(\App\Services\ZongSmsService::class)->sendForApplicationEvent($app, 'dormant');
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Dormant SMS dispatch failed', ['application_id' => $app->id]);
+                }
             });
             $count++;
         }
@@ -861,6 +900,17 @@ class ApplicationLifecycleService
                 'reason' => $documentedReason,
                 'new_due_date' => $application->challan_due_date,
             ]);
+
+            try {
+                app(\App\Services\ZongSmsService::class)->sendForApplicationEvent(
+                    $application->fresh(['applicant', 'scheme.department', 'district', 'bills']),
+                    'reactivated',
+                    ['reason' => $documentedReason],
+                    $dd->id
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Reactivation SMS dispatch failed', ['application_id' => $application->id]);
+            }
 
             return $application;
         });
