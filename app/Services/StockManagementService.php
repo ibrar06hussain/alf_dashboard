@@ -11,6 +11,7 @@ use App\Models\AccessAuditLog;
 use App\Models\ApplicationStatusLog;
 use App\Models\StockDamage;
 use App\Models\StockDisbursement;
+use App\Models\StockEditAuditLog;
 use App\Models\StockReceipt;
 use App\Models\StockTransfer;
 use App\Models\User;
@@ -458,6 +459,304 @@ class StockManagementService
                     'error' => $e->getMessage(),
                 ]);
             }
+
+            return $disbursement;
+        });
+    }
+
+    /**
+     * Recalculate inventory tallies directly from the underlying ledger tables for maximum consistency.
+     */
+    public function recalculateCenterInventory(int $centerId, int $schemeStockItemId): CenterInventory
+    {
+        $center = CollectionCenter::findOrFail($centerId);
+        $inventory = $center->getInventoryForItem($schemeStockItemId);
+
+        $totalReceived = (float) StockReceipt::where('collection_center_id', $centerId)
+            ->where('scheme_stock_item_id', $schemeStockItemId)
+            ->sum('quantity_received');
+
+        $totalTransferredIn = (float) StockTransfer::where('to_center_id', $centerId)
+            ->where('scheme_stock_item_id', $schemeStockItemId)
+            ->where('status', 'completed')
+            ->sum('quantity');
+
+        $totalTransferredOut = (float) StockTransfer::where('from_center_id', $centerId)
+            ->where('scheme_stock_item_id', $schemeStockItemId)
+            ->where('status', 'completed')
+            ->sum('quantity');
+
+        $totalDistributed = (float) StockDisbursement::where('collection_center_id', $centerId)
+            ->where('scheme_stock_item_id', $schemeStockItemId)
+            ->sum('quantity_disbursed');
+
+        $totalDamaged = (float) StockDamage::where('collection_center_id', $centerId)
+            ->where('scheme_stock_item_id', $schemeStockItemId)
+            ->sum('quantity');
+
+        $inventory->quantity_received = $totalReceived;
+        $inventory->quantity_transferred_in = $totalTransferredIn;
+        $inventory->quantity_transferred_out = $totalTransferredOut;
+        $inventory->quantity_distributed = $totalDistributed;
+        $inventory->quantity_damaged = $totalDamaged;
+        $inventory->recalculate();
+
+        return $inventory;
+    }
+
+    /**
+     * Update an existing Stock Receipt (Stock In) with mandatory justification and audit trail.
+     * Enforces the 10-minute non-admin window vs Super Admin access.
+     */
+    public function updateStockReceipt(StockReceipt $receipt, array $data, User $actor, ?UploadedFile $proofFile = null): StockReceipt
+    {
+        if (! $receipt->canUserEdit($actor)) {
+            throw ValidationException::withMessages([
+                'justification' => 'Edit window expired. Stock In entries older than 10 minutes can only be edited by Super Admin.',
+            ]);
+        }
+
+        if (empty(trim($data['justification'] ?? ''))) {
+            throw ValidationException::withMessages([
+                'justification' => 'A detailed justification explaining the reason for modifying this Stock In entry is mandatory.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($receipt, $data, $actor, $proofFile) {
+            $oldCenterId = $receipt->collection_center_id;
+            $oldItemId = $receipt->scheme_stock_item_id;
+            $newCenterId = (int) ($data['collection_center_id'] ?? $oldCenterId);
+            $newItemId = (int) ($data['scheme_stock_item_id'] ?? $oldItemId);
+
+            $targetCenter = CollectionCenter::findOrFail($newCenterId);
+            $this->validateUserCenterAccess($actor, $targetCenter);
+
+            $oldValues = [
+                'collection_center_id' => $receipt->collection_center_id,
+                'collection_center_name' => $receipt->center?->name,
+                'scheme_stock_item_id' => $receipt->scheme_stock_item_id,
+                'scheme_stock_item_name' => $receipt->item?->item_name,
+                'quantity_received' => (float) $receipt->quantity_received,
+                'received_date' => $receipt->received_date?->toDateString(),
+                'supplier_source' => $receipt->supplier_source,
+                'batch_no' => $receipt->batch_no,
+                'notes' => $receipt->notes,
+            ];
+
+            $updatePayload = [
+                'collection_center_id' => $newCenterId,
+                'scheme_stock_item_id' => $newItemId,
+                'district_id' => $targetCenter->district_id,
+                'quantity_received' => $data['quantity_received'],
+                'received_date' => $data['received_date'],
+                'supplier_source' => $data['supplier_source'] ?? null,
+                'batch_no' => $data['batch_no'] ?? null,
+                'notes' => $data['notes'] ?? null,
+            ];
+
+            if ($proofFile) {
+                $updatePayload['proof_attachment_path'] = $proofFile->store('stock/receipts', 'public');
+            }
+
+            $receipt->update($updatePayload);
+
+            // Recalculate inventories for both affected centers/items
+            $this->recalculateCenterInventory($oldCenterId, $oldItemId);
+            if ($oldCenterId !== $newCenterId || $oldItemId !== $newItemId) {
+                $this->recalculateCenterInventory($newCenterId, $newItemId);
+            }
+
+            $newValues = [
+                'collection_center_id' => $receipt->collection_center_id,
+                'collection_center_name' => $receipt->fresh('center')->center?->name,
+                'scheme_stock_item_id' => $receipt->scheme_stock_item_id,
+                'scheme_stock_item_name' => $receipt->fresh('item')->item?->item_name,
+                'quantity_received' => (float) $receipt->quantity_received,
+                'received_date' => $receipt->received_date?->toDateString(),
+                'supplier_source' => $receipt->supplier_source,
+                'batch_no' => $receipt->batch_no,
+                'notes' => $receipt->notes,
+            ];
+
+            $changedFields = [];
+            foreach ($oldValues as $key => $val) {
+                if ($val != ($newValues[$key] ?? null)) {
+                    $changedFields[$key] = [
+                        'from' => $val,
+                        'to' => $newValues[$key] ?? null,
+                    ];
+                }
+            }
+
+            StockEditAuditLog::create([
+                'stock_type' => 'receipt',
+                'stock_id' => $receipt->id,
+                'reference_no' => $receipt->receipt_no,
+                'user_id' => $actor->id,
+                'user_role' => $actor->roles->pluck('name')->implode(', ') ?: 'User',
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'changed_fields' => $changedFields,
+                'justification' => trim($data['justification']),
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            AccessAuditLog::log('stock_receipt_edited', StockReceipt::class, (string) $receipt->id, [
+                'receipt_no' => $receipt->receipt_no,
+                'justification' => $data['justification'],
+                'changed_fields' => array_keys($changedFields),
+                'actor_id' => $actor->id,
+                'actor_name' => $actor->name,
+            ]);
+
+            return $receipt;
+        });
+    }
+
+    /**
+     * Update an existing Stock Disbursement (Stock Out) with mandatory justification, inventory recalculation,
+     * and beneficiary application status reconciliation.
+     */
+    public function updateStockDisbursement(StockDisbursement $disbursement, array $data, User $actor, ?UploadedFile $proofFile = null): StockDisbursement
+    {
+        if (! $disbursement->canUserEdit($actor)) {
+            throw ValidationException::withMessages([
+                'justification' => 'Edit window expired. Stock Out entries older than 10 minutes can only be edited by Super Admin.',
+            ]);
+        }
+
+        if (empty(trim($data['justification'] ?? ''))) {
+            throw ValidationException::withMessages([
+                'justification' => 'A detailed justification explaining the reason for modifying this Stock Out disbursement is mandatory.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($disbursement, $data, $actor, $proofFile) {
+            $oldCenterId = $disbursement->collection_center_id;
+            $oldItemId = $disbursement->scheme_stock_item_id;
+            $newCenterId = (int) ($data['collection_center_id'] ?? $oldCenterId);
+            $newItemId = (int) ($data['scheme_stock_item_id'] ?? $oldItemId);
+
+            $targetCenter = CollectionCenter::findOrFail($newCenterId);
+            $this->validateUserCenterAccess($actor, $targetCenter);
+
+            $oldValues = [
+                'collection_center_id' => $disbursement->collection_center_id,
+                'collection_center_name' => $disbursement->center?->name,
+                'scheme_stock_item_id' => $disbursement->scheme_stock_item_id,
+                'scheme_stock_item_name' => $disbursement->item?->item_name,
+                'quantity_disbursed' => (float) $disbursement->quantity_disbursed,
+                'recipient_name' => $disbursement->recipient_name,
+                'recipient_cnic' => $disbursement->recipient_cnic,
+                'recipient_phone' => $disbursement->recipient_phone,
+                'is_original_applicant' => (bool) $disbursement->is_original_applicant,
+                'representative_relationship' => $disbursement->representative_relationship,
+                'challan_no' => $disbursement->challan_no,
+                'disbursement_date' => $disbursement->disbursement_date?->toDateString(),
+                'notes' => $disbursement->notes,
+            ];
+
+            $updatePayload = [
+                'collection_center_id' => $newCenterId,
+                'scheme_stock_item_id' => $newItemId,
+                'quantity_disbursed' => $data['quantity_disbursed'],
+                'recipient_name' => $data['recipient_name'],
+                'recipient_cnic' => $data['recipient_cnic'],
+                'recipient_phone' => $data['recipient_phone'] ?? null,
+                'is_original_applicant' => filter_var($data['is_original_applicant'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'representative_relationship' => $data['representative_relationship'] ?? null,
+                'challan_no' => $data['challan_no'] ?? null,
+                'disbursement_date' => $data['disbursement_date'],
+                'notes' => $data['notes'] ?? null,
+            ];
+
+            if ($proofFile) {
+                $updatePayload['proof_attachment_path'] = $proofFile->store('stock/disbursements', 'public');
+            }
+
+            $disbursement->update($updatePayload);
+
+            // Recalculate inventories for both affected centers/items
+            $this->recalculateCenterInventory($oldCenterId, $oldItemId);
+            if ($oldCenterId !== $newCenterId || $oldItemId !== $newItemId) {
+                $this->recalculateCenterInventory($newCenterId, $newItemId);
+            }
+
+            // Reconcile application distributed total and lifecycle stage
+            $application = $disbursement->application()->lockForUpdate()->first();
+            if ($application) {
+                $totalDisbursed = (float) StockDisbursement::where('application_id', $application->id)->sum('quantity_disbursed');
+                $totalQuota = (float) ($application->allocated_quantity ?: ($application->getBagsRequired() ?: 1));
+
+                $isFullyDistributed = $totalDisbursed >= $totalQuota;
+                $targetStage = $totalDisbursed > 0
+                    ? ($isFullyDistributed ? Application::STAGE_FULLY_DISTRIBUTED : Application::STAGE_PARTIALLY_DISTRIBUTED)
+                    : Application::STAGE_PAYMENT_VERIFIED;
+                $targetStatus = $isFullyDistributed ? 'disbursed' : 'approved';
+
+                $application->update([
+                    'distributed_quantity' => $totalDisbursed,
+                    'current_stage' => $targetStage,
+                    'status' => $targetStatus,
+                ]);
+
+                ApplicationStatusLog::create([
+                    'application_id' => $application->id,
+                    'from_status' => $application->current_stage,
+                    'to_status' => $targetStage,
+                    'user_id' => $actor->id,
+                    'note' => "Disbursement #{$disbursement->disbursement_no} updated (new qty: {$data['quantity_disbursed']}). Justification: {$data['justification']}",
+                ]);
+            }
+
+            $newValues = [
+                'collection_center_id' => $disbursement->collection_center_id,
+                'collection_center_name' => $disbursement->fresh('center')->center?->name,
+                'scheme_stock_item_id' => $disbursement->scheme_stock_item_id,
+                'scheme_stock_item_name' => $disbursement->fresh('item')->item?->item_name,
+                'quantity_disbursed' => (float) $disbursement->quantity_disbursed,
+                'recipient_name' => $disbursement->recipient_name,
+                'recipient_cnic' => $disbursement->recipient_cnic,
+                'recipient_phone' => $disbursement->recipient_phone,
+                'is_original_applicant' => (bool) $disbursement->is_original_applicant,
+                'representative_relationship' => $disbursement->representative_relationship,
+                'challan_no' => $disbursement->challan_no,
+                'disbursement_date' => $disbursement->disbursement_date?->toDateString(),
+                'notes' => $disbursement->notes,
+            ];
+
+            $changedFields = [];
+            foreach ($oldValues as $key => $val) {
+                if ($val != ($newValues[$key] ?? null)) {
+                    $changedFields[$key] = [
+                        'from' => $val,
+                        'to' => $newValues[$key] ?? null,
+                    ];
+                }
+            }
+
+            StockEditAuditLog::create([
+                'stock_type' => 'disbursement',
+                'stock_id' => $disbursement->id,
+                'reference_no' => $disbursement->disbursement_no,
+                'user_id' => $actor->id,
+                'user_role' => $actor->roles->pluck('name')->implode(', ') ?: 'User',
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'changed_fields' => $changedFields,
+                'justification' => trim($data['justification']),
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            AccessAuditLog::log('stock_disbursement_edited', StockDisbursement::class, (string) $disbursement->id, [
+                'disbursement_no' => $disbursement->disbursement_no,
+                'justification' => $data['justification'],
+                'changed_fields' => array_keys($changedFields),
+                'actor_id' => $actor->id,
+                'actor_name' => $actor->name,
+            ]);
 
             return $disbursement;
         });

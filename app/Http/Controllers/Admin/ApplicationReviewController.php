@@ -313,6 +313,62 @@ class ApplicationReviewController extends Controller
             abort(403, 'Unauthorized access to application in another administrative scope.');
         }
 
+        // Self-heal: if application is in a field survey stage but missing ApplicationSurvey or ApplicationAssignment record, create it automatically
+        if (in_array($application->current_stage, [
+            Application::STAGE_FIELD_SURVEY_ASSIGNED,
+            Application::STAGE_VISIT_SCHEDULED,
+            Application::STAGE_VISIT_COMPLETED,
+        ], true)) {
+            $existingAssignment = $application->assignments()->first();
+            $existingSurvey = $application->surveys()->first();
+
+            if (! $existingSurvey || ! $existingAssignment) {
+                $targetFoId = $existingSurvey?->assigned_to
+                    ?? $existingAssignment?->assigned_to
+                    ?? ($user->hasRole('Field Officer') ? $user->id : null);
+
+                if (! $targetFoId) {
+                    $fo = User::role('Field Officer')
+                        ->where('is_active', true)
+                        ->where(function ($q) use ($application) {
+                            $q->where('district_id', $application->district_id)
+                              ->orWhereHas('officeAssignments', fn ($sq) => $sq->where('district_id', $application->district_id));
+                        })
+                        ->first();
+                    $targetFoId = $fo?->id;
+                }
+
+                if ($targetFoId) {
+                    $assignerId = $application->assigned_to ?: $targetFoId;
+                    if (! $existingSurvey) {
+                        \App\Models\ApplicationSurvey::firstOrCreate(
+                            ['application_id' => $application->id, 'assigned_to' => $targetFoId],
+                            [
+                                'assigned_by' => $assignerId,
+                                'status' => \App\Models\ApplicationSurvey::STATUS_ASSIGNED,
+                                'findings_summary' => 'Field verification required for scheme application.',
+                            ]
+                        );
+                    }
+                    if (! $existingAssignment) {
+                        \App\Models\ApplicationAssignment::firstOrCreate(
+                            [
+                                'application_id' => $application->id,
+                                'assigned_to' => $targetFoId,
+                                'task_type' => \App\Models\ApplicationAssignment::TASK_LAND_VERIFICATION,
+                            ],
+                            [
+                                'assigned_by' => $assignerId,
+                                'status' => \App\Models\ApplicationAssignment::STATUS_ASSIGNED,
+                                'due_date' => now()->addDays(3),
+                                'notes' => 'Field verification required for scheme application.',
+                            ]
+                        );
+                    }
+                }
+            }
+        }
+
         $application->load([
             'scheme.department',
             'applicant.district',
@@ -403,6 +459,25 @@ class ApplicationReviewController extends Controller
         }
 
         try {
+            // If DD transitions directly to field_survey_assigned via the general status form, auto-assign to the district's Field Officer
+            if ($targetStatus === Application::STAGE_FIELD_SURVEY_ASSIGNED) {
+                $fo = User::role('Field Officer')
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($application) {
+                        $q->where('district_id', $application->district_id)
+                          ->orWhereHas('officeAssignments', fn ($sq) => $sq->where('district_id', $application->district_id));
+                    })
+                    ->first();
+
+                if ($fo) {
+                    $this->lifecycle->assignSurvey($application, $user, $fo, [
+                        'instructions' => $data['note'] ?? $data['verification_note'] ?? 'Field verification required for scheme application.',
+                    ]);
+
+                    return back()->with('success', "Application transitioned to Field Survey Assigned and delegated to Field Officer {$fo->name}.");
+                }
+            }
+
             $expectedLock = $request->filled('lock_version') ? (int) $request->input('lock_version') : null;
             $this->lifecycle->transition($application, $targetStatus, $user, [
                 'note' => $data['note'] ?? $data['verification_note'] ?? null,
@@ -711,7 +786,7 @@ class ApplicationReviewController extends Controller
     {
         $user = auth()->user();
 
-        if ($assignment->assigned_to !== $user->id && ! $user->hasRole('Super Admin')) {
+        if ((int) $assignment->assigned_to !== (int) $user->id && ! $user->hasRole('Super Admin')) {
             abort(403, 'You are not assigned to this task.');
         }
 

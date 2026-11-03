@@ -71,10 +71,18 @@
 
         {{-- Field Survey & Land Verification Section --}}
         @php
-            $activeSurvey = $application->surveys->first();
-            $activeAssignment = $application->assignments->first();
+            $currentUser = auth()->user();
+            // Prefer the survey or assignment explicitly assigned to the logged-in user (if multiple exist), otherwise fallback to latest
+            $activeSurvey = $application->surveys->firstWhere('assigned_to', auth()->id()) ?? $application->surveys->first();
+            $activeAssignment = $application->assignments->firstWhere('assigned_to', auth()->id()) ?? $application->assignments->first();
             $surveyorId = $activeSurvey?->assigned_to ?? $activeAssignment?->assigned_to;
-            $canPerformSurvey = (auth()->id() === $surveyorId || auth()->user()->hasRole('Super Admin'));
+
+            // Loose comparison ((int) === (int)) handles string vs int IDs across PDO drivers; also allow district Field Officers on assigned stage
+            $canPerformSurvey = (
+                ($surveyorId !== null && (int) auth()->id() === (int) $surveyorId)
+                || $currentUser->hasRole('Super Admin')
+                || ($currentUser->hasRole('Field Officer') && in_array((int) $application->district_id, $currentUser->authorizedDistrictIds(), true))
+            );
             
             // Determine if findings have been submitted
             $hasSubmittedFindings = false;
@@ -112,7 +120,16 @@
                 $surveyorUser = $activeAssignment->assignee;
             }
 
-            $hasActiveSurveyTask = ($activeSurvey !== null || $activeAssignment !== null);
+            $hasActiveSurveyTask = (
+                $activeSurvey !== null
+                || $activeAssignment !== null
+                || in_array($application->current_stage, [
+                    \App\Models\Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                    \App\Models\Application::STAGE_VISIT_SCHEDULED,
+                    \App\Models\Application::STAGE_VISIT_COMPLETED,
+                    \App\Models\Application::STAGE_FINDINGS_SUBMITTED,
+                ], true)
+            );
         @endphp
 
         @if($hasActiveSurveyTask)
@@ -1035,7 +1052,7 @@
                             @endif
 
                             {{-- Task completion button directing to comprehensive GPS/Photo form --}}
-                            @if(($asn->assigned_to === auth()->id() || auth()->user()->hasRole('Super Admin')) && $asn->status !== 'completed')
+                            @if(((int) $asn->assigned_to === (int) auth()->id() || auth()->user()->hasRole('Super Admin')) && $asn->status !== 'completed')
                                 <a href="#survey-section" class="btn btn-sm btn-primary w-100 mt-1">
                                     <i class="fa-solid fa-map-location-dot me-1"></i> Open Field Survey & GPS Form
                                 </a>
@@ -1061,26 +1078,28 @@
             </ul>
         </div>
 
-        {{-- SMS Notifications History & Manual Trigger --}}
+        {{-- SMS Notifications History & Manual Trigger (Manual Sending Restricted to Super Admin Only) --}}
         <div class="card alf-panel mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="fa-solid fa-comment-sms me-1 text-primary"></i> SMS Notifications</span>
                 <span class="badge bg-secondary">{{ $application->smsLogs?->count() ?? 0 }}</span>
             </div>
-            <div class="card-body p-2 border-bottom bg-light">
-                <form method="POST" action="{{ route('admin.applications.send-sms', $application) }}" class="d-flex gap-1 align-items-center">
-                    @csrf
-                    <select name="event_key" class="form-select form-select-sm">
-                        <option value="{{ $application->current_stage ?: $application->status }}">Current Status ({{ \App\Models\Application::translateStatus($application->current_stage ?: $application->status) }})</option>
-                        @foreach(\App\Models\SmsTemplate::eventLabels() as $eventKey => $eventLabel)
-                            <option value="{{ $eventKey }}">{{ $eventLabel }}</option>
-                        @endforeach
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap" title="Send or Resend SMS to Applicant">
-                        <i class="fa-solid fa-paper-plane me-1"></i> Send SMS
-                    </button>
-                </form>
-            </div>
+            @if(auth()->user()?->hasRole('Super Admin'))
+                <div class="card-body p-2 border-bottom bg-light">
+                    <form method="POST" action="{{ route('admin.applications.send-sms', $application) }}" class="d-flex gap-1 align-items-center">
+                        @csrf
+                        <select name="event_key" class="form-select form-select-sm">
+                            <option value="{{ $application->current_stage ?: $application->status }}">Current Status ({{ \App\Models\Application::translateStatus($application->current_stage ?: $application->status) }})</option>
+                            @foreach(\App\Models\SmsTemplate::eventLabels() as $eventKey => $eventLabel)
+                                <option value="{{ $eventKey }}">{{ $eventLabel }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap" title="Send or Resend SMS to Applicant">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Send SMS
+                        </button>
+                    </form>
+                </div>
+            @endif
             <ul class="list-group list-group-flush" style="max-height: 280px; overflow-y: auto;">
                 @forelse($application->smsLogs ?? [] as $sms)
                     <li class="list-group-item py-2">

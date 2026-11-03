@@ -638,7 +638,7 @@ class ApplicationLifecycleService
     public function scheduleVisit(ApplicationSurvey $survey, User $officer, Carbon $date, ?string $notes = null): ApplicationSurvey
     {
         return DB::transaction(function () use ($survey, $officer, $date, $notes) {
-            if ($survey->assigned_to !== $officer->id && ! $officer->hasRole('Super Admin')) {
+            if ((int) $survey->assigned_to !== (int) $officer->id && ! $officer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages(['survey' => 'You are not assigned to this field survey.']);
             }
 
@@ -662,7 +662,7 @@ class ApplicationLifecycleService
     public function completeVisit(ApplicationSurvey $survey, User $officer, ?string $notes = null): ApplicationSurvey
     {
         return DB::transaction(function () use ($survey, $officer, $notes) {
-            if ($survey->assigned_to !== $officer->id && ! $officer->hasRole('Super Admin')) {
+            if ((int) $survey->assigned_to !== (int) $officer->id && ! $officer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages(['survey' => 'You are not assigned to this field survey.']);
             }
 
@@ -686,7 +686,7 @@ class ApplicationLifecycleService
     public function submitFindings(ApplicationSurvey $survey, User $officer, array $data): ApplicationSurvey
     {
         return DB::transaction(function () use ($survey, $officer, $data) {
-            if ($survey->assigned_to !== $officer->id && ! $officer->hasRole('Super Admin')) {
+            if ((int) $survey->assigned_to !== (int) $officer->id && ! $officer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages(['survey' => 'You are not assigned to this field survey.']);
             }
 

@@ -130,7 +130,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('applications/{application}/correction-request', [ApplicationReviewController::class, 'requestCorrection'])->name('applications.correction-request');
         Route::post('applications/{application}/verify-payment', [ApplicationReviewController::class, 'verifyPayment'])->name('applications.verify-payment');
         Route::post('applications/{application}/generate-gbpay-bill', [GbpayController::class, 'generateApplicationBill'])->name('applications.generate-gbpay-bill');
-        Route::post('applications/{application}/send-sms', [SmsTemplateController::class, 'sendForApplication'])->name('applications.send-sms');
         Route::post('applications/{application}/allocate-stock', [ApplicationReviewController::class, 'allocateStock'])->name('applications.allocate-stock');
         Route::post('applications/{application}/reactivate', [ApplicationReviewController::class, 'reactivateDormant'])->name('applications.reactivate');
         Route::post('applications/{application}/assign-dd', [ApplicationReviewController::class, 'assignDeputyDirector'])->name('applications.assign-dd');
@@ -162,6 +161,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // Receipts (Stock In)
             Route::get('receipts', [StockManagementController::class, 'receiptsIndex'])->name('receipts');
             Route::post('receipts', [StockManagementController::class, 'receiptsStore'])->name('receipts.store');
+            Route::put('receipts/{receipt}', [StockManagementController::class, 'receiptsUpdate'])->name('receipts.update');
             
             // Transfers
             Route::get('transfers', [StockManagementController::class, 'transfersIndex'])->name('transfers');
@@ -177,6 +177,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // Disbursements (Stock Out to Eligible Beneficiaries)
             Route::get('disbursements', [StockManagementController::class, 'disbursementsIndex'])->name('disbursements');
             Route::post('disbursements', [StockManagementController::class, 'disbursementsStore'])->name('disbursements.store');
+            Route::put('disbursements/{disbursement}', [StockManagementController::class, 'disbursementsUpdate'])->name('disbursements.update');
             Route::get('disbursements/{disbursement}/voucher', [StockManagementController::class, 'disbursementVoucher'])->name('disbursements.voucher');
         });
 
@@ -192,13 +193,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
             Route::resource('challan-templates', ChallanTemplateController::class)->names('challan-templates');
             Route::get('challan-templates/{challan_template}/preview', [ChallanTemplateController::class, 'preview'])->name('challan-templates.preview');
-
-            // SMS Notification Templates & Zong CBS Gateway Configuration
-            Route::post('sms-templates/gateway', [SmsTemplateController::class, 'updateGateway'])->name('sms-templates.gateway.update');
-            Route::post('sms-templates/check-balance', [SmsTemplateController::class, 'checkBalance'])->name('sms-templates.check-balance');
-            Route::post('sms-templates/send-test', [SmsTemplateController::class, 'sendTest'])->name('sms-templates.send-test');
-            Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
-            Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
 
             Route::get('forms', [FormBuilderController::class, 'index'])->name('form-builder.index');
             Route::get('application-forms', [FormBuilderController::class, 'index'])->name('application-forms.index');
@@ -216,6 +210,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // Super Admin only (System, CMS & Technical Web Application Configuration)
         Route::middleware('role:Super Admin')->group(function () {
+            // SMS Manual Application Dispatch & Gateway Testing (Super Admin Only)
+            Route::post('applications/{application}/send-sms', [SmsTemplateController::class, 'sendForApplication'])->name('applications.send-sms');
+            Route::post('sms-templates/gateway', [SmsTemplateController::class, 'updateGateway'])->name('sms-templates.gateway.update');
+            Route::post('sms-templates/check-balance', [SmsTemplateController::class, 'checkBalance'])->name('sms-templates.check-balance');
+            Route::post('sms-templates/send-test', [SmsTemplateController::class, 'sendTest'])->name('sms-templates.send-test');
+            Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
+            Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
+
             Route::resource('departments', AdminDepartmentController::class);
             Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
             Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');

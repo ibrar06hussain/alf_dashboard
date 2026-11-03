@@ -61,4 +61,48 @@ class StockDisbursement extends Model
     {
         return $this->belongsTo(User::class, 'disbursed_by');
     }
+
+    public function editLogs()
+    {
+        return $this->hasMany(StockEditAuditLog::class, 'stock_id')
+            ->where('stock_type', 'disbursement')
+            ->latest();
+    }
+
+    /**
+     * Check if the given user can edit this stock disbursement.
+     * Rule: Within 10 minutes of creation, creator or admin can edit.
+     * After 10 minutes, ONLY Super Admin can edit.
+     */
+    public function canUserEdit(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasRole('Super Admin')) {
+            return true;
+        }
+
+        // Within 10 minutes of creation
+        $isWithinWindow = $this->created_at && $this->created_at->diffInMinutes(now()) <= 10;
+        if (! $isWithinWindow) {
+            return false;
+        }
+
+        // Must be the user who disbursed it or an authorized officer
+        return (int) $this->disbursed_by === (int) $user->id || $user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries', 'District Deputy Director', 'District Officer', 'Distribution Officer']);
+    }
+
+    /**
+     * Minutes remaining in the initial 10-minute edit window.
+     */
+    public function editMinutesRemaining(): int
+    {
+        if (! $this->created_at) {
+            return 0;
+        }
+        $diff = 10 - $this->created_at->diffInMinutes(now());
+        return max(0, (int) $diff);
+    }
 }

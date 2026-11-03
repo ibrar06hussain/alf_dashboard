@@ -72,13 +72,26 @@
                     <th>Batch / Lot No</th>
                     <th>Receiver</th>
                     <th class="text-center">Proof / Voucher</th>
+                    <th class="text-center">Action / Audit</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($receipts as $r)
+                @php
+                    $canEditReceipt = $r->canUserEdit(auth()->user());
+                    $minsLeft = $r->editMinutesRemaining();
+                    $hasAudit = $r->editLogs->isNotEmpty();
+                @endphp
                 <tr>
                     <td>
                         <span class="font-weight-bold text-primary">#{{ $r->receipt_no }}</span>
+                        @if($hasAudit)
+                            <div class="mt-1">
+                                <span class="badge badge-warning text-dark font-weight-normal" style="font-size: 10px;" title="This entry was edited">
+                                    <i class="fa-solid fa-clock-rotate-left mr-1"></i> Edited ({{ $r->editLogs->count() }})
+                                </span>
+                            </div>
+                        @endif
                     </td>
                     <td>
                         <strong>{{ $r->item->item_name ?? 'Scheme Item' }}</strong>
@@ -118,10 +131,55 @@
                             <span class="text-muted small">None</span>
                         @endif
                     </td>
+                    <td class="text-center text-nowrap">
+                        @if($canEditReceipt)
+                            <button type="button" class="btn btn-sm btn-outline-warning font-weight-bold shadow-sm"
+                                    onclick="openEditReceiptModal({{ json_encode([
+                                        'id' => $r->id,
+                                        'receipt_no' => $r->receipt_no,
+                                        'center_id' => $r->collection_center_id,
+                                        'item_id' => $r->scheme_stock_item_id,
+                                        'quantity' => (float) $r->quantity_received,
+                                        'date' => $r->received_date->format('Y-m-d'),
+                                        'supplier' => $r->supplier_source,
+                                        'batch' => $r->batch_no,
+                                        'notes' => $r->notes,
+                                        'update_url' => route('admin.stock.receipts.update', $r),
+                                        'mins_left' => $minsLeft,
+                                        'is_super_admin' => auth()->user()->hasRole('Super Admin'),
+                                    ]) }})"
+                                    title="{{ auth()->user()->hasRole('Super Admin') ? 'Admin Edit Stock In' : 'User Edit ('.$minsLeft.' mins left in 10-min grace window)' }}">
+                                <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                                @if(!auth()->user()->hasRole('Super Admin'))
+                                    <span class="badge badge-light border ml-1">{{ $minsLeft }}m</span>
+                                @endif
+                            </button>
+                        @else
+                            <span class="badge badge-light text-muted border" title="Edit window expired (>10 mins). Only Super Admin can modify.">
+                                <i class="fa-solid fa-lock mr-1"></i> Locked
+                            </span>
+                        @endif
+
+                        @if($hasAudit)
+                            <button type="button" class="btn btn-sm btn-outline-secondary ml-1"
+                                    onclick="showAuditLogModal('Receipt #{{ $r->receipt_no }}', {{ json_encode($r->editLogs->map(function($l) {
+                                        return [
+                                            'date' => $l->created_at->format('d M Y H:i:s'),
+                                            'user' => $l->user->name ?? 'System',
+                                            'role' => $l->user_role ?? 'Officer',
+                                            'justification' => $l->justification,
+                                            'changed_fields' => $l->changed_fields,
+                                        ];
+                                    })) }})"
+                                    title="View Audit Trail of Edits & Justifications">
+                                <i class="fa-solid fa-history"></i>
+                            </button>
+                        @endif
+                    </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="text-center py-5">
+                    <td colspan="10" class="text-center py-5">
                         <div class="py-4">
                             <div class="avatar-icon-wrapper rounded-circle bg-light text-success p-3 mb-3 mx-auto" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
                                 <i class="fa-solid fa-truck-ramp-box fa-2x"></i>
@@ -146,6 +204,125 @@
     </div>
 </div>
 @endsection
+
+@push('modals')
+{{-- Edit Receipt Modal --}}
+<div class="modal fade" id="editReceiptModal" tabindex="-1" role="dialog" aria-labelledby="editReceiptModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0">
+            <form id="editReceiptForm" method="POST" action="" enctype="multipart/form-data">
+                @csrf
+                @method('PUT')
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title font-weight-bold" id="editReceiptModalTitle">
+                        <i class="fa-solid fa-pen-to-square mr-2"></i> Edit Stock In (<span id="editReceiptNoLabel"></span>)
+                    </h5>
+                    <button type="button" class="close" onclick="closeEditReceiptModal()" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="editReceiptGraceAlert" class="alert alert-info py-2 small mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> <strong id="editReceiptWindowText">10-Minute Edit Window Active</strong>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Collection Center / Depot *</label>
+                            <select name="collection_center_id" id="edit_receipt_center_id" class="form-control" required>
+                                @foreach($centers as $c)
+                                    <option value="{{ $c->id }}">
+                                        {{ $c->name }} ({{ $c->district->name ?? '' }} - {{ ucfirst($c->level) }})
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Scheme Stock Item *</label>
+                            <select name="scheme_stock_item_id" id="edit_receipt_item_id" class="form-control" required>
+                                @foreach($items as $it)
+                                    <option value="{{ $it->id }}">
+                                        {{ $it->item_name }} ({{ $it->unit }}) - {{ $it->scheme->title ?? 'General' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Quantity Received *</label>
+                            <input type="number" step="0.01" min="0.01" name="quantity_received" id="edit_receipt_qty" class="form-control" required>
+                            <small class="text-muted">Warehouse balance will automatically adjust for differences.</small>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Received Date *</label>
+                            <input type="date" name="received_date" id="edit_receipt_date" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Supplier / Source Organization</label>
+                            <input type="text" name="supplier_source" id="edit_receipt_supplier" class="form-control">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Batch / Lot Number</label>
+                            <input type="text" name="batch_no" id="edit_receipt_batch" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-dark">Replace Proof Attachment (Optional)</label>
+                        <input type="file" name="proof_file" class="form-control-file" accept=".jpg,.jpeg,.png,.pdf">
+                        <small class="text-muted">Leave empty to keep existing proof document.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-dark">Notes / Remarks</label>
+                        <textarea name="notes" id="edit_receipt_notes" rows="2" class="form-control"></textarea>
+                    </div>
+
+                    {{-- MANDATORY JUSTIFICATION --}}
+                    <div class="form-group p-3 border border-warning rounded bg-light mb-0">
+                        <label class="font-weight-bold text-danger">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Mandatory Justification for Change *
+                        </label>
+                        <textarea name="justification" id="edit_receipt_justification" rows="2" class="form-control" required minlength="5" placeholder="Specify why this entry is being edited (e.g., corrected typo in supplier quantity, adjusted batch number per delivery invoice)..."></textarea>
+                        <small class="text-muted">Every edit, old and new values, and this justification are permanently preserved in the audit log.</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary px-3" onclick="closeEditReceiptModal()" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning font-weight-bold px-4 shadow-sm">
+                        <i class="fa-solid fa-save mr-1"></i> Save Changes & Recalculate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- Generic Audit Trail Modal --}}
+<div class="modal fade" id="stockAuditModal" tabindex="-1" role="dialog" aria-labelledby="stockAuditModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title font-weight-bold" id="stockAuditModalTitle">
+                    <i class="fa-solid fa-history mr-2"></i> Audit Trail & Change History
+                </h5>
+                <button type="button" class="close text-white" onclick="closeAuditModal()" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-4">
+                <h6 class="font-weight-bold text-primary mb-3" id="auditModalSubject"></h6>
+                <div id="auditModalBody" style="max-height: 420px; overflow-y: auto;">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" onclick="closeAuditModal()" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @push('modals')
 {{-- Create Receipt Modal --}}
@@ -276,5 +453,115 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(openReceiptModal, 200);
     }
 });
+
+function openEditReceiptModal(data) {
+    document.getElementById('editReceiptForm').action = data.update_url;
+    document.getElementById('editReceiptNoLabel').innerText = '#' + data.receipt_no;
+    document.getElementById('edit_receipt_center_id').value = data.center_id;
+    document.getElementById('edit_receipt_item_id').value = data.item_id;
+    document.getElementById('edit_receipt_qty').value = data.quantity;
+    document.getElementById('edit_receipt_date').value = data.date;
+    document.getElementById('edit_receipt_supplier').value = data.supplier || '';
+    document.getElementById('edit_receipt_batch').value = data.batch || '';
+    document.getElementById('edit_receipt_notes').value = data.notes || '';
+    document.getElementById('edit_receipt_justification').value = '';
+
+    var windowText = document.getElementById('editReceiptWindowText');
+    var alertBox = document.getElementById('editReceiptGraceAlert');
+    if (data.is_super_admin) {
+        alertBox.className = 'alert alert-primary py-2 small mb-3';
+        windowText.innerHTML = '<i class="fa-solid fa-shield-halved mr-1"></i> <strong>Super Admin Access:</strong> You can edit this entry anytime. All changes require justification and are logged.';
+    } else {
+        alertBox.className = 'alert alert-warning py-2 small mb-3';
+        windowText.innerHTML = '<i class="fa-solid fa-stopwatch mr-1"></i> <strong>Initial Edit Window Active:</strong> ' + data.mins_left + ' minutes remaining to adjust values. After 10 minutes, editing locks to Admin only.';
+    }
+
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#editReceiptModal').modal('show');
+    } else {
+        var m = document.getElementById('editReceiptModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+    }
+}
+
+function closeEditReceiptModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#editReceiptModal').modal('hide');
+    } else {
+        var m = document.getElementById('editReceiptModal');
+        if (m) {
+            m.classList.remove('show');
+            m.style.display = 'none';
+            document.body.classList.remove('modal-open');
+        }
+    }
+}
+
+function showAuditLogModal(title, logs) {
+    document.getElementById('auditModalSubject').innerText = title;
+    var container = document.getElementById('auditModalBody');
+    container.innerHTML = '';
+
+    if (!logs || logs.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-3">No change logs recorded yet.</p>';
+    } else {
+        logs.forEach(function (log) {
+            var card = document.createElement('div');
+            card.className = 'card border mb-3 shadow-sm';
+
+            var changesHtml = '';
+            if (log.changed_fields && Object.keys(log.changed_fields).length > 0) {
+                changesHtml += '<table class="table table-sm table-bordered mt-2 mb-0" style="font-size: 11px;">';
+                changesHtml += '<thead class="thead-light"><tr><th>Field</th><th>Original Value</th><th>Modified Value</th></tr></thead><tbody>';
+                for (var f in log.changed_fields) {
+                    var change = log.changed_fields[f];
+                    var fromVal = (change.from !== null && change.from !== undefined) ? change.from : '<em>empty</em>';
+                    var toVal = (change.to !== null && change.to !== undefined) ? change.to : '<em>empty</em>';
+                    changesHtml += '<tr><td class="font-weight-bold">' + f + '</td><td class="text-danger">' + fromVal + '</td><td class="text-success">' + toVal + '</td></tr>';
+                }
+                changesHtml += '</tbody></table>';
+            }
+
+            card.innerHTML =
+                '<div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">' +
+                    '<div><strong>' + log.user + '</strong> <span class="badge badge-secondary ml-1">' + log.role + '</span></div>' +
+                    '<small class="text-muted"><i class="fa-solid fa-clock mr-1"></i>' + log.date + '</small>' +
+                '</div>' +
+                '<div class="card-body p-3">' +
+                    '<div class="mb-2"><strong class="text-dark">Reason / Justification:</strong> <span class="text-primary font-weight-bold">' + (log.justification || 'None') + '</span></div>' +
+                    changesHtml +
+                '</div>';
+            container.appendChild(card);
+        });
+    }
+
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#stockAuditModal').modal('show');
+    } else {
+        var m = document.getElementById('stockAuditModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+    }
+}
+
+function closeAuditModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#stockAuditModal').modal('hide');
+    } else {
+        var m = document.getElementById('stockAuditModal');
+        if (m) {
+            m.classList.remove('show');
+            m.style.display = 'none';
+            document.body.classList.remove('modal-open');
+        }
+    }
+}
 </script>
 @endpush

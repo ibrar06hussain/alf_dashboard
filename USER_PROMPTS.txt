@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 105
+Total Prompts Logged: 115
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-10-30T18:38:31+05:00 (UTC: 2026-10-30T13:38:31Z)
-File Last Updated  : 2026-10-30 18:38:31 (PKT)
+Latest Prompt Date : 2026-11-03T12:05:34+05:00 (UTC: 2026-11-03T07:05:34Z)
+File Last Updated  : 2026-11-03 12:05:34 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1331,6 +1331,94 @@ Date & Time (UTC)   : 2026-10-30T13:38:31Z
 Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
 --------------------------------------------------------------------------------
 push these changes to github
+
+================================================================================
+PROMPT #106
+Date & Time (Local) : 2026-10-30T19:04:21+05:00
+Date & Time (UTC)   : 2026-10-30T14:04:21Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+write queries for database changes in last two days to push in live server
+
+================================================================================
+PROMPT #107
+Date & Time (Local) : 2026-11-01T18:03:16+05:00
+Date & Time (UTC)   : 2026-11-01T13:03:16Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+Conversation Log
+write queries for database changes in last FOUR days to push in live server
+
+================================================================================
+PROMPT #108
+Date & Time (Local) : 2026-11-01T18:57:15+05:00
+Date & Time (UTC)   : 2026-11-01T13:57:15Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+remove the send sms features from all users other than admin
+
+
+================================================================================
+PROMPT #109
+Date & Time (Local) : 2026-11-02T13:10:43+05:00
+Date & Time (UTC)   : 2026-11-02T08:10:43Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+edit stock in or out options
+
+
+================================================================================
+PROMPT #110
+Date & Time (Local) : 2026-11-02T13:14:49+05:00
+Date & Time (UTC)   : 2026-11-02T08:14:49Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+initially give user to edit a stock for 10 minutes after that only admin should be able to edit the stock entries. For every edit it should be recorded the values changes and the justification for each change
+
+
+================================================================================
+PROMPT #111
+Date & Time (Local) : 2026-11-03T11:26:50+05:00
+Date & Time (UTC)   : 2026-11-03T06:26:50Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+when an application is assigned to a field surveyor what  database changes occour
+
+
+================================================================================
+PROMPT #112
+Date & Time (Local) : 2026-11-03T11:39:13+05:00
+Date & Time (UTC)   : 2026-11-03T06:39:13Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+I have a few applications where they are assigned to field surveyor status field_survey_assigned in applications table but there is no entry in application_assignments how to correct this
+
+
+================================================================================
+PROMPT #113
+Date & Time (Local) : 2026-11-03T11:40:35+05:00
+Date & Time (UTC)   : 2026-11-03T06:40:35Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+and application_surveys table
+
+
+================================================================================
+PROMPT #114
+Date & Time (Local) : 2026-11-03T11:52:14+05:00
+Date & Time (UTC)   : 2026-11-03T06:52:14Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+after running this query the applications are now visible to field officer but the forms for field officer is not opening to enter field data
+
+
+================================================================================
+PROMPT #115
+Date & Time (Local) : 2026-11-03T12:05:34+05:00
+Date & Time (UTC)   : 2026-11-03T07:05:34Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+push these changes to git
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             

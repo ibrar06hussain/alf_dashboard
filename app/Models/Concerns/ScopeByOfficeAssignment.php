@@ -18,11 +18,15 @@ trait ScopeByOfficeAssignment
             return $query->whereRaw('1 = 0');
         }
 
-        // Field Officers: strictly limited to applications with assigned tasks
+        // Field Officers: strictly limited to applications with assigned tasks or surveys
         if ($user->hasRole('Field Officer') && ! $user->hasRole('Super Admin')) {
-            return $query->whereHas('assignments', function ($q) use ($user) {
-                $q->where('assigned_to', $user->id)
-                    ->whereIn('status', ['assigned', 'in_progress', 'completed']);
+            return $query->where(function ($sub) use ($user) {
+                $sub->whereHas('assignments', function ($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                        ->whereIn('status', ['assigned', 'in_progress', 'completed']);
+                })->orWhereHas('surveys', function ($sq) use ($user) {
+                    $sq->where('assigned_to', $user->id);
+                });
             });
         }
 

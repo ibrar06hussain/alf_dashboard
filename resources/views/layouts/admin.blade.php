@@ -131,6 +131,11 @@
                                     <i class="metismenu-icon fa-solid fa-address-card"></i> Site Information
                                 </a>
                             </li>
+                            <li class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.sms-templates.index') }}">
+                                    <i class="metismenu-icon fa-solid fa-comment-sms"></i> SMS Templates & Gateway
+                                </a>
+                            </li>
                         @endif
                         @if($canManageSchemes)
                             <li class="{{ request()->routeIs('admin.schemes.*') && request('type') !== 'proposed' ? 'mm-active' : '' }}">
@@ -141,11 +146,6 @@
                             <li class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.challan-templates.index') }}">
                                     <i class="metismenu-icon fa-solid fa-receipt"></i> Challan Templates
-                                </a>
-                            </li>
-                            <li class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
-                                <a href="{{ route('admin.sms-templates.index') }}">
-                                    <i class="metismenu-icon fa-solid fa-comment-sms"></i> SMS Templates
                                 </a>
                             </li>
                             <li class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">

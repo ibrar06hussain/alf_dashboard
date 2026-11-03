@@ -223,7 +223,7 @@ class StockManagementController extends Controller
     {
         $districtId = $this->getEffectiveDistrictId($request);
 
-        $query = StockReceipt::with(['item.scheme', 'center.district', 'receiver']);
+        $query = StockReceipt::with(['item.scheme', 'center.district', 'receiver', 'editLogs.user']);
 
         if ($districtId) {
             $query->where('district_id', $districtId);
@@ -275,6 +275,44 @@ class StockManagementController extends Controller
 
         return redirect()->route('admin.stock.receipts')
             ->with('success', "Stock receipt #{$receipt->receipt_no} recorded successfully. Inventory updated.");
+    }
+
+    /**
+     * Update an existing Stock Receipt (Stock In).
+     * Non-admin users can edit within 10 minutes of creation; afterwards only Super Admin can edit.
+     * Mandatory justification is required and recorded in audit log.
+     */
+    public function receiptsUpdate(Request $request, StockReceipt $receipt): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $receipt->canUserEdit($user)) {
+            return back()->with('error', 'Edit window expired. This Stock In entry was created more than 10 minutes ago and can only be modified by Super Admin.');
+        }
+
+        $validated = $request->validate([
+            'collection_center_id' => 'required|exists:collection_centers,id',
+            'scheme_stock_item_id' => 'required|exists:scheme_stock_items,id',
+            'quantity_received' => 'required|numeric|min:0.01',
+            'received_date' => 'required|date',
+            'supplier_source' => 'nullable|string|max:255',
+            'batch_no' => 'nullable|string|max:100',
+            'proof_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'notes' => 'nullable|string|max:1000',
+            'justification' => 'required|string|min:5|max:2000',
+        ], [
+            'justification.required' => 'A valid justification explaining the reason for modifying this Stock In entry is mandatory.',
+        ]);
+
+        $this->stockService->updateStockReceipt(
+            $receipt,
+            $validated,
+            $user,
+            $request->file('proof_file')
+        );
+
+        return redirect()->route('admin.stock.receipts')
+            ->with('success', "Stock In #{$receipt->receipt_no} updated successfully with justification audit log. Inventory balance recalculated.");
     }
 
     /**
@@ -431,6 +469,7 @@ class StockManagementController extends Controller
             'item.scheme',
             'district',
             'disbursedBy',
+            'editLogs.user',
         ])->latest();
 
         if ($districtId) {
@@ -532,6 +571,48 @@ class StockManagementController extends Controller
         return redirect()->route('admin.stock.disbursements', ['tab' => 'history'])
             ->with('success', "Stock successfully disbursed under Voucher #{$disbursement->disbursement_no}. Inventory updated.")
             ->with('voucher_id', $disbursement->id);
+    }
+
+    /**
+     * Update an existing Stock Disbursement (Stock Out).
+     * Non-admin users can edit within 10 minutes of creation; afterwards only Super Admin can edit.
+     * Mandatory justification is required and recorded in audit log.
+     */
+    public function disbursementsUpdate(Request $request, StockDisbursement $disbursement): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $disbursement->canUserEdit($user)) {
+            return back()->with('error', 'Edit window expired. This Stock Out entry was created more than 10 minutes ago and can only be modified by Super Admin.');
+        }
+
+        $validated = $request->validate([
+            'collection_center_id' => 'required|exists:collection_centers,id',
+            'scheme_stock_item_id' => 'required|exists:scheme_stock_items,id',
+            'quantity_disbursed' => 'required|numeric|min:0.01',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_cnic' => 'required|string|max:20',
+            'recipient_phone' => 'nullable|string|max:50',
+            'is_original_applicant' => 'sometimes|boolean',
+            'representative_relationship' => 'nullable|string|max:100',
+            'challan_no' => 'nullable|string|max:100',
+            'disbursement_date' => 'required|date',
+            'proof_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'notes' => 'nullable|string|max:1000',
+            'justification' => 'required|string|min:5|max:2000',
+        ], [
+            'justification.required' => 'A valid justification explaining the reason for modifying this Stock Out entry is mandatory.',
+        ]);
+
+        $this->stockService->updateStockDisbursement(
+            $disbursement,
+            $validated,
+            $user,
+            $request->file('proof_file')
+        );
+
+        return redirect()->route('admin.stock.disbursements', ['tab' => 'history'])
+            ->with('success', "Stock Out Voucher #{$disbursement->disbursement_no} updated successfully with justification audit log. Inventory & beneficiary status recalculated.");
     }
 
     /**

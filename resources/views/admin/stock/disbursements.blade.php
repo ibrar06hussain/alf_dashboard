@@ -240,11 +240,16 @@
                     <th>Date Disbursed</th>
                     <th>Disbursed By</th>
                     <th class="text-center">Proof / Slip</th>
-                    <th class="text-center">Action</th>
+                    <th class="text-center">Action / Audit</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($disbursements as $d)
+                @php
+                    $canEditDisb = $d->canUserEdit(auth()->user());
+                    $minsLeft = $d->editMinutesRemaining();
+                    $hasAudit = $d->editLogs->isNotEmpty();
+                @endphp
                 <tr>
                     <td>
                         <span class="font-weight-bold text-primary">#{{ $d->disbursement_no }}</span>
@@ -253,6 +258,13 @@
                                 App #{{ $d->application->application_no ?? $d->application_id }}
                             </a>
                         </div>
+                        @if($hasAudit)
+                            <div class="mt-1">
+                                <span class="badge badge-warning text-dark font-weight-normal" style="font-size: 10px;" title="This disbursement was edited">
+                                    <i class="fa-solid fa-clock-rotate-left mr-1"></i> Edited ({{ $d->editLogs->count() }})
+                                </span>
+                            </div>
+                        @endif
                     </td>
                     <td>
                         <div class="font-weight-bold text-dark">{{ $d->recipient_name }}</div>
@@ -291,15 +303,65 @@
                             <span class="text-muted small">None</span>
                         @endif
                     </td>
-                    <td class="text-center">
+                    <td class="text-center text-nowrap">
                         <a href="{{ route('admin.stock.disbursements.voucher', $d) }}" target="_blank" class="btn btn-outline-secondary btn-sm shadow-sm font-weight-bold px-2" title="Print Official Handover Slip">
                             <i class="fa-solid fa-print mr-1"></i> Gate Pass
                         </a>
+
+                        @if($canEditDisb)
+                            <button type="button" class="btn btn-sm btn-outline-warning font-weight-bold shadow-sm ml-1"
+                                    onclick="openEditDisbursementModal({{ json_encode([
+                                        'id' => $d->id,
+                                        'disbursement_no' => $d->disbursement_no,
+                                        'application_id' => $d->application_id,
+                                        'application_no' => $d->application->application_no ?? $d->application_id,
+                                        'center_id' => $d->collection_center_id,
+                                        'item_id' => $d->scheme_stock_item_id,
+                                        'quantity' => (float) $d->quantity_disbursed,
+                                        'recipient_name' => $d->recipient_name,
+                                        'recipient_cnic' => $d->recipient_cnic,
+                                        'recipient_phone' => $d->recipient_phone,
+                                        'is_original' => (bool) $d->is_original_applicant,
+                                        'representative' => $d->representative_relationship,
+                                        'challan' => $d->challan_no,
+                                        'date' => $d->disbursement_date->format('Y-m-d'),
+                                        'notes' => $d->notes,
+                                        'update_url' => route('admin.stock.disbursements.update', $d),
+                                        'mins_left' => $minsLeft,
+                                        'is_super_admin' => auth()->user()->hasRole('Super Admin'),
+                                    ]) }})"
+                                    title="{{ auth()->user()->hasRole('Super Admin') ? 'Admin Edit Stock Out' : 'User Edit ('.$minsLeft.' mins left in 10-min grace window)' }}">
+                                <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                                @if(!auth()->user()->hasRole('Super Admin'))
+                                    <span class="badge badge-light border ml-1">{{ $minsLeft }}m</span>
+                                @endif
+                            </button>
+                        @else
+                            <span class="badge badge-light text-muted border ml-1" title="Edit window expired (>10 mins). Only Super Admin can modify.">
+                                <i class="fa-solid fa-lock mr-1"></i> Locked
+                            </span>
+                        @endif
+
+                        @if($hasAudit)
+                            <button type="button" class="btn btn-sm btn-outline-secondary ml-1"
+                                    onclick="showDisbursementAuditModal('Disbursement Voucher #{{ $d->disbursement_no }}', {{ json_encode($d->editLogs->map(function($l) {
+                                        return [
+                                            'date' => $l->created_at->format('d M Y H:i:s'),
+                                            'user' => $l->user->name ?? 'System',
+                                            'role' => $l->user_role ?? 'Officer',
+                                            'justification' => $l->justification,
+                                            'changed_fields' => $l->changed_fields,
+                                        ];
+                                    })) }})"
+                                    title="View Audit Trail of Edits & Justifications">
+                                <i class="fa-solid fa-history"></i>
+                            </button>
+                        @endif
                     </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="text-center py-5">
+                    <td colspan="10" class="text-center py-5">
                         <div class="py-4">
                             <div class="avatar-icon-wrapper rounded-circle bg-light text-muted p-3 mb-3 mx-auto" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
                                 <i class="fa-solid fa-box-open fa-2x"></i>
@@ -472,6 +534,147 @@
         </div>
     </div>
 </div>
+
+{{-- Edit Disbursement Modal --}}
+<div class="modal fade" id="editDisbursementModal" tabindex="-1" role="dialog" aria-labelledby="editDisbursementModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0">
+            <form id="editDisbursementForm" method="POST" action="" enctype="multipart/form-data">
+                @csrf
+                @method('PUT')
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title font-weight-bold" id="editDisbursementModalTitle">
+                        <i class="fa-solid fa-pen-to-square mr-2"></i> Edit Stock Out Voucher (<span id="editDisbNoLabel"></span>)
+                    </h5>
+                    <button type="button" class="close" onclick="closeEditDisbursementModal()" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="editDisbGraceAlert" class="alert alert-info py-2 small mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> <strong id="editDisbWindowText">10-Minute Edit Window Active</strong>
+                    </div>
+
+                    <div class="alert alert-light border small text-muted mb-3">
+                        <i class="fa-solid fa-file-contract mr-1 text-primary"></i> Linked to Application: <strong class="text-dark" id="edit_disb_app_no"></strong>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Collection Center / Handover Depot *</label>
+                            <select name="collection_center_id" id="edit_disb_center_id" class="form-control" required>
+                                @foreach($centers as $c)
+                                    <option value="{{ $c->id }}">
+                                        {{ $c->name }} ({{ $c->district->name ?? '' }} - {{ ucfirst($c->level ?? 'depot') }})
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Scheme Stock Item *</label>
+                            <select name="scheme_stock_item_id" id="edit_disb_item_id" class="form-control" required>
+                                @foreach($items as $it)
+                                    <option value="{{ $it->id }}">
+                                        {{ $it->item_name }} ({{ $it->unit }}) - {{ $it->scheme->title ?? 'General' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Quantity Disbursed (Units/Bags) *</label>
+                            <input type="number" step="0.01" min="0.01" name="quantity_disbursed" id="edit_disb_qty" class="form-control" required>
+                            <small class="text-muted">Warehouse balance & beneficiary status will automatically synchronize.</small>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Disbursement Date *</label>
+                            <input type="date" name="disbursement_date" id="edit_disb_date" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="col-md-4 form-group">
+                            <label class="font-weight-bold text-dark">Recipient Name *</label>
+                            <input type="text" name="recipient_name" id="edit_disb_recip_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label class="font-weight-bold text-dark">Recipient CNIC *</label>
+                            <input type="text" name="recipient_cnic" id="edit_disb_recip_cnic" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label class="font-weight-bold text-dark">Recipient Phone</label>
+                            <input type="text" name="recipient_phone" id="edit_disb_recip_phone" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Representative Relationship (if not applicant)</label>
+                            <input type="text" name="representative_relationship" id="edit_disb_representative" class="form-control" placeholder="Self, Son, Brother, etc.">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="font-weight-bold text-dark">Paid Challan Reference</label>
+                            <input type="text" name="challan_no" id="edit_disb_challan" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="font-weight-bold text-dark">Replace Handover Proof Voucher (Optional)</label>
+                        <input type="file" name="proof_file" class="form-control-file" accept=".jpg,.jpeg,.png,.pdf">
+                        <small class="text-muted">Leave empty to keep existing proof document.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="font-weight-bold text-dark">Remarks / Verification Notes</label>
+                        <textarea name="notes" id="edit_disb_notes" rows="2" class="form-control"></textarea>
+                    </div>
+
+                    {{-- MANDATORY JUSTIFICATION --}}
+                    <div class="form-group p-3 border border-warning rounded bg-light mb-0">
+                        <label class="font-weight-bold text-danger">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Mandatory Justification for Change *
+                        </label>
+                        <textarea name="justification" id="edit_disb_justification" rows="2" class="form-control" required minlength="5" placeholder="Specify why this disbursement entry is being edited (e.g., corrected quantity count, updated representative CNIC per identification card)..."></textarea>
+                        <small class="text-muted">Every edit, old and new values, and this justification are permanently preserved in the audit log.</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary px-3" onclick="closeEditDisbursementModal()" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning font-weight-bold px-4 shadow-sm">
+                        <i class="fa-solid fa-save mr-1"></i> Save Changes & Recalculate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- Disbursement Audit Trail Modal --}}
+<div class="modal fade" id="disbursementAuditModal" tabindex="-1" role="dialog" aria-labelledby="disbursementAuditModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title font-weight-bold" id="disbursementAuditModalTitle">
+                    <i class="fa-solid fa-history mr-2"></i> Audit Trail & Change History
+                </h5>
+                <button type="button" class="close text-white" onclick="closeDisbursementAuditModal()" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-4">
+                <h6 class="font-weight-bold text-primary mb-3" id="disbursementAuditModalSubject"></h6>
+                <div id="disbursementAuditModalBody" style="max-height: 420px; overflow-y: auto;">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" onclick="closeDisbursementAuditModal()" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endpush
 
 @push('scripts')
@@ -581,6 +784,120 @@ function updateDepotStockNotice() {
         }
     } else {
         notice.innerHTML = 'Select the depot where physical stock is being handed over.';
+    }
+}
+
+function openEditDisbursementModal(data) {
+    document.getElementById('editDisbursementForm').action = data.update_url;
+    document.getElementById('editDisbNoLabel').innerText = '#' + data.disbursement_no;
+    document.getElementById('edit_disb_app_no').innerText = '#' + data.application_no;
+    document.getElementById('edit_disb_center_id').value = data.center_id;
+    document.getElementById('edit_disb_item_id').value = data.item_id;
+    document.getElementById('edit_disb_qty').value = data.quantity;
+    document.getElementById('edit_disb_date').value = data.date;
+    document.getElementById('edit_disb_recip_name').value = data.recipient_name || '';
+    document.getElementById('edit_disb_recip_cnic').value = data.recipient_cnic || '';
+    document.getElementById('edit_disb_recip_phone').value = data.recipient_phone || '';
+    document.getElementById('edit_disb_representative').value = data.representative || '';
+    document.getElementById('edit_disb_challan').value = data.challan || '';
+    document.getElementById('edit_disb_notes').value = data.notes || '';
+    document.getElementById('edit_disb_justification').value = '';
+
+    var windowText = document.getElementById('editDisbWindowText');
+    var alertBox = document.getElementById('editDisbGraceAlert');
+    if (data.is_super_admin) {
+        alertBox.className = 'alert alert-primary py-2 small mb-3';
+        windowText.innerHTML = '<i class="fa-solid fa-shield-halved mr-1"></i> <strong>Super Admin Access:</strong> You can edit this disbursement anytime. All changes require justification and are permanently audited.';
+    } else {
+        alertBox.className = 'alert alert-warning py-2 small mb-3';
+        windowText.innerHTML = '<i class="fa-solid fa-stopwatch mr-1"></i> <strong>Initial Edit Window Active:</strong> ' + data.mins_left + ' minutes remaining to adjust values. After 10 minutes, editing locks to Admin only.';
+    }
+
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#editDisbursementModal').modal('show');
+    } else {
+        var m = document.getElementById('editDisbursementModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+    }
+}
+
+function closeEditDisbursementModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#editDisbursementModal').modal('hide');
+    } else {
+        var m = document.getElementById('editDisbursementModal');
+        if (m) {
+            m.classList.remove('show');
+            m.style.display = 'none';
+            document.body.classList.remove('modal-open');
+        }
+    }
+}
+
+function showDisbursementAuditModal(title, logs) {
+    document.getElementById('disbursementAuditModalSubject').innerText = title;
+    var container = document.getElementById('disbursementAuditModalBody');
+    container.innerHTML = '';
+
+    if (!logs || logs.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-3">No change logs recorded yet.</p>';
+    } else {
+        logs.forEach(function (log) {
+            var card = document.createElement('div');
+            card.className = 'card border mb-3 shadow-sm';
+
+            var changesHtml = '';
+            if (log.changed_fields && Object.keys(log.changed_fields).length > 0) {
+                changesHtml += '<table class="table table-sm table-bordered mt-2 mb-0" style="font-size: 11px;">';
+                changesHtml += '<thead class="thead-light"><tr><th>Field</th><th>Original Value</th><th>Modified Value</th></tr></thead><tbody>';
+                for (var f in log.changed_fields) {
+                    var change = log.changed_fields[f];
+                    var fromVal = (change.from !== null && change.from !== undefined) ? change.from : '<em>empty</em>';
+                    var toVal = (change.to !== null && change.to !== undefined) ? change.to : '<em>empty</em>';
+                    changesHtml += '<tr><td class="font-weight-bold">' + f + '</td><td class="text-danger">' + fromVal + '</td><td class="text-success">' + toVal + '</td></tr>';
+                }
+                changesHtml += '</tbody></table>';
+            }
+
+            card.innerHTML =
+                '<div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">' +
+                    '<div><strong>' + log.user + '</strong> <span class="badge badge-secondary ml-1">' + log.role + '</span></div>' +
+                    '<small class="text-muted"><i class="fa-solid fa-clock mr-1"></i>' + log.date + '</small>' +
+                '</div>' +
+                '<div class="card-body p-3">' +
+                    '<div class="mb-2"><strong class="text-dark">Reason / Justification:</strong> <span class="text-primary font-weight-bold">' + (log.justification || 'None') + '</span></div>' +
+                    changesHtml +
+                '</div>';
+            container.appendChild(card);
+        });
+    }
+
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#disbursementAuditModal').modal('show');
+    } else {
+        var m = document.getElementById('disbursementAuditModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+    }
+}
+
+function closeDisbursementAuditModal() {
+    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#disbursementAuditModal').modal('hide');
+    } else {
+        var m = document.getElementById('disbursementAuditModal');
+        if (m) {
+            m.classList.remove('show');
+            m.style.display = 'none';
+            document.body.classList.remove('modal-open');
+        }
     }
 }
 

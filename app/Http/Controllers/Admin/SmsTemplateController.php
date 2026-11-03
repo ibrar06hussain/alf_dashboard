@@ -230,6 +230,10 @@ class SmsTemplateController extends Controller
 
     public function sendForApplication(Request $request, Application $application): RedirectResponse
     {
+        if (! auth()->user()?->hasRole('Super Admin')) {
+            abort(403, 'Unauthorized. Only Super Admin is permitted to manually send SMS notifications.');
+        }
+
         $data = $request->validate([
             'event_key' => ['nullable', 'string', 'max:80'],
             'custom_message' => ['nullable', 'string', 'max:1500'],
