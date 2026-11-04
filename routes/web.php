@@ -11,7 +11,9 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DepartmentController as AdminDepartmentController;
 use App\Http\Controllers\Admin\DepartmentStatController;
 use App\Http\Controllers\Admin\DistrictController;
+use App\Http\Controllers\Admin\FarmerOrganizationController;
 use App\Http\Controllers\Admin\FormBuilderController;
+use App\Http\Controllers\FarmerOrganizationPublicController;
 use App\Http\Controllers\Admin\GbpayController;
 use App\Http\Controllers\Admin\GbpayWebhookController;
 use App\Http\Controllers\Admin\SchemeController as AdminSchemeController;
@@ -68,6 +70,7 @@ Route::post('/applications/{application_no}/correction', [ApplicationController:
 
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+Route::get('/organizations', [FarmerOrganizationPublicController::class, 'index'])->name('organizations.index');
 
 // Fallback storage route for shared hosting environments (Hostinger / cPanel)
 // Ensures uploaded images/documents are served even if Apache symlink fails or returns 403
@@ -138,6 +141,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('applications.documents.download');
 
         Route::get('interests', [SchemeInterestController::class, 'index'])->name('interests.index');
+        Route::get('organizations', [FarmerOrganizationController::class, 'index'])->name('organizations.index');
 
         // Dedicated Scheme MIS: Distribution of Wheat Seed (Cost Sharing 50:50)
         Route::middleware('role:Super Admin|Secretary|Director Agriculture|District Officer|District Deputy Director|Division Director|Field Officer|Accounts Officer|Distribution Officer')->group(function () {
@@ -222,6 +226,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
             Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');
             Route::put('districts/{district}', [DistrictController::class, 'update'])->name('districts.update');
+
+            // Farmer / Village Organizations CRUD (Super Admin Only)
+            Route::post('organizations', [FarmerOrganizationController::class, 'store'])->name('organizations.store');
+            Route::put('organizations/{organization}', [FarmerOrganizationController::class, 'update'])->name('organizations.update');
+            Route::delete('organizations/{organization}', [FarmerOrganizationController::class, 'destroy'])->name('organizations.destroy');
 
             Route::resource('carousel', CarouselSlideController::class)->except(['show']);
             Route::get('media', [SiteMediaController::class, 'edit'])->name('media.edit');

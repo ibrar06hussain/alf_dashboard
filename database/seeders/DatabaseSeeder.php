@@ -212,6 +212,7 @@ class DatabaseSeeder extends Seeder
         ])->syncRoles(['District Officer']);
 
         $this->call(DemoApplicationSeeder::class);
+        $this->call(FarmerOrganizationSeeder::class);
     }
 
     private function seedStats(Department $department, array $stats): void

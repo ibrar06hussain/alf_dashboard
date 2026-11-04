@@ -158,6 +158,9 @@
                                 <li class="{{ request()->routeIs('applications.track') ? 'active' : '' }}">
                                     <a href="{{ route('applications.track') }}">{{ __('portal.track_application') }}</a>
                                 </li>
+                                <li class="{{ request()->routeIs('organizations.*') ? 'active' : '' }}">
+                                    <a href="{{ route('organizations.index') }}">{{ $currentLocale === 'ur' ? 'تنظیمیں (Organizations)' : 'Organizations' }}</a>
+                                </li>
                                 <li class="{{ request()->routeIs('about') ? 'active' : '' }}">
                                     <a href="{{ route('about') }}">{{ __('portal.about') }}</a>
                                 </li>

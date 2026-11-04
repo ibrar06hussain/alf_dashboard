@@ -174,6 +174,11 @@
                                 <i class="metismenu-icon fa-solid fa-bell"></i> Interests
                             </a>
                         </li>
+                        <li class="{{ request()->routeIs('admin.organizations.*') ? 'mm-active' : '' }}">
+                            <a href="{{ route('admin.organizations.index') }}">
+                                <i class="metismenu-icon fa-solid fa-people-group"></i> Organizations
+                            </a>
+                        </li>
                         @if($canViewCm)
                             <li class="{{ request()->routeIs('admin.cm-dashboard.*') ? 'mm-active' : '' }}">
                                 <a href="{{ route('admin.cm-dashboard.index') }}">
