@@ -408,6 +408,336 @@ class GbGeoCoordinates
     }
 
     /**
+     * Build cascading filter options (District -> Tehsil -> UC) and page-wide filtered analytics
+     * (KPI totals, District summary rows, drill-down chart rows, and geospatial map clusters).
+     */
+    public static function buildPageAnalyticsAndFilters($allRecords, array $filters): array
+    {
+        $activeDivision = trim((string) ($filters['division'] ?? ''));
+        $activeSheet    = trim((string) ($filters['sheet'] ?? ''));
+        $activeDistrict = trim((string) ($filters['district'] ?? ''));
+        $activeTehsil   = trim((string) ($filters['tehsil'] ?? ''));
+        $activeUc       = trim((string) ($filters['uc'] ?? ''));
+        $voStatus       = trim((string) ($filters['vo_status'] ?? ''));
+        $search         = trim((string) ($filters['q'] ?? ''));
+
+        if ($activeSheet !== '' && isset(FarmerOrganization::SHEET_DISTRICT_MAP[$activeSheet])) {
+            $activeDistrict = FarmerOrganization::SHEET_DISTRICT_MAP[$activeSheet]['district'];
+        } elseif ($activeDistrict !== '') {
+            $activeSheet = FarmerOrganization::resolveSheetCode($activeDistrict) ?? '';
+        }
+
+        $tehsilOptions = [];
+        $ucOptions = [];
+        $rawTehsilMap = [];
+        $rawUcMap = [];
+        $districtTotalMap = [];
+
+        foreach ($allRecords as $org) {
+            $dName = trim((string) $org->district_name);
+            $sCode = trim((string) $org->sheet_code);
+            $rawSub = trim((string) $org->sub_division);
+            $rawUc  = trim((string) $org->uc_mc);
+
+            $normSub = self::normalizeSubDivision($rawSub, $dName);
+            $normUc  = self::normalizeUc($rawUc, $normSub);
+
+            $districtTotalMap[$sCode] = ($districtTotalMap[$sCode] ?? 0) + 1;
+
+            $rawTehsilMap[$normSub][$rawSub] = $rawSub;
+            $rawUcMap[$normUc][$rawUc] = $rawUc;
+
+            $tKey = $dName . '|' . $normSub;
+            if (! isset($tehsilOptions[$tKey])) {
+                $tehsilOptions[$tKey] = [
+                    'name' => $normSub,
+                    'district' => $dName,
+                    'sheet_code' => $sCode,
+                    'division' => $org->division_name,
+                    'count' => 0,
+                ];
+            }
+            $tehsilOptions[$tKey]['count']++;
+
+            $uKey = $dName . '|' . $normSub . '|' . $normUc;
+            if (! isset($ucOptions[$uKey])) {
+                $ucOptions[$uKey] = [
+                    'name' => $normUc,
+                    'tehsil' => $normSub,
+                    'district' => $dName,
+                    'sheet_code' => $sCode,
+                    'division' => $org->division_name,
+                    'count' => 0,
+                ];
+            }
+            $ucOptions[$uKey]['count']++;
+        }
+
+        // Filter records in memory for whole-page KPIs, Summary Table, Charts, and Map
+        $filteredRecords = $allRecords->filter(function ($org) use (
+            $activeDivision,
+            $activeDistrict,
+            $activeTehsil,
+            $activeUc,
+            $voStatus,
+            $search
+        ) {
+            $dName = trim((string) $org->district_name);
+            $normSub = self::normalizeSubDivision((string) $org->sub_division, $dName);
+            $normUc  = self::normalizeUc((string) $org->uc_mc, $normSub);
+
+            if ($activeDivision !== '' && strcasecmp((string) $org->division_name, $activeDivision) !== 0) {
+                return false;
+            }
+            if ($activeDistrict !== '' && strcasecmp($dName, $activeDistrict) !== 0) {
+                return false;
+            }
+            if ($activeTehsil !== '' && strcasecmp($normSub, $activeTehsil) !== 0) {
+                return false;
+            }
+            if ($activeUc !== '' && strcasecmp($normUc, $activeUc) !== 0) {
+                return false;
+            }
+            if ($voStatus === 'formed' && ! $org->is_vo_formed) {
+                return false;
+            }
+            if ($voStatus === 'not_formed' && $org->is_vo_formed) {
+                return false;
+            }
+            if ($search !== '') {
+                $haystack = strtolower(implode(' ', [
+                    $org->village_name,
+                    $org->organization_name,
+                    $org->sub_division,
+                    $org->uc_mc,
+                    $org->focal_person_name,
+                    $org->focal_person_phone,
+                    $org->focal_person_raw,
+                    $org->district_name,
+                ]));
+                if (! str_contains($haystack, strtolower($search))) {
+                    return false;
+                }
+            }
+
+            return true;
+        })->values();
+
+        // Calculate Filtered Totals
+        $totalVillages = $filteredRecords->count();
+        $vosFormed = $filteredRecords->where('is_vo_formed', true)->count();
+        $noVosFormed = $totalVillages - $vosFormed;
+        $coveragePct = $totalVillages > 0 ? round(($vosFormed / $totalVillages) * 100, 1) : 0;
+
+        $totals = [
+            'total_villages' => $totalVillages,
+            'vos_formed' => $vosFormed,
+            'no_vos_formed' => $noVosFormed,
+            'coverage_pct' => $coveragePct,
+            'unfiltered_total' => $allRecords->count(),
+            'district_totals_unfiltered' => $districtTotalMap,
+        ];
+
+        // Build Summary Rows & Chart Breakdown Rows
+        // 1. District Summary Rows (filtered by active filters)
+        $bySheet = $filteredRecords->groupBy('sheet_code');
+        $summaryRows = [];
+        $sr = 1;
+        foreach (FarmerOrganization::SHEET_DISTRICT_MAP as $code => $meta) {
+            if ($activeDivision !== '' && strcasecmp($meta['division'], $activeDivision) !== 0) {
+                continue;
+            }
+            if ($activeDistrict !== '' && strcasecmp($meta['district'], $activeDistrict) !== 0) {
+                continue;
+            }
+            $group = $bySheet->get($code, collect());
+            $vTotal = $group->count();
+            $vFormed = $group->where('is_vo_formed', true)->count();
+            $vNotFormed = $vTotal - $vFormed;
+            $pct = $vTotal > 0 ? round(($vFormed / $vTotal) * 100, 1) : 0;
+
+            $summaryRows[] = [
+                'sr' => $sr++,
+                'sheet_code' => $code,
+                'district' => $meta['district'],
+                'division' => $meta['division'],
+                'total_villages' => $vTotal,
+                'vos_formed' => $vFormed,
+                'no_vos_formed' => $vNotFormed,
+                'coverage_pct' => $pct,
+            ];
+        }
+
+        // 2. Dynamic Drill-Down Breakdown (for Bar Chart & Sub-Summary when District or Tehsil is selected)
+        $chartLevelLabel = 'District-Wise';
+        $chartRows = [];
+        if ($activeTehsil !== '' || $activeUc !== '') {
+            $chartLevelLabel = 'Union Council (UC) Wise — ' . ($activeTehsil ?: $activeDistrict);
+            $groupedUc = $filteredRecords->groupBy(function ($org) {
+                $d = trim((string) $org->district_name);
+                $s = self::normalizeSubDivision((string) $org->sub_division, $d);
+                return self::normalizeUc((string) $org->uc_mc, $s);
+            });
+            $idx = 1;
+            foreach ($groupedUc as $ucLabel => $items) {
+                $vt = $items->count();
+                $vf = $items->where('is_vo_formed', true)->count();
+                $vn = $vt - $vf;
+                $first = $items->first();
+                $d = trim((string) $first->district_name);
+                $s = self::normalizeSubDivision((string) $first->sub_division, $d);
+                $chartRows[] = [
+                    'sr' => $idx++,
+                    'label' => $ucLabel,
+                    'parent' => $s . ' (' . $d . ')',
+                    'district' => $d,
+                    'sheet_code' => $first->sheet_code,
+                    'tehsil' => $s,
+                    'uc' => $ucLabel,
+                    'total_villages' => $vt,
+                    'vos_formed' => $vf,
+                    'no_vos_formed' => $vn,
+                    'coverage_pct' => $vt > 0 ? round(($vf / $vt) * 100, 1) : 0,
+                ];
+            }
+        } elseif ($activeDistrict !== '') {
+            $chartLevelLabel = 'Tehsil / Sub-Division Wise — ' . $activeDistrict . ' District';
+            $groupedTehsil = $filteredRecords->groupBy(function ($org) {
+                $d = trim((string) $org->district_name);
+                return self::normalizeSubDivision((string) $org->sub_division, $d);
+            });
+            $idx = 1;
+            foreach ($groupedTehsil as $tLabel => $items) {
+                $vt = $items->count();
+                $vf = $items->where('is_vo_formed', true)->count();
+                $vn = $vt - $vf;
+                $first = $items->first();
+                $d = trim((string) $first->district_name);
+                $chartRows[] = [
+                    'sr' => $idx++,
+                    'label' => $tLabel,
+                    'parent' => $d . ' District',
+                    'district' => $d,
+                    'sheet_code' => $first->sheet_code,
+                    'tehsil' => $tLabel,
+                    'uc' => '',
+                    'total_villages' => $vt,
+                    'vos_formed' => $vf,
+                    'no_vos_formed' => $vn,
+                    'coverage_pct' => $vt > 0 ? round(($vf / $vt) * 100, 1) : 0,
+                ];
+            }
+        } else {
+            foreach ($summaryRows as $r) {
+                $chartRows[] = [
+                    'sr' => $r['sr'],
+                    'label' => $r['district'],
+                    'parent' => $r['division'] . ' Division',
+                    'district' => $r['district'],
+                    'sheet_code' => $r['sheet_code'],
+                    'tehsil' => '',
+                    'uc' => '',
+                    'total_villages' => $r['total_villages'],
+                    'vos_formed' => $r['vos_formed'],
+                    'no_vos_formed' => $r['no_vos_formed'],
+                    'coverage_pct' => $r['coverage_pct'],
+                ];
+            }
+        }
+
+        // 3. Build Map Clusters for the filtered dataset + compute initial map focus
+        $mapClusters = self::buildMapClusters($filteredRecords);
+        $initialCenter = [35.65, 74.85];
+        $initialZoom = 8;
+        $initialMode = 'auto';
+
+        if ($activeUc !== '' && count($mapClusters['ucs']) > 0) {
+            $firstUc = $mapClusters['ucs'][0];
+            $initialCenter = [$firstUc['lat'], $firstUc['lng']];
+            $initialZoom = 12;
+        } elseif ($activeTehsil !== '' && count($mapClusters['tehsils']) > 0) {
+            $firstTeh = $mapClusters['tehsils'][0];
+            $initialCenter = [$firstTeh['lat'], $firstTeh['lng']];
+            $initialZoom = 11;
+        } elseif ($activeDistrict !== '' && count($mapClusters['districts']) > 0) {
+            $firstDist = $mapClusters['districts'][0];
+            $initialCenter = [$firstDist['lat'], $firstDist['lng']];
+            $initialZoom = 10;
+        }
+
+        $mapClusters['initial_center'] = $initialCenter;
+        $mapClusters['initial_zoom'] = $initialZoom;
+        $mapClusters['initial_mode'] = $initialMode;
+
+        return [
+            'totals' => $totals,
+            'summaryRows' => $summaryRows,
+            'chartRows' => $chartRows,
+            'chartLevelLabel' => $chartLevelLabel,
+            'mapClusters' => $mapClusters,
+            'tehsilOptions' => array_values($tehsilOptions),
+            'ucOptions' => array_values($ucOptions),
+            'rawTehsilMap' => $rawTehsilMap,
+            'rawUcMap' => $rawUcMap,
+            'resolvedDistrict' => $activeDistrict,
+            'resolvedSheet' => $activeSheet,
+        ];
+    }
+
+    /**
+     * Apply District, Tehsil, UC, Division, Status, and Search filters to the Eloquent Directory Query.
+     */
+    public static function applyFiltersToQuery($query, array $filters, array $rawTehsilMap, array $rawUcMap): void
+    {
+        $activeDivision = trim((string) ($filters['division'] ?? ''));
+        $activeSheet    = trim((string) ($filters['sheet'] ?? ''));
+        $activeDistrict = trim((string) ($filters['district'] ?? ''));
+        $activeTehsil   = trim((string) ($filters['tehsil'] ?? ''));
+        $activeUc       = trim((string) ($filters['uc'] ?? ''));
+        $voStatus       = trim((string) ($filters['vo_status'] ?? ''));
+        $search         = trim((string) ($filters['q'] ?? ''));
+
+        if ($activeSheet !== '' && isset(FarmerOrganization::SHEET_DISTRICT_MAP[$activeSheet])) {
+            $query->where('sheet_code', $activeSheet);
+        } elseif ($activeDistrict !== '') {
+            $query->where('district_name', $activeDistrict);
+        }
+
+        if ($activeDivision !== '') {
+            $query->where('division_name', $activeDivision);
+        }
+
+        if ($activeTehsil !== '') {
+            $rawSubs = isset($rawTehsilMap[$activeTehsil]) ? array_values($rawTehsilMap[$activeTehsil]) : [$activeTehsil];
+            $query->whereIn('sub_division', $rawSubs);
+        }
+
+        if ($activeUc !== '') {
+            $rawUcs = isset($rawUcMap[$activeUc]) ? array_values($rawUcMap[$activeUc]) : [$activeUc];
+            $query->whereIn('uc_mc', $rawUcs);
+        }
+
+        if ($voStatus === 'formed') {
+            $query->where('is_vo_formed', true);
+        } elseif ($voStatus === 'not_formed') {
+            $query->where('is_vo_formed', false);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($sub) use ($search) {
+                $sub->where('village_name', 'like', "%{$search}%")
+                    ->orWhere('organization_name', 'like', "%{$search}%")
+                    ->orWhere('sub_division', 'like', "%{$search}%")
+                    ->orWhere('uc_mc', 'like', "%{$search}%")
+                    ->orWhere('focal_person_name', 'like', "%{$search}%")
+                    ->orWhere('focal_person_phone', 'like', "%{$search}%")
+                    ->orWhere('focal_person_raw', 'like', "%{$search}%")
+                    ->orWhere('district_name', 'like', "%{$search}%");
+            });
+        }
+    }
+
+    /**
      * Deterministic radial offset if a new custom Tehsil/UC is added by Admin without hardcoded coordinates.
      */
     private static function fallbackOffset(array $center, string $seed, float $radius): array

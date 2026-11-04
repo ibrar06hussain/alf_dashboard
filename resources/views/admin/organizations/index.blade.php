@@ -161,6 +161,43 @@
         border-bottom-left-radius: 13px;
         border-bottom-right-radius: 13px;
     }
+    .admin-org-map-box {
+        width: 100%;
+        height: 480px;
+        z-index: 1;
+    }
+    @media (max-width: 767.98px) {
+        .org-sheet-tabs {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 10px 12px;
+        }
+        .org-sheet-tab {
+            flex-shrink: 0;
+        }
+        .admin-org-map-box {
+            height: 350px !important;
+        }
+        .gb-cluster-bubble--district {
+            width: 44px;
+            height: 44px;
+            font-size: 0.82rem;
+        }
+        .gb-cluster-bubble--tehsil {
+            width: 38px;
+            height: 38px;
+            font-size: 0.76rem;
+        }
+        .gb-cluster-bubble--uc {
+            width: 30px;
+            height: 30px;
+            font-size: 0.7rem;
+        }
+        .admin-filter-collapse:not(.is-expanded) {
+            display: none;
+        }
+    }
 </style>
 @endpush
 
@@ -223,13 +260,110 @@
     @endif
 </div>
 
+{{-- 0. Page-Wide Global Filter Panel (Division, District, Tehsil / Sub-Division, Union Council, Status, Search) --}}
+@php
+    $hasAdminGlobalFilters = $activeDivision !== '' || $activeDistrict !== '' || $activeSheet !== '' || $activeTehsil !== '' || $activeUc !== '' || $voStatus !== '' || $search !== '';
+@endphp
+<div class="card alf-panel mb-4">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center justify-content-between w-100 w-md-auto">
+            <span><i class="fa-solid fa-sliders me-2 text-success"></i><strong>Filter Whole Page</strong> (District, Tehsil &amp; UC)</span>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary d-md-none ms-2"
+                    onclick="document.getElementById('adminGlobalFilterBody').classList.toggle('is-expanded')">
+                <i class="fa-solid fa-filter me-1"></i> Filters
+            </button>
+        </div>
+        @if($hasAdminGlobalFilters)
+            <a href="{{ route('admin.organizations.index') }}" class="btn btn-sm btn-warning fw-bold">
+                <i class="fa-solid fa-rotate-left me-1"></i> Reset All Filters
+            </a>
+        @endif
+    </div>
+    <div id="adminGlobalFilterBody" class="card-body admin-filter-collapse {{ $hasAdminGlobalFilters ? 'is-expanded' : '' }}">
+        <form method="GET" action="{{ route('admin.organizations.index') }}" id="adminGlobalFilterForm" class="row g-2 align-items-end">
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-bold mb-1">Division</label>
+                <select id="adminGlobalDivision" name="division" class="form-select form-select-sm" onchange="onAdminGlobalDivisionChange()">
+                    <option value="">All Divisions (3)</option>
+                    <option value="Gilgit" @selected($activeDivision === 'Gilgit')>Gilgit</option>
+                    <option value="Baltistan" @selected($activeDivision === 'Baltistan')>Baltistan</option>
+                    <option value="Diamer" @selected($activeDivision === 'Diamer')>Diamer</option>
+                </select>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-bold mb-1">District</label>
+                <select id="adminGlobalDistrict" name="district" class="form-select form-select-sm" onchange="onAdminGlobalDistrictChange()">
+                    <option value="">All Districts (10)</option>
+                    @foreach(\App\Models\FarmerOrganization::SHEET_DISTRICT_MAP as $code => $meta)
+                        <option value="{{ $meta['district'] }}"
+                                data-division="{{ $meta['division'] }}"
+                                @selected($activeDistrict === $meta['district'] || $activeSheet === $code)>
+                            {{ $meta['district'] }} ({{ $code }})
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-bold mb-1">Tehsil / Sub-Div</label>
+                <select id="adminGlobalTehsil" name="tehsil" class="form-select form-select-sm" onchange="onAdminGlobalTehsilChange()">
+                    <option value="">All Tehsils ({{ count($tehsilOptions) }})</option>
+                    @foreach($tehsilOptions as $tOpt)
+                        <option value="{{ $tOpt['name'] }}"
+                                data-district="{{ $tOpt['district'] }}"
+                                data-division="{{ $tOpt['division'] }}"
+                                @selected($activeTehsil === $tOpt['name'])>
+                            {{ $tOpt['name'] }} ({{ $tOpt['district'] }} - {{ $tOpt['count'] }})
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-bold mb-1">Union Council / MC</label>
+                <select id="adminGlobalUc" name="uc" class="form-select form-select-sm" onchange="document.getElementById('adminGlobalFilterForm').submit()">
+                    <option value="">All UCs ({{ count($ucOptions) }})</option>
+                    @foreach($ucOptions as $uOpt)
+                        <option value="{{ $uOpt['name'] }}"
+                                data-district="{{ $uOpt['district'] }}"
+                                data-tehsil="{{ $uOpt['tehsil'] }}"
+                                data-division="{{ $uOpt['division'] }}"
+                                @selected($activeUc === $uOpt['name'])>
+                            {{ $uOpt['name'] }} ({{ $uOpt['tehsil'] }} - {{ $uOpt['count'] }})
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-bold mb-1">VO Status</label>
+                <select name="vo_status" class="form-select form-select-sm" onchange="document.getElementById('adminGlobalFilterForm').submit()">
+                    <option value="">All Villages</option>
+                    <option value="formed" @selected($voStatus === 'formed')>VO Formed Only</option>
+                    <option value="not_formed" @selected($voStatus === 'not_formed')>No VO Formed Yet</option>
+                </select>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label small fw-bold mb-1">Keyword Search</label>
+                <div class="input-group input-group-sm">
+                    <input type="text" name="q" value="{{ $search }}" class="form-control" placeholder="Village / VO / Phone...">
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 {{-- 1. Graphical Representation Row --}}
 <div class="row g-3 mb-4">
     <div class="col-lg-8">
         <div class="card alf-panel h-100">
             <div class="card-header d-flex align-items-center justify-content-between">
-                <span><i class="fa-solid fa-chart-column me-2 text-success"></i>District-Wise Villages &amp; VOs Formed Comparison</span>
-                <span class="badge bg-success-subtle text-success">10 Districts</span>
+                <span><i class="fa-solid fa-chart-column me-2 text-success"></i>{{ $chartLevelLabel }} Villages &amp; VOs Formed Comparison</span>
+                <span class="badge bg-success-subtle text-success">{{ count($chartRows) }} {{ $activeTehsil ? 'UCs' : ($activeDistrict ? 'Tehsils' : 'Districts') }}</span>
             </div>
             <div class="card-body">
                 <div style="position: relative; height: 320px;">
@@ -303,7 +437,7 @@
         <span class="text-muted">Zoom in on the map or click any cluster marker to drill down into Tehsils and Union Councils</span>
     </div>
     <div class="card-body p-0">
-        <div id="adminGbOrganizationsMap" style="width: 100%; height: 480px; z-index: 1;"></div>
+        <div id="adminGbOrganizationsMap" class="admin-org-map-box"></div>
     </div>
 </div>
 
@@ -949,13 +1083,80 @@
         }
     }
 
+    // Cascading Dropdowns (Admin Global Filter)
+    function filterAdminCascadingDropdowns(clearChildren) {
+        const divSel = document.getElementById('adminGlobalDivision');
+        const distSel = document.getElementById('adminGlobalDistrict');
+        const tehSel = document.getElementById('adminGlobalTehsil');
+        const ucSel = document.getElementById('adminGlobalUc');
+        if (!divSel || !distSel || !tehSel || !ucSel) return;
+
+        const selectedDiv = divSel.value;
+        Array.from(distSel.options).forEach(opt => {
+            if (!opt.value) return;
+            const optDiv = opt.getAttribute('data-division') || '';
+            const match = !selectedDiv || optDiv.toLowerCase() === selectedDiv.toLowerCase();
+            opt.hidden = !match;
+            if (!match && opt.selected && clearChildren) distSel.value = '';
+        });
+
+        const activeDist = distSel.value;
+        Array.from(tehSel.options).forEach(opt => {
+            if (!opt.value) return;
+            const optDist = opt.getAttribute('data-district') || '';
+            const optDiv = opt.getAttribute('data-division') || '';
+            const match = (!activeDist || optDist.toLowerCase() === activeDist.toLowerCase())
+                && (!selectedDiv || optDiv.toLowerCase() === selectedDiv.toLowerCase());
+            opt.hidden = !match;
+            if (!match && opt.selected && clearChildren) tehSel.value = '';
+        });
+
+        const activeTeh = tehSel.value;
+        Array.from(ucSel.options).forEach(opt => {
+            if (!opt.value) return;
+            const optDist = opt.getAttribute('data-district') || '';
+            const optTeh = opt.getAttribute('data-tehsil') || '';
+            const optDiv = opt.getAttribute('data-division') || '';
+            const match = (!activeDist || optDist.toLowerCase() === activeDist.toLowerCase())
+                && (!activeTeh || optTeh.toLowerCase() === activeTeh.toLowerCase())
+                && (!selectedDiv || optDiv.toLowerCase() === selectedDiv.toLowerCase());
+            opt.hidden = !match;
+            if (!match && opt.selected && clearChildren) ucSel.value = '';
+        });
+    }
+
+    function onAdminGlobalDivisionChange() {
+        document.getElementById('adminGlobalDistrict').value = '';
+        document.getElementById('adminGlobalTehsil').value = '';
+        document.getElementById('adminGlobalUc').value = '';
+        filterAdminCascadingDropdowns(true);
+        document.getElementById('adminGlobalFilterForm').submit();
+    }
+
+    function onAdminGlobalDistrictChange() {
+        document.getElementById('adminGlobalTehsil').value = '';
+        document.getElementById('adminGlobalUc').value = '';
+        filterAdminCascadingDropdowns(true);
+        document.getElementById('adminGlobalFilterForm').submit();
+    }
+
+    function onAdminGlobalTehsilChange() {
+        document.getElementById('adminGlobalUc').value = '';
+        filterAdminCascadingDropdowns(true);
+        document.getElementById('adminGlobalFilterForm').submit();
+    }
+
     // Charts & Map Initialization
     document.addEventListener('DOMContentLoaded', function () {
+        filterAdminCascadingDropdowns(false);
+
         const mapEl = document.getElementById('adminGbOrganizationsMap');
         if (mapEl && window.L) {
+            const initCenter = adminGbClusters.initial_center || [35.65, 74.85];
+            const initZoom = adminGbClusters.initial_zoom || 8;
             adminGbMap = L.map('adminGbOrganizationsMap', {
-                center: [35.65, 74.85],
-                zoom: 8,
+                center: initCenter,
+                zoom: initZoom,
                 minZoom: 6,
                 maxZoom: 15,
                 scrollWheelZoom: true
@@ -969,7 +1170,7 @@
             renderAdminGbMapClusters();
         }
 
-        const summaryData = @json($summaryRows);
+        const chartData = @json($chartRows);
         const totalsData = @json($totals);
 
         const barCtx = document.getElementById('adminDistrictBarChart');
@@ -977,23 +1178,23 @@
             new Chart(barCtx, {
                 type: 'bar',
                 data: {
-                    labels: summaryData.map(r => r.district),
+                    labels: chartData.map(r => r.label),
                     datasets: [
                         {
                             label: 'No. of Villages',
-                            data: summaryData.map(r => r.total_villages),
+                            data: chartData.map(r => r.total_villages),
                             backgroundColor: 'rgba(14, 165, 233, 0.85)',
                             borderRadius: 4
                         },
                         {
                             label: 'VOs Formed',
-                            data: summaryData.map(r => r.vos_formed),
+                            data: chartData.map(r => r.vos_formed),
                             backgroundColor: 'rgba(22, 163, 74, 0.88)',
                             borderRadius: 4
                         },
                         {
                             label: 'No VOs Formed',
-                            data: summaryData.map(r => r.no_vos_formed),
+                            data: chartData.map(r => r.no_vos_formed),
                             backgroundColor: 'rgba(245, 158, 11, 0.88)',
                             borderRadius: 4
                         }
