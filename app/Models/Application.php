@@ -37,6 +37,7 @@ class Application extends Model
     public const STAGE_COMPLETED = 'completed';
     public const STAGE_REJECTED = 'rejected';
     public const STAGE_DORMANT = 'dormant';
+    public const STAGE_DISBURSED = 'disbursed';
 
     public const STATUSES = [
         // Modern lifecycle
@@ -97,9 +98,28 @@ class Application extends Model
             'is_unassigned' => 'boolean',
             'demanded_quantity' => 'decimal:2',
             'approved_quantity' => 'decimal:2',
-            'challan_amount' => 'decimal:2',
             'lock_version' => 'integer',
         ];
+    }
+
+    /**
+     * Always round challan_amount up to the nearest upper integer when setting.
+     */
+    public function setChallanAmountAttribute($value): void
+    {
+        $this->attributes['challan_amount'] = ($value !== null && $value !== '')
+            ? (int) ceil((float) $value)
+            : null;
+    }
+
+    /**
+     * Always return challan_amount as an integer rounded up to the nearest upper integer (or null).
+     */
+    public function getChallanAmountAttribute($value): ?int
+    {
+        return ($value !== null && $value !== '')
+            ? (int) ceil((float) $value)
+            : null;
     }
 
     public function statusLabel(): string
@@ -240,6 +260,11 @@ class Application extends Model
         return $this->hasMany(SmsLog::class, 'application_id')->latest();
     }
 
+    public function editAuditLogs(): HasMany
+    {
+        return $this->hasMany(ApplicationEditAuditLog::class, 'application_id')->latest();
+    }
+
     /**
      * Determine if applicant is eligible for stock disbursement.
      */
@@ -308,7 +333,7 @@ class Application extends Model
      * Calculated as Configure Seed data rate for the applicant's district (delivered rate with 50% subsidy discount),
      * or falls back to the scheme's default challan_fee_per_unit.
      */
-    public function getEffectiveUnitRate(): float
+    public function getEffectiveUnitRate(): int
     {
         $misService = app(\App\Services\WheatSeedMisService::class);
         $scheme = $this->scheme ?: ($this->scheme_id ? \App\Models\Scheme::find($this->scheme_id) : null);
@@ -316,11 +341,11 @@ class Application extends Model
         if ($misService->isWheatSeedScheme($scheme?->id ?? $this->scheme_id, $scheme?->slug, $scheme?->title)) {
             $districtRate = $misService->getPayableRateForDistrict($this->district_id);
             if ($districtRate !== null && $districtRate > 0) {
-                return (float) $districtRate;
+                return (int) ceil((float) $districtRate);
             }
         }
 
-        return (float) ($scheme?->challan_fee_per_unit ?: 3000.00);
+        return (int) ceil((float) ($scheme?->challan_fee_per_unit ?: 3000));
     }
 
     /**
@@ -373,7 +398,7 @@ class Application extends Model
 
         return [
             'template' => $template,
-            'cost_of_1_bag' => (float) $costOfOneBag,
+            'cost_of_1_bag' => (int) ceil((float) $costOfOneBag),
             'approved_bags' => $approvedBags,
             'total_bill' => $totalBill,
             'govt_share_pct' => $govtSharePct,

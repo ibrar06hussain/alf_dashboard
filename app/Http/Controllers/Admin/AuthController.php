@@ -13,6 +13,10 @@ class AuthController extends Controller
     public function showLogin(): View|RedirectResponse
     {
         if (Auth::check()) {
+            if (Auth::user()->hasRole('Field Officer') && ! Auth::user()->hasRole('Super Admin')) {
+                return redirect()->route('admin.applications.index');
+            }
+
             return redirect()->route('admin.dashboard');
         }
 
@@ -45,6 +49,10 @@ class AuthController extends Controller
         }
 
         $request->session()->regenerate();
+
+        if ($user->hasRole('Field Officer') && ! $user->hasRole('Super Admin')) {
+            return redirect()->intended(route('admin.applications.index'));
+        }
 
         return redirect()->intended(route('admin.dashboard'));
     }

@@ -79,7 +79,7 @@
                     <li class="list-group-item">
                         <div class="d-flex justify-content-between">
                             <span>{{ $sd->district?->name }}</span>
-                            <strong>{{ $usage['used'] ?? 0 }} / {{ $sd->quota }}</strong>
+                            <strong>{{ number_format($usage['used'] ?? 0) }} / {{ number_format($sd->quota) }} Bags</strong>
                         </div>
                         @if($usage)
                             @php $pct = $sd->quota > 0 ? min(100, round(($usage['used'] / $sd->quota) * 100)) : 0; @endphp

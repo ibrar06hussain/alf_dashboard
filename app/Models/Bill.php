@@ -31,13 +31,32 @@ class Bill extends Model
     protected function casts(): array
     {
         return [
-            'bill_amount' => 'decimal:2',
             'generated_at' => 'datetime',
             'due_date' => 'date',
             'paid_at' => 'datetime',
             'gbpay_response' => 'array',
             'challan_data' => 'array',
         ];
+    }
+
+    /**
+     * Always round bill_amount up to the nearest upper integer when setting.
+     */
+    public function setBillAmountAttribute($value): void
+    {
+        $this->attributes['bill_amount'] = $value !== null && $value !== ''
+            ? (int) ceil((float) $value)
+            : 0;
+    }
+
+    /**
+     * Always return bill_amount as an integer rounded up to the nearest upper integer.
+     */
+    public function getBillAmountAttribute($value): int
+    {
+        return $value !== null && $value !== ''
+            ? (int) ceil((float) $value)
+            : 0;
     }
 
     public function application(): BelongsTo

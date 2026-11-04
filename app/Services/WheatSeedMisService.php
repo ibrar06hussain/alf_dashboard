@@ -241,7 +241,7 @@ class WheatSeedMisService
         }
 
         $farmerPct = $this->getConfiguredFarmerSharePct(); // e.g. 50%
-        return round($deliveredRate * ($farmerPct / 100), 2);
+        return (float) ceil($deliveredRate * ($farmerPct / 100));
     }
 
     /**
@@ -265,13 +265,13 @@ class WheatSeedMisService
 
             $rate = null;
             if (isset($data['rate']) && is_numeric($data['rate']) && (float) $data['rate'] > 0) {
-                $rate = (float) $data['rate'];
+                $rate = (float) ceil((float) $data['rate']);
             } elseif ($baseRate !== null) {
-                $rate = round($baseRate + $transport, 2);
+                $rate = (float) ceil($baseRate + $transport);
             }
 
-            $govShare = $rate !== null ? round($rate * ($govPct / 100), 2) : null;
-            $farmerShare = $rate !== null ? round($rate * ($farmerPct / 100), 2) : null;
+            $govShare = $rate !== null ? (float) ceil($rate * ($govPct / 100)) : null;
+            $farmerShare = $rate !== null ? (float) ceil($rate * ($farmerPct / 100)) : null;
 
             return (object) [
                 'district_id' => $dist->id,

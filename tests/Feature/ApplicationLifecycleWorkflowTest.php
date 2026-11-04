@@ -549,7 +549,7 @@ class ApplicationLifecycleWorkflowTest extends TestCase
         $this->assertEquals('danger', $breachedSla['badge']);
     }
 
-    public function test_field_survey_findings_submission_requires_minimum_three_gps_points(): void
+    public function test_field_survey_findings_submission_allows_optional_gps_points(): void
     {
         $gilgit = District::where('name', 'Gilgit')->firstOrFail();
         $app = $this->createTestApplication($gilgit->id);
@@ -562,19 +562,16 @@ class ApplicationLifecycleWorkflowTest extends TestCase
             'instructions' => 'Conduct physical inspection and map land boundaries.',
         ]);
 
-        // Attempt submission with only 2 GPS points -> must fail validation
+        // Attempt submission without GPS points (optional) -> must succeed
         $response = $this->actingAs($fieldOfficer)->post(route('admin.applications.surveys.findings', $survey), [
             'land_verified_kanals' => 10.0,
             'recommendation' => 'recommended',
-            'findings_summary' => 'Good land, but only 2 points captured.',
-            'gps_points' => json_encode([
-                ['lat' => 35.920834, 'lng' => 74.308332, 'accuracy' => 3.2, 'label' => 'Point 1'],
-                ['lat' => 35.921510, 'lng' => 74.309015, 'accuracy' => 4.1, 'label' => 'Point 2'],
-            ]),
+            'findings_summary' => 'Good land, inspected without GPS coordinates.',
+            'gps_points' => json_encode([]),
         ]);
 
-        $response->assertSessionHasErrors(['gps_points']);
-        $this->assertEquals(ApplicationSurvey::STATUS_ASSIGNED, $survey->fresh()->status);
+        $response->assertSessionHasNoErrors();
+        $this->assertEquals(ApplicationSurvey::STATUS_FINDINGS_SUBMITTED, $survey->fresh()->status);
     }
 
     public function test_field_survey_findings_submission_accepts_three_or_more_gps_points_and_three_photos_up_to_5mb(): void

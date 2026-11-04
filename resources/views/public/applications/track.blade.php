@@ -184,7 +184,7 @@
                                 <div class="small mb-0">
                                     <div><strong>PSID:</strong> <span class="font-monospace">{{ $paidBill?->psid ?? $application->psid }}</span></div>
                                     <div><strong>Transaction ID:</strong> {{ $paidBill?->transaction_id ?? $application->gbpay_transaction_id }}</div>
-                                    <div><strong>Amount Paid:</strong> Rs. {{ number_format((float) ($paidBill?->bill_amount ?? $application->challan_amount), 2) }}</div>
+                                    <div><strong>Amount Paid:</strong> Rs. {{ number_format((int) ceil((float) ($paidBill?->bill_amount ?? $application->challan_amount))) }}</div>
                                     @if($paidBill?->paid_at || $application->challan_paid_at)
                                         <div><strong>Paid Date:</strong> {{ \Carbon\Carbon::parse($paidBill?->paid_at ?? $application->challan_paid_at)->format('d M Y, h:i A') }}</div>
                                     @endif

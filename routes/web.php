@@ -124,6 +124,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('applications', [ApplicationReviewController::class, 'index'])->name('applications.index');
         Route::get('applications/export', [ApplicationReviewController::class, 'export'])->name('applications.export');
         Route::get('applications/{application}', [ApplicationReviewController::class, 'show'])->name('applications.show');
+        Route::get('applications/{application}/edit', [ApplicationReviewController::class, 'edit'])->name('applications.edit');
+        Route::put('applications/{application}', [ApplicationReviewController::class, 'update'])->name('applications.update');
         Route::post('applications/{application}/status', [ApplicationReviewController::class, 'updateStatus'])->name('applications.status');
         Route::post('applications/{application}/assign-field-officer', [ApplicationReviewController::class, 'assignFieldOfficer'])->name('applications.assign-field-officer');
         Route::post('applications/{application}/assign-survey', [ApplicationReviewController::class, 'assignSurvey'])->name('applications.assign-survey');
@@ -254,10 +256,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // GBPay Payment Gateway Configuration, Credentials & PSID Ledger
         Route::middleware('role:Super Admin|Accounts Officer|Secretary|Director Agriculture|Director Livestock|Director Fisheries')->prefix('gbpay')->name('gbpay.')->group(function () {
             Route::get('/', [GbpayController::class, 'index'])->name('index');
-            Route::post('psid-config', [GbpayController::class, 'updatePsidConfig'])->name('psid-config.update');
+            Route::match(['post', 'put'], 'psid-config', [GbpayController::class, 'updatePsidConfig'])->name('psid-config.update');
             Route::post('credentials', [GbpayController::class, 'storeCredential'])->name('credentials.store');
             Route::put('credentials/{id}', [GbpayController::class, 'updateCredential'])->name('credentials.update');
             Route::delete('credentials/{id}', [GbpayController::class, 'destroyCredential'])->name('credentials.destroy');
+
+            // Interactive GBPay API Testing & Sandbox Console
+            Route::get('test', [GbpayController::class, 'testConsole'])->name('test');
+            Route::post('test/execute', [GbpayController::class, 'executeTest'])->name('test.execute');
+            Route::post('test/sample-bill', [GbpayController::class, 'createSampleBill'])->name('test.sample-bill');
+            Route::post('test/reset-bill/{bill}', [GbpayController::class, 'resetBillToPending'])->name('test.reset-bill');
         });
     });
 });

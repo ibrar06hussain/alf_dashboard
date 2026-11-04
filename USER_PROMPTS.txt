@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 125
+Total Prompts Logged: 134
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-04T17:36:28+05:00 (UTC: 2026-11-04T12:36:28Z)
-File Last Updated  : 2026-11-04 17:36:28 (PKT)
+Latest Prompt Date : 2026-11-04T20:43:02+05:00 (UTC: 2026-11-04T15:43:02Z)
+File Last Updated  : 2026-11-04 20:43:02 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1512,15 +1512,88 @@ Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
 push these changes
 
 ================================================================================
+PROMPT #126
+Date & Time (Local) : 2026-11-04T17:43:56+05:00
+Date & Time (UTC)   : 2026-11-04T12:43:56Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+In the PSID for gbpay configurations the Department Service No is 2 digit code
+
+================================================================================
+PROMPT #127
+Date & Time (Local) : 2026-11-04T17:49:12+05:00
+Date & Time (UTC)   : 2026-11-04T12:49:12Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+PSID Combination 
+1link Prefix: 101530 (6 digit)
+Department Code: 09 (2 digit)
+Service Code: 01 (2 digits)
+and other 10 digits are the voucher number  (10 digits)
+update these values for PSID configuration
+
+================================================================================
+PROMPT #128
+Date & Time (Local) : 2026-11-04T17:56:55+05:00
+Date & Time (UTC)   : 2026-11-04T12:56:55Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+The bill amounts should be integer if any bill amount is in decimals convert it to nearest upper integer value across the application
+
+================================================================================
+PROMPT #129
+Date & Time (Local) : 2026-11-04T18:06:14+05:00
+Date & Time (UTC)   : 2026-11-04T13:06:14Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+develop pages in admin to test gbpay APIs , the admin shoud be able to test these api and should get reponse for these api in the page
+
+================================================================================
+PROMPT #130
+Date & Time (Local) : 2026-11-04T18:39:20+05:00
+Date & Time (UTC)   : 2026-11-04T13:39:20Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+The admin should be able to edit applications data if it requires modification , each modification should be kept in audit logs to current and updated values with time and login details
+
+================================================================================
+PROMPT #131
+Date & Time (Local) : 2026-11-04T19:59:54+05:00
+Date & Time (UTC)   : 2026-11-04T14:59:54Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+For the field officers in change their home page to /admin/applications and show them only applications assigned to each officer by deputy director and that are not yet prcessed by this field officer, show them a page where they can view verifications completed by them, the gps coordinate options should be optional while verifying data , 
+
+================================================================================
+PROMPT #132
+Date & Time (Local) : 2026-11-04T20:24:46+05:00
+Date & Time (UTC)   : 2026-11-04T15:24:46Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+Error
+app\Http\Controllers\Admin\ApplicationReviewController.php:294
+Undefined constant App\Models\Application::STAGE_DISBURSED
+
+================================================================================
+PROMPT #133
+Date & Time (Local) : 2026-11-04T20:32:07+05:00
+Date & Time (UTC)   : 2026-11-04T15:32:07Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+ErrorException
+resources\views\layouts\admin.blade.php:102
+Undefined variable $currentUser
+
+================================================================================
+PROMPT #134
+Date & Time (Local) : 2026-11-04T20:43:02+05:00
+Date & Time (UTC)   : 2026-11-04T15:43:02Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+7 / 3500
+Approved / Disbursed vs quota for Diamer
+In this case the no 7 should represent the no of bags approved currently it is counting the no of applications  Fix this no and apply it to all the pages where it is visible
+
+================================================================================
                          END OF CURRENT PROMPTS LOG                             
 ================================================================================
-
-
-
-
-
-
-
-
-
-

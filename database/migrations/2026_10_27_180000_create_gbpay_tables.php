@@ -18,9 +18,9 @@ return new class extends Migration
             Schema::create('psid_config', function (Blueprint $table) {
                 $table->id('config_id');
                 $table->string('one_link_prefix', 6)->default('101530'); // Digits 1-6
-                $table->string('department_code', 2)->default('15');     // Digits 7-8
-                $table->string('district_code', 2)->default('01');       // Digits 9-10
-                $table->string('department_service_no', 1)->default('1'); // Digit 11
+                $table->string('department_code', 2)->default('09');     // Digits 7-8
+                $table->string('district_code', 2)->default('01');       // Fallback district
+                $table->string('department_service_no', 2)->default('01'); // Digits 9-10 (Service Code)
                 $table->string('rco', 20)->nullable()->default('GL1800'); // RCO Code
                 $table->string('head', 20)->nullable()->default('C03870'); // Head of Account Code
                 $table->boolean('is_active')->default(true);
@@ -29,9 +29,9 @@ return new class extends Migration
 
             DB::table('psid_config')->insert([
                 'one_link_prefix' => '101530',
-                'department_code' => '15',
+                'department_code' => '09',
                 'district_code' => '01',
-                'department_service_no' => '1',
+                'department_service_no' => '01',
                 'rco' => 'GL1800',
                 'head' => 'C03870',
                 'is_active' => true,

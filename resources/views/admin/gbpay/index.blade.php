@@ -8,6 +8,7 @@
     'subtitle' => 'Configure 20-digit PSID prefix rules, manage GBPay Basic Auth API credentials, monitor paid & pending bills, and inspect webhook/API audit logs.',
     'icon' => 'fa-solid fa-money-check-dollar',
     'actions' => [
+        ['label' => 'Test GBPay APIs', 'url' => route('admin.gbpay.test'), 'class' => 'btn btn-success'],
         ['label' => 'Challan Templates', 'url' => route('admin.challan-templates.index'), 'class' => 'btn btn-outline-secondary'],
         ['label' => 'Applications', 'url' => route('admin.applications.index'), 'class' => 'btn btn-primary'],
     ],
@@ -75,54 +76,54 @@
                 <h6 class="mb-0 fw-bold text-dark">
                     <i class="fa-solid fa-sliders text-primary me-2"></i> 20-Digit PSID Prefix & Treasury Configuration
                 </h6>
-                <span class="badge bg-success">Active Prefix: {{ ($psidConfig->one_link_prefix ?? '101325') . ($psidConfig->department_code ?? '18') . ($psidConfig->district_code ?? '01') . ($psidConfig->department_service_no ?? '01') }}</span>
+                <span class="badge bg-success">Active Prefix: {{ ($psidConfig->one_link_prefix ?? '101530') . str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT) . str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT) }}</span>
             </div>
             <div class="card-body">
                 <form action="{{ route('admin.gbpay.psid-config.update') }}" method="POST">
                     @csrf
                     @method('PUT')
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label small fw-bold">1Link Biller Prefix (6 Digits) <span class="text-danger">*</span></label>
                             <input type="text" name="one_link_prefix" maxlength="6" class="form-control form-control-sm"
-                                value="{{ old('one_link_prefix', $psidConfig->one_link_prefix ?? '101325') }}" required>
-                            <div class="form-text" style="font-size: 11px;">Standard GBPay 1Link prefix: <code>101325</code></div>
+                                value="{{ old('one_link_prefix', $psidConfig->one_link_prefix ?? '101530') }}" required>
+                            <div class="form-text" style="font-size: 11px;">GBPay 1Link prefix: <code>101530</code></div>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label small fw-bold">Department Code (2 Digits) <span class="text-danger">*</span></label>
                             <input type="text" name="department_code" maxlength="2" class="form-control form-control-sm"
-                                value="{{ old('department_code', $psidConfig->department_code ?? '18') }}" required>
-                            <div class="form-text" style="font-size: 11px;">2-digit department identifier (e.g. <code>18</code>)</div>
+                                value="{{ old('department_code', str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT)) }}" required>
+                            <div class="form-text" style="font-size: 11px;">2-digit department code: <code>09</code></div>
                         </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Default District Code (2 Digits) <span class="text-danger">*</span></label>
-                            <select name="district_code" class="form-select form-select-sm" required>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Service Code (2 Digits) <span class="text-danger">*</span></label>
+                            <input type="text" name="department_service_no" maxlength="2" class="form-control form-control-sm"
+                                value="{{ old('department_service_no', str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT)) }}" required>
+                            <div class="form-text" style="font-size: 11px;">2-digit service code: <code>01</code></div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Default District (For API Reporting)</label>
+                            <select name="district_code" class="form-select form-select-sm">
                                 @foreach(\App\Models\PsidConfig::DISTRICT_CODES as $numCode => $info)
                                     <option value="{{ $numCode }}" @selected(old('district_code', $psidConfig->district_code ?? '01') === $numCode)>
                                         {{ $numCode }} — {{ $info['name'] }} ({{ $info['alpha'] }})
                                     </option>
                                 @endforeach
                             </select>
-                            <div class="form-text" style="font-size: 11px;">Automatically overridden per application's district if mapped.</div>
+                            <div class="form-text" style="font-size: 11px;">Used as fallback district code in inquiry payload.</div>
                         </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Department Service No (1 Digit) <span class="text-danger">*</span></label>
-                            <input type="text" name="department_service_no" maxlength="1" class="form-control form-control-sm"
-                                value="{{ old('department_service_no', $psidConfig->department_service_no ?? '1') }}" required>
-                            <div class="form-text" style="font-size: 11px;">Service number (e.g. <code>1</code>)</div>
-                        </div>
-
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label small fw-bold">Default RCO Code <span class="text-danger">*</span></label>
                             <input type="text" name="rco" maxlength="20" class="form-control form-control-sm"
                                 value="{{ old('rco', $psidConfig->rco ?? 'GL1800') }}" required>
                             <div class="form-text" style="font-size: 11px;">Reported in GBPay Bill Inquiry / Payment response</div>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label small fw-bold">Default Head of Account <span class="text-danger">*</span></label>
                             <input type="text" name="head" maxlength="20" class="form-control form-control-sm"
                                 value="{{ old('head', $psidConfig->head ?? 'C03870') }}" required>
@@ -132,9 +133,9 @@
                         <div class="col-12">
                             <div class="p-2 rounded bg-light border small">
                                 <strong>PSID Structure (20 Digits):</strong>
-                                <code>[6-digit 1Link][2-digit Dept][2-digit District][1-digit Service][9-digit Unique Voucher ID]</code>
+                                <code>[6-digit 1Link Prefix][2-digit Department Code][2-digit Service Code][10-digit Voucher Number]</code>
                                 <div class="text-muted mt-1" style="font-size: 11px;">
-                                    Example: <code>{{ ($psidConfig->one_link_prefix ?? '101530') . ($psidConfig->department_code ?? '15') . ($psidConfig->district_code ?? '01') . ($psidConfig->department_service_no ?? '1') }}000000001</code>
+                                    Example: <code>{{ ($psidConfig->one_link_prefix ?? '101530') . str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT) . str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT) }}0000000001</code>
                                 </div>
                             </div>
                         </div>
@@ -161,7 +162,12 @@
             </div>
             <div class="card-body">
                 <div class="p-2 rounded bg-light border small mb-3">
-                    <div class="fw-bold text-dark mb-1"><i class="fa-solid fa-plug me-1 text-success"></i> GBPay Gateway Callback Endpoints</div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="fw-bold text-dark"><i class="fa-solid fa-plug me-1 text-success"></i> GBPay Gateway Callback Endpoints</div>
+                        <a href="{{ route('admin.gbpay.test') }}" class="btn btn-xs btn-success py-0 px-2 fw-bold" style="font-size: 11px;">
+                            <i class="fa-solid fa-flask-vial me-1"></i> Open API Sandbox &amp; Tester
+                        </a>
+                    </div>
                     <div style="font-size: 11px;">
                         <div><strong>Bill Inquiry:</strong> <code>POST {{ url('/api/gb-pay/bill-inquiry') }}</code></div>
                         <div><strong>Bill Payment:</strong> <code>POST {{ url('/api/gb-pay/bill-payment') }}</code></div>

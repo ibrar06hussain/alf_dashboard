@@ -63,9 +63,9 @@ class PsidConfig extends Model
 
         return new static([
             'one_link_prefix' => '101530',
-            'department_code' => '15',
+            'department_code' => '09',
             'district_code' => '01',
-            'department_service_no' => '1',
+            'department_service_no' => '01',
             'rco' => 'GL1800',
             'head' => 'C03870',
             'is_active' => true,
@@ -73,18 +73,17 @@ class PsidConfig extends Model
     }
 
     /**
-     * Generate 20-digit PSID with unique 9-digit voucher ID.
-     * Format: 1Link Prefix (6) + Dept Code (2) + District Code (2) + Service No (1) + Voucher ID (9) = 20 digits
+     * Generate 20-digit PSID with unique 10-digit voucher number.
+     * Format: 1Link Prefix (6) + Dept Code (2) + Service Code (2) + Voucher Number (10) = 20 digits
      */
     public function generatePsid(?string $districtCodeOverride = null): string
     {
         $prefix = str_pad(substr((string) ($this->one_link_prefix ?: '101530'), 0, 6), 6, '0', STR_PAD_LEFT);
-        $deptCode = str_pad(substr((string) ($this->department_code ?: '15'), 0, 2), 2, '0', STR_PAD_LEFT);
-        $distCode = str_pad(substr((string) ($districtCodeOverride ?: $this->district_code ?: '01'), 0, 2), 2, '0', STR_PAD_LEFT);
-        $serviceNo = substr((string) ($this->department_service_no ?: '1'), 0, 1);
-        $uniqueVoucherId = str_pad((string) random_int(1, 999999999), 9, '0', STR_PAD_LEFT);
+        $deptCode = str_pad(substr((string) ($this->department_code ?: '09'), 0, 2), 2, '0', STR_PAD_LEFT);
+        $serviceNo = str_pad(substr((string) ($this->department_service_no ?: '01'), 0, 2), 2, '0', STR_PAD_LEFT);
+        $uniqueVoucherId = str_pad((string) random_int(1, 9999999999), 10, '0', STR_PAD_LEFT);
 
-        return $prefix . $deptCode . $distCode . $serviceNo . $uniqueVoucherId;
+        return $prefix . $deptCode . $serviceNo . $uniqueVoucherId;
     }
 
     /**

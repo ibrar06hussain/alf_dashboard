@@ -47,19 +47,80 @@ class ApplicationReviewController extends Controller
 
         $statuses = Application::STATUSES;
 
-        $pageStats = [
-            ['label' => 'Matching', 'value' => (clone $query)->count(), 'icon' => 'fa-solid fa-folder-open', 'tone' => 'green'],
-            ['label' => 'Under Review', 'value' => (clone $query)->whereIn('current_stage', ['submitted', 'under_review'])->count(), 'icon' => 'fa-solid fa-clock', 'tone' => 'amber'],
-            ['label' => 'Field Survey', 'value' => (clone $query)->whereIn('current_stage', ['field_survey_assigned', 'visit_scheduled', 'visit_completed', 'findings_submitted'])->count(), 'icon' => 'fa-solid fa-magnifying-glass-location', 'tone' => 'teal'],
-            ['label' => 'Approved / Challan', 'value' => (clone $query)->whereIn('current_stage', ['approved', 'challan_issued', 'payment_proof_submitted', 'payment_verified', 'eligible_beneficiary'])->count(), 'icon' => 'fa-solid fa-thumbs-up', 'tone' => 'blue'],
-            ['label' => 'Disbursed / Done', 'value' => (clone $query)->whereIn('current_stage', ['partially_distributed', 'fully_distributed', 'completed', 'disbursed'])->count(), 'icon' => 'fa-solid fa-hand-holding-dollar', 'tone' => 'purple'],
-            ['label' => 'Unassigned Queue', 'value' => (clone $query)->where('is_unassigned', true)->count(), 'icon' => 'fa-solid fa-triangle-exclamation', 'tone' => 'rose'],
-        ];
+        $isFieldOfficer = $user->hasRole('Field Officer') && ! $user->hasRole('Super Admin');
+        $pendingCount = null;
+        $completedCount = null;
+
+        if ($isFieldOfficer) {
+            $baseFoQuery = Application::query()->authorizedFor($user);
+
+            $pendingCount = (clone $baseFoQuery)->where(function ($sub) use ($user) {
+                $sub->where(function ($sqSub) use ($user) {
+                    $sqSub->whereHas('surveys', function ($sq) use ($user) {
+                        $sq->where('assigned_to', $user->id)
+                           ->whereNotIn('status', ['findings_submitted']);
+                    })->whereIn('current_stage', [
+                        Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                        Application::STAGE_VISIT_SCHEDULED,
+                        Application::STAGE_VISIT_COMPLETED,
+                    ]);
+                })->orWhere(function ($aqSub) use ($user) {
+                    $aqSub->whereHas('assignments', function ($aq) use ($user) {
+                        $aq->where('assigned_to', $user->id)
+                           ->whereIn('status', ['assigned', 'in_progress']);
+                    })->whereNotIn('current_stage', [
+                        Application::STAGE_FINDINGS_SUBMITTED,
+                        Application::STAGE_APPROVED,
+                        Application::STAGE_REJECTED,
+                        Application::STAGE_COMPLETED,
+                        Application::STAGE_CHALLAN_ISSUED,
+                        Application::STAGE_PAYMENT_VERIFIED,
+                        Application::STAGE_ELIGIBLE_BENEFICIARY,
+                        Application::STAGE_PARTIALLY_DISTRIBUTED,
+                        Application::STAGE_FULLY_DISTRIBUTED,
+                        Application::STAGE_DISBURSED,
+                    ]);
+                });
+            })->count();
+
+            $scheduledCount = (clone $baseFoQuery)->where(function ($sqSub) use ($user) {
+                $sqSub->whereHas('surveys', function ($sq) use ($user) {
+                    $sq->where('assigned_to', $user->id)
+                       ->where('status', 'visit_scheduled');
+                })->orWhere('current_stage', Application::STAGE_VISIT_SCHEDULED);
+            })->count();
+
+            $completedCount = (clone $baseFoQuery)->where(function ($sub) use ($user) {
+                $sub->whereHas('surveys', function ($sq) use ($user) {
+                    $sq->where('assigned_to', $user->id)
+                       ->where('status', 'findings_submitted');
+                })->orWhereHas('assignments', function ($aq) use ($user) {
+                    $aq->where('assigned_to', $user->id)
+                       ->where('status', 'completed');
+                });
+            })->count();
+
+            $pageStats = [
+                ['label' => 'Pending Verification', 'value' => $pendingCount, 'icon' => 'fa-solid fa-clock-rotate-left', 'tone' => 'amber'],
+                ['label' => 'Visits Scheduled', 'value' => $scheduledCount, 'icon' => 'fa-solid fa-calendar-check', 'tone' => 'teal'],
+                ['label' => 'Completed Verifications', 'value' => $completedCount, 'icon' => 'fa-solid fa-circle-check', 'tone' => 'green'],
+            ];
+        } else {
+            $pageStats = [
+                ['label' => 'Matching', 'value' => (clone $query)->count(), 'icon' => 'fa-solid fa-folder-open', 'tone' => 'green'],
+                ['label' => 'Under Review', 'value' => (clone $query)->whereIn('current_stage', ['submitted', 'under_review'])->count(), 'icon' => 'fa-solid fa-clock', 'tone' => 'amber'],
+                ['label' => 'Field Survey', 'value' => (clone $query)->whereIn('current_stage', ['field_survey_assigned', 'visit_scheduled', 'visit_completed', 'findings_submitted'])->count(), 'icon' => 'fa-solid fa-magnifying-glass-location', 'tone' => 'teal'],
+                ['label' => 'Approved / Challan', 'value' => (clone $query)->whereIn('current_stage', ['approved', 'challan_issued', 'payment_proof_submitted', 'payment_verified', 'eligible_beneficiary'])->count(), 'icon' => 'fa-solid fa-thumbs-up', 'tone' => 'blue'],
+                ['label' => 'Disbursed / Done', 'value' => (clone $query)->whereIn('current_stage', ['partially_distributed', 'fully_distributed', 'completed', 'disbursed'])->count(), 'icon' => 'fa-solid fa-hand-holding-dollar', 'tone' => 'purple'],
+                ['label' => 'Unassigned Queue', 'value' => (clone $query)->where('is_unassigned', true)->count(), 'icon' => 'fa-solid fa-triangle-exclamation', 'tone' => 'rose'],
+            ];
+        }
 
         $applications = $query->paginate(25)->withQueryString();
 
         return view('admin.applications.index', compact(
-            'applications', 'departments', 'districts', 'schemes', 'statuses', 'pageStats'
+            'applications', 'departments', 'districts', 'schemes', 'statuses', 'pageStats',
+            'isFieldOfficer', 'pendingCount', 'completedCount'
         ));
     }
 
@@ -194,6 +255,52 @@ class ApplicationReviewController extends Controller
 
         $authorizedDistricts = $user->authorizedDistrictIds();
         $authorizedDepts = $user->authorizedDepartmentIds();
+
+        // Field Officers: show either active assigned (unprocessed) queue OR completed verifications
+        if ($user->hasRole('Field Officer') && ! $user->hasRole('Super Admin')) {
+            $viewMode = $request->input('view', 'pending');
+            if ($viewMode === 'completed') {
+                $query->where(function ($sub) use ($user) {
+                    $sub->whereHas('surveys', function ($sq) use ($user) {
+                        $sq->where('assigned_to', $user->id)
+                           ->where('status', 'findings_submitted');
+                    })->orWhereHas('assignments', function ($aq) use ($user) {
+                        $aq->where('assigned_to', $user->id)
+                           ->where('status', 'completed');
+                    });
+                });
+            } else {
+                // Pending verification queue: assigned to this officer and not yet processed
+                $query->where(function ($sub) use ($user) {
+                    $sub->where(function ($sqSub) use ($user) {
+                        $sqSub->whereHas('surveys', function ($sq) use ($user) {
+                            $sq->where('assigned_to', $user->id)
+                               ->whereNotIn('status', ['findings_submitted']);
+                        })->whereIn('current_stage', [
+                            Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                            Application::STAGE_VISIT_SCHEDULED,
+                            Application::STAGE_VISIT_COMPLETED,
+                        ]);
+                    })->orWhere(function ($aqSub) use ($user) {
+                        $aqSub->whereHas('assignments', function ($aq) use ($user) {
+                            $aq->where('assigned_to', $user->id)
+                               ->whereIn('status', ['assigned', 'in_progress']);
+                        })->whereNotIn('current_stage', [
+                            Application::STAGE_FINDINGS_SUBMITTED,
+                            Application::STAGE_APPROVED,
+                            Application::STAGE_REJECTED,
+                            Application::STAGE_COMPLETED,
+                            Application::STAGE_CHALLAN_ISSUED,
+                            Application::STAGE_PAYMENT_VERIFIED,
+                            Application::STAGE_ELIGIBLE_BENEFICIARY,
+                            Application::STAGE_PARTIALLY_DISTRIBUTED,
+                            Application::STAGE_FULLY_DISTRIBUTED,
+                            Application::STAGE_DISBURSED,
+                        ]);
+                    });
+                });
+            }
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
@@ -388,6 +495,7 @@ class ApplicationReviewController extends Controller
             'reactivatedBy',
             'bills',
             'smsLogs',
+            'editAuditLogs.user',
         ]);
 
         $allowedTransitions = $this->allowedTransitions($user, $application);
@@ -446,13 +554,17 @@ class ApplicationReviewController extends Controller
             return back()->with('error', 'You are not authorized to transition this application to the requested status.');
         }
 
+        $qtyToApprove = isset($data['approved_quantity']) && is_numeric($data['approved_quantity'])
+            ? (float) $data['approved_quantity']
+            : (float) ($application->approved_quantity ?? $application->getDemandedQuantity());
+
         if (in_array($targetStatus, ['directorate_approved', 'approved', 'disbursed', 'fully_distributed'], true)
-            && ! $this->quotas->canApprove($application->scheme, $application->district_id)
+            && ! $this->quotas->canApprove($application->scheme, $application->district_id, $qtyToApprove)
             && ! in_array($application->status, ['directorate_approved', 'approved', 'disbursed', 'fully_distributed'], true)) {
             $quota = $this->quotas->status($application->scheme, $application->district_id);
 
             return back()->with('error', sprintf(
-                'District quota reached (%d / %d). Cannot approve further applications for this district.',
+                'District quota reached (%d / %d bags). Cannot approve further applications for this district.',
                 $quota['used'] ?? 0,
                 $quota['quota'] ?? 0
             ));
@@ -553,7 +665,7 @@ class ApplicationReviewController extends Controller
     {
         $user = auth()->user();
 
-        // 1. Process and validate GPS points (3 or more required from mobile/GPS)
+        // 1. Process GPS points (Optional: capture coordinates or proceed without them)
         $rawGps = $request->input('gps_points');
         if (is_string($rawGps)) {
             $rawGps = json_decode($rawGps, true) ?: [];
@@ -573,12 +685,6 @@ class ApplicationReviewController extends Controller
                     'timestamp' => $pt['timestamp'] ?? now()->toIso8601String(),
                 ];
             }
-        }
-
-        if (count($validPoints) < 3) {
-            return back()->withInput()->withErrors([
-                'gps_points' => 'A minimum of 3 GPS boundary/perimeter points of the land must be captured from the mobile device/GPS.',
-            ]);
         }
 
         // 2. Validate request fields and land photos (max 3 photos, max 5MB each)
@@ -636,7 +742,8 @@ class ApplicationReviewController extends Controller
 
         try {
             $this->lifecycle->submitFindings($survey, $user, $data);
-            return back()->with('success', 'Field survey recorded: ' . count($validPoints) . ' GPS boundary points and ' . count($uploadedPhotos) . ' land photos submitted to Deputy Director.');
+            $gpsNote = count($validPoints) > 0 ? (count($validPoints) . ' GPS boundary points and ') : '';
+            return back()->with('success', 'Field survey recorded: ' . $gpsNote . count($uploadedPhotos) . ' land photo(s) submitted to Deputy Director.');
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -971,5 +1078,255 @@ class ApplicationReviewController extends Controller
         }
 
         return array_values(array_unique($allowed));
+    }
+
+    /**
+     * Show form to edit application data.
+     */
+    public function edit(Application $application): View
+    {
+        $user = auth()->user();
+
+        if (! $user->can('update', $application)) {
+            abort(403, 'Unauthorized: You do not have permission to modify this application.');
+        }
+
+        $application->loadMissing([
+            'scheme.department',
+            'applicant.district',
+            'district',
+            'division',
+            'form.fields',
+            'fieldValues.formField',
+            'editAuditLogs.user',
+        ]);
+
+        $districts = District::when(! $user->isGlobalScope(), function ($q) use ($user) {
+            $q->whereIn('id', $user->authorizedDistrictIds());
+        })->orderBy('name')->get();
+
+        $formFields = $application->form?->fields()->orderBy('display_order')->get() ?? collect();
+        $fieldValuesKeyed = $application->fieldValues->keyBy('form_field_id');
+
+        return view('admin.applications.edit', compact(
+            'application',
+            'districts',
+            'formFields',
+            'fieldValuesKeyed'
+        ));
+    }
+
+    /**
+     * Update application data and log changes with previous/new values and user session details.
+     */
+    public function update(Request $request, Application $application): RedirectResponse
+    {
+        $user = auth()->user();
+
+        if (! $user->can('update', $application)) {
+            abort(403, 'Unauthorized: You do not have permission to modify this application.');
+        }
+
+        $request->validate([
+            'full_name' => ['required', 'string', 'max:255'],
+            'father_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'gender' => ['nullable', 'string', 'in:male,female,other'],
+            'district_id' => ['required', 'exists:districts,id'],
+            'tehsil' => ['nullable', 'string', 'max:150'],
+            'union_council' => ['nullable', 'string', 'max:150'],
+            'village' => ['nullable', 'string', 'max:150'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'demanded_quantity' => ['nullable', 'numeric', 'min:0.01'],
+            'approved_quantity' => ['nullable', 'numeric', 'min:0'],
+            'allocated_quantity' => ['nullable', 'integer', 'min:0'],
+            'distributed_quantity' => ['nullable', 'integer', 'min:0'],
+            'challan_amount' => ['nullable', 'numeric', 'min:0'],
+            'challan_due_date' => ['nullable', 'date'],
+            'verification_note' => ['nullable', 'string', 'max:2000'],
+            'modification_reason' => ['required', 'string', 'min:5', 'max:1000'],
+            'fields' => ['nullable', 'array'],
+        ]);
+
+        $application->loadMissing(['applicant', 'fieldValues.formField']);
+        $applicant = $application->applicant;
+
+        $oldValues = [];
+        $newValues = [];
+        $changedFields = [];
+
+        // Track Applicant changes
+        $applicantMap = [
+            'full_name' => 'Full Name',
+            'father_name' => 'Father / Husband Name',
+            'phone' => 'Contact Phone',
+            'email' => 'Email Address',
+            'gender' => 'Gender',
+            'tehsil' => 'Tehsil',
+            'union_council' => 'Union Council',
+            'village' => 'Village',
+            'address' => 'Residential Address',
+        ];
+
+        foreach ($applicantMap as $attr => $label) {
+            $oldVal = (string) ($applicant?->{$attr} ?? '');
+            $newVal = (string) ($request->input($attr) ?? '');
+
+            if ($oldVal !== $newVal) {
+                $oldValues["applicant.{$attr}"] = ['label' => $label, 'value' => $oldVal];
+                $newValues["applicant.{$attr}"] = ['label' => $label, 'value' => $newVal];
+                $changedFields[] = "applicant.{$attr}";
+            }
+        }
+
+        // Track Application core attributes
+        $appAttributes = [
+            'district_id' => 'District ID',
+            'demanded_quantity' => 'Demanded Quantity',
+            'approved_quantity' => 'Approved Quantity',
+            'allocated_quantity' => 'Allocated Quantity',
+            'distributed_quantity' => 'Distributed Quantity',
+            'challan_amount' => 'Challan Amount',
+            'challan_due_date' => 'Challan Due Date',
+            'verification_note' => 'Verification Note',
+        ];
+
+        foreach ($appAttributes as $attr => $label) {
+            $oldRaw = $application->{$attr};
+            $oldVal = $oldRaw instanceof \Carbon\Carbon ? $oldRaw->format('Y-m-d') : (string) ($oldRaw ?? '');
+            
+            $newRaw = $request->input($attr);
+            if ($attr === 'challan_amount' && is_numeric($newRaw)) {
+                $newVal = (string) ((int) ceil((float) $newRaw));
+            } else {
+                $newVal = (string) ($newRaw ?? '');
+            }
+
+            if ($oldVal !== $newVal && ! ($oldVal === '' && $newVal === '')) {
+                $oldValues["application.{$attr}"] = ['label' => $label, 'value' => $oldVal];
+                $newValues["application.{$attr}"] = ['label' => $label, 'value' => $newVal];
+                $changedFields[] = "application.{$attr}";
+            }
+        }
+
+        // Track Dynamic Form Fields
+        $submittedFields = (array) $request->input('fields', []);
+        $formFieldsById = $application->form?->fields->keyBy('id') ?? collect();
+        $existingValuesByFieldId = $application->fieldValues->keyBy('form_field_id');
+
+        foreach ($submittedFields as $fieldId => $subVal) {
+            $formField = $formFieldsById->get($fieldId);
+            $fieldLabel = $formField ? $formField->field_label : "Field #{$fieldId}";
+            $existingRecord = $existingValuesByFieldId->get($fieldId);
+            $oldVal = (string) ($existingRecord?->value ?? '');
+            $newVal = is_array($subVal) ? json_encode($subVal) : (string) ($subVal ?? '');
+
+            if ($oldVal !== $newVal) {
+                $oldValues["form_field.{$fieldId}"] = ['label' => $fieldLabel, 'value' => $oldVal];
+                $newValues["form_field.{$fieldId}"] = ['label' => $fieldLabel, 'value' => $newVal];
+                $changedFields[] = "form_field.{$fieldId}";
+            }
+        }
+
+        if (empty($changedFields)) {
+            return back()->with('info', 'No modifications were detected. All values remain unchanged.');
+        }
+
+        DB::transaction(function () use ($application, $applicant, $request, $submittedFields, $oldValues, $newValues, $changedFields, $user) {
+            // 1. Update Applicant
+            if ($applicant) {
+                $applicant->update([
+                    'full_name' => $request->input('full_name'),
+                    'father_name' => $request->input('father_name'),
+                    'phone' => $request->input('phone'),
+                    'email' => $request->input('email'),
+                    'gender' => $request->input('gender'),
+                    'district_id' => $request->input('district_id'),
+                    'tehsil' => $request->input('tehsil'),
+                    'union_council' => $request->input('union_council'),
+                    'village' => $request->input('village'),
+                    'address' => $request->input('address'),
+                ]);
+            }
+
+            // 2. Update Application
+            $newDistrictId = (int) $request->input('district_id');
+            $divisionId = DB::table('division_districts')->where('district_id', $newDistrictId)->value('division_id');
+
+            $appUpdates = [
+                'district_id' => $newDistrictId,
+                'division_id' => $divisionId ?: $application->division_id,
+                'demanded_quantity' => $request->filled('demanded_quantity') ? (float) $request->input('demanded_quantity') : $application->demanded_quantity,
+                'approved_quantity' => $request->filled('approved_quantity') ? (float) $request->input('approved_quantity') : $application->approved_quantity,
+                'allocated_quantity' => $request->filled('allocated_quantity') ? (int) $request->input('allocated_quantity') : $application->allocated_quantity,
+                'distributed_quantity' => $request->filled('distributed_quantity') ? (int) $request->input('distributed_quantity') : $application->distributed_quantity,
+                'verification_note' => $request->input('verification_note'),
+                'lock_version' => ($application->lock_version ?? 1) + 1,
+            ];
+
+            if ($request->filled('challan_amount')) {
+                $appUpdates['challan_amount'] = (int) ceil((float) $request->input('challan_amount'));
+            }
+
+            if ($request->filled('challan_due_date')) {
+                $appUpdates['challan_due_date'] = $request->input('challan_due_date');
+            }
+
+            $application->update($appUpdates);
+
+            // 3. Update Dynamic Form Field Values
+            foreach ($submittedFields as $fieldId => $val) {
+                $stringVal = is_array($val) ? json_encode($val) : (string) ($val ?? '');
+                \App\Models\ApplicationFieldValue::updateOrCreate(
+                    [
+                        'application_id' => $application->id,
+                        'form_field_id' => $fieldId,
+                    ],
+                    [
+                        'value' => $stringVal,
+                    ]
+                );
+            }
+
+            // 4. Record Detailed Audit Log in application_edit_audit_logs
+            \App\Models\ApplicationEditAuditLog::create([
+                'application_id' => $application->id,
+                'application_no' => $application->application_no,
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'user_email' => $user->email,
+                'user_role' => $user->getRoleNames()->first() ?? 'Admin',
+                'action' => 'application_data_modified',
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'changed_fields' => $changedFields,
+                'modification_reason' => $request->input('modification_reason'),
+                'ip_address' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 500),
+                'modified_at' => now(),
+            ]);
+
+            // 5. Also log into universal AccessAuditLog for cross-system query compliance
+            AccessAuditLog::log('application_modified', Application::class, (string) $application->id, [
+                'application_no' => $application->application_no,
+                'changed_count' => count($changedFields),
+                'changed_fields' => $changedFields,
+                'modification_reason' => $request->input('modification_reason'),
+            ]);
+
+            // 6. Record Application Status / Action Log
+            ApplicationStatusLog::create([
+                'application_id' => $application->id,
+                'from_status' => $application->current_stage ?: $application->status,
+                'to_status' => $application->current_stage ?: $application->status,
+                'user_id' => $user->id,
+                'note' => 'Application data modified by ' . $user->name . '. Reason: ' . $request->input('modification_reason') . ' (' . count($changedFields) . ' field(s) updated)',
+            ]);
+        });
+
+        return redirect()
+            ->route('admin.applications.show', $application)
+            ->with('success', 'Application data modified successfully and audit log recorded (' . count($changedFields) . ' field(s) updated).');
     }
 }

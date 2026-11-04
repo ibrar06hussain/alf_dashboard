@@ -3,13 +3,17 @@
 @section('title', $application->application_no)
 
 @section('content')
+@php
+    $canEditApplication = auth()->user()->can('update', $application);
+@endphp
 @include('admin.partials.page-hero', [
     'title' => $application->application_no,
     'subtitle' => ($application->scheme?->title ?? '—').' · '.$application->statusLabel(),
     'icon' => 'fa-solid fa-id-card',
-    'actions' => [
+    'actions' => array_filter([
+        $canEditApplication ? ['label' => 'Edit / Modify Application', 'url' => route('admin.applications.edit', $application), 'class' => 'btn btn-outline-danger fw-bold'] : null,
         ['label' => 'Back to list', 'url' => route('admin.applications.index'), 'class' => 'btn btn-light'],
-    ],
+    ]),
 ])
 
 @php
@@ -26,7 +30,14 @@
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card alf-panel mb-3">
-            <div class="card-header">Applicant</div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Applicant</span>
+                @if($canEditApplication)
+                    <a href="{{ route('admin.applications.edit', $application) }}" class="btn btn-xs btn-outline-danger py-0 px-2 fw-semibold" style="font-size: 11px;">
+                        <i class="fa-solid fa-pen-to-square me-1"></i> Edit Data
+                    </a>
+                @endif
+            </div>
             <div class="card-body">
                 <div class="alf-meta-grid">
                     <div class="alf-meta-item">
@@ -432,14 +443,14 @@
                                     </div>
                                 </div>
 
-                                {{-- Status counter alert --}}
-                                <div id="gps-status-box" class="alert alert-warning py-2 px-3 mb-2 d-flex justify-content-between align-items-center">
+                                {{-- Status counter alert (Optional) --}}
+                                <div id="gps-status-box" class="alert alert-light border py-2 px-3 mb-2 d-flex justify-content-between align-items-center">
                                     <div>
-                                        <i class="fa-solid fa-triangle-exclamation me-1" id="gps-status-icon"></i>
-                                        <span id="gps-counter-text">0 / 3 GPS points recorded</span>
-                                        <span class="small text-muted ms-1">(Perimeter requires minimum 3 points)</span>
+                                        <i class="fa-solid fa-location-crosshairs me-1 text-muted" id="gps-status-icon"></i>
+                                        <span id="gps-counter-text" class="fw-semibold">0 GPS points recorded</span>
+                                        <span class="small text-muted ms-1">(Optional: You may record GPS boundary points or proceed without them)</span>
                                     </div>
-                                    <span class="badge bg-warning text-dark" id="gps-status-badge">Minimum 3 Required</span>
+                                    <span class="badge bg-secondary" id="gps-status-badge">Optional</span>
                                 </div>
 
                                 {{-- Dynamic Points Container --}}
@@ -624,6 +635,76 @@
                 @endforelse
             </ul>
         </div>
+
+        {{-- Application Modification Audit Trail --}}
+        @if($application->relationLoaded('editAuditLogs') && $application->editAuditLogs->isNotEmpty())
+            <div class="card alf-panel mb-3 border-danger-subtle">
+                <div class="card-header bg-danger-subtle text-danger-emphasis d-flex justify-content-between align-items-center">
+                    <div class="fw-bold"><i class="fa-solid fa-clock-rotate-left me-1"></i> Data Modification Audit Logs</div>
+                    <span class="badge bg-danger">{{ $application->editAuditLogs->count() }} Updates Recorded</span>
+                </div>
+                <div class="card-body p-0" style="max-height: 480px; overflow-y: auto;">
+                    @foreach($application->editAuditLogs as $editLog)
+                        <div class="p-3 border-bottom small">
+                            <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap">
+                                <div>
+                                    <strong class="text-dark">{{ $editLog->user_name ?: ($editLog->user?->name ?? 'Administrator') }}</strong>
+                                    <span class="text-muted ms-1">({{ $editLog->user_email ?: ($editLog->user?->email ?? '—') }})</span>
+                                    <span class="badge bg-light text-dark border ms-1">{{ $editLog->user_role ?: 'Admin' }}</span>
+                                </div>
+                                <span class="text-muted" style="font-size: 11px;">
+                                    <i class="fa-regular fa-clock me-1"></i> {{ $editLog->modified_at?->format('d M Y, h:i:s A') }}
+                                </span>
+                            </div>
+
+                            <div class="text-muted mb-2" style="font-size: 11px;">
+                                <span><i class="fa-solid fa-network-wired me-1"></i> IP: <code>{{ $editLog->ip_address ?: '—' }}</code></span>
+                                @if($editLog->user_agent)
+                                    <span class="ms-2 text-truncate d-inline-block" style="max-width: 320px; vertical-align: bottom;" title="{{ $editLog->user_agent }}">Browser: {{ \Illuminate\Support\Str::limit($editLog->user_agent, 45) }}</span>
+                                @endif
+                            </div>
+
+                            <div class="p-2 rounded bg-light border mb-2">
+                                <strong class="text-danger">Modification Reason:</strong> <em>{{ $editLog->modification_reason ?: 'No justification provided' }}</em>
+                            </div>
+
+                            <div>
+                                <span class="text-muted fw-bold" style="font-size: 11px; text-transform: uppercase;">
+                                    Modified Fields ({{ count($editLog->changed_fields ?? []) }}):
+                                </span>
+                                <div class="table-responsive mt-1">
+                                    <table class="table table-sm table-bordered mb-0" style="font-size: 11px;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 30%;">Field</th>
+                                                <th style="width: 35%;">Previous Value</th>
+                                                <th style="width: 35%;">Updated Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($editLog->changed_fields ?? [] as $fieldKey)
+                                                @php
+                                                    $oldEntry = $editLog->old_values[$fieldKey] ?? null;
+                                                    $newEntry = $editLog->new_values[$fieldKey] ?? null;
+                                                    $lbl = is_array($newEntry) && isset($newEntry['label']) ? $newEntry['label'] : (is_array($oldEntry) && isset($oldEntry['label']) ? $oldEntry['label'] : $fieldKey);
+                                                    $oldV = is_array($oldEntry) && array_key_exists('value', $oldEntry) ? $oldEntry['value'] : (is_scalar($oldEntry) ? (string) $oldEntry : '—');
+                                                    $newV = is_array($newEntry) && array_key_exists('value', $newEntry) ? $newEntry['value'] : (is_scalar($newEntry) ? (string) $newEntry : '—');
+                                                @endphp
+                                                <tr>
+                                                    <td class="fw-bold text-dark">{{ $lbl }}</td>
+                                                    <td class="text-danger text-break"><del>{{ $oldV !== '' ? $oldV : '(empty)' }}</del></td>
+                                                    <td class="text-success text-break fw-semibold">{{ $newV !== '' ? $newV : '(empty)' }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="col-lg-4">
@@ -688,7 +769,7 @@
             <div class="card alf-panel mb-3">
                 <div class="card-header">District Quota</div>
                 <div class="card-body">
-                    <div class="h4 mb-1">{{ $quotaStatus['used'] }} / {{ $quotaStatus['quota'] }}</div>
+                    <div class="h4 mb-1">{{ number_format($quotaStatus['used']) }} / {{ number_format($quotaStatus['quota']) }} <span class="small text-muted fs-6">Bags</span></div>
                     <div class="small text-muted mb-2">Approved / Disbursed vs quota for {{ $application->district?->name }}</div>
                     <div class="progress" style="height:8px;">
                         @php $pct = $quotaStatus['quota'] > 0 ? min(100, round(($quotaStatus['used'] / $quotaStatus['quota']) * 100)) : 0; @endphp
@@ -955,7 +1036,7 @@
                                     @php
                                         $unitRate = $application->getEffectiveUnitRate();
                                     @endphp
-                                    Challan billing: <strong>Rs. {{ number_format($unitRate, 2) }} / unit</strong> (based on {{ $application->district?->name ?? 'district' }} delivery bag rate with 50% discount) will be calculated on this approved quantity.
+                                    Challan billing: <strong>Rs. {{ number_format((int) ceil((float) $unitRate)) }} / unit</strong> (based on {{ $application->district?->name ?? 'district' }} delivery bag rate with 50% discount) will be calculated on this approved quantity.
                                 @endif
                             </div>
                         </div>
@@ -1248,32 +1329,32 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
 
-            // update status box
+            // update status box (Optional)
             const count = currentPoints.length;
             if (counterText) {
-                counterText.textContent = `${count} / 3 GPS points recorded`;
+                counterText.textContent = `${count} GPS point${count === 1 ? '' : 's'} recorded`;
             }
-            if (count >= 3) {
+            if (count > 0) {
                 if (statusBox) {
-                    statusBox.className = 'alert alert-success py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
+                    statusBox.className = 'alert alert-success-subtle border border-success-subtle py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
                 }
                 if (statusIcon) {
-                    statusIcon.className = 'fa-solid fa-circle-check me-1';
+                    statusIcon.className = 'fa-solid fa-circle-check me-1 text-success';
                 }
                 if (statusBadge) {
                     statusBadge.className = 'badge bg-success';
-                    statusBadge.textContent = 'Perimeter Valid (3+ Points)';
+                    statusBadge.textContent = `${count} Point${count === 1 ? '' : 's'} Recorded`;
                 }
             } else {
                 if (statusBox) {
-                    statusBox.className = 'alert alert-warning py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
+                    statusBox.className = 'alert alert-light border py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
                 }
                 if (statusIcon) {
-                    statusIcon.className = 'fa-solid fa-triangle-exclamation me-1';
+                    statusIcon.className = 'fa-solid fa-location-crosshairs me-1 text-muted';
                 }
                 if (statusBadge) {
-                    statusBadge.className = 'badge bg-warning text-dark';
-                    statusBadge.textContent = 'Minimum 3 Required';
+                    statusBadge.className = 'badge bg-secondary';
+                    statusBadge.textContent = 'Optional';
                 }
             }
 
@@ -1435,17 +1516,10 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        // Form submit validation
+        // Form submit handling (GPS coordinates are optional)
         const form = document.getElementById('survey-findings-form');
         if (form) {
             form.addEventListener('submit', function(e) {
-                if (currentPoints.length < 3) {
-                    e.preventDefault();
-                    alert(`A minimum of 3 GPS points of the land boundary are required. Currently recorded: ${currentPoints.length}.\n\nPlease capture at least 3 points before submitting.`);
-                    const sec = document.getElementById('gps-status-box');
-                    if (sec) sec.scrollIntoView({ behavior: 'smooth' });
-                    return false;
-                }
                 hiddenGpsInput.value = JSON.stringify(currentPoints);
             });
         }

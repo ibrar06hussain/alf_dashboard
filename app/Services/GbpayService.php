@@ -61,9 +61,10 @@ class GbpayService
         $template = $breakdown['template'];
         $psidConfig = PsidConfig::getActive();
 
-        $billAmount = $amount !== null && $amount > 0
-            ? (float) ceil($amount)
+        $rawBillAmount = $amount !== null && $amount > 0
+            ? (float) $amount
             : (float) ($application->challan_amount > 0 ? $application->challan_amount : $breakdown['final_bill']);
+        $billAmount = (int) ceil($rawBillAmount);
 
         $validityDays = (int) ($template->validity_days ?: 10);
         $dueDate = $application->challan_due_date
@@ -170,7 +171,7 @@ class GbpayService
 
             $requestData = [
                 'psid' => $bill->psid,
-                'amount' => (float) $bill->bill_amount,
+                'amount' => (int) ceil((float) $bill->bill_amount),
                 'description' => 'ALF Scheme Fee - Application No: ' . ($bill->application?->application_no ?? $bill->application_id),
                 'customer_name' => $bill->application?->applicant?->full_name ?? 'Applicant',
                 'customer_cnic' => $bill->application?->applicant?->cnic ?? '',
@@ -383,10 +384,10 @@ class GbpayService
         }
 
         // Calculate total paid strictly from paid bills in the bills table
-        $totalPaid = (float) $application->paidBills()->sum('bill_amount');
-        $requiredAmount = (float) ($application->challan_amount ?: $bill->bill_amount);
+        $totalPaid = (int) ceil((float) $application->paidBills()->sum('bill_amount'));
+        $requiredAmount = (int) ceil((float) ($application->challan_amount ?: $bill->bill_amount));
 
-        if ($totalPaid <= 0 || $totalPaid + 0.01 < $requiredAmount) {
+        if ($totalPaid <= 0 || $totalPaid < $requiredAmount) {
             return;
         }
 
@@ -421,7 +422,7 @@ class GbpayService
                 'application_id' => $application->id,
                 'from_status' => $fromStage,
                 'to_status' => Application::STAGE_PAYMENT_VERIFIED,
-                'note' => "Payment received and verified automatically via GBPay ({$bankMnemonic}). PSID: {$bill->psid}, Transaction ID: {$txnId}, Paid: Rs. " . number_format($totalPaid, 2),
+                'note' => "Payment received and verified automatically via GBPay ({$bankMnemonic}). PSID: {$bill->psid}, Transaction ID: {$txnId}, Paid: Rs. " . number_format($totalPaid),
             ]);
 
             ApplicationStatusLog::create([

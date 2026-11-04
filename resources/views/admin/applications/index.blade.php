@@ -1,12 +1,26 @@
 @extends('layouts.admin')
 
-@section('title', 'Applications')
+@php
+    $isFieldOfficer = auth()->user()->hasRole('Field Officer') && !auth()->user()->hasRole('Super Admin');
+    $isCompletedView = request('view') === 'completed';
+    $pageTitle = $isFieldOfficer 
+        ? ($isCompletedView ? 'Completed Verifications' : 'Assigned Applications (Pending)') 
+        : 'Applications';
+    $pageSubtitle = $isFieldOfficer 
+        ? ($isCompletedView ? 'Applications where you have completed field verification and submitted findings.' : 'Applications assigned to you by the Deputy Director awaiting field verification.') 
+        : 'Review, filter, and track applications across schemes and districts.';
+    $pageIcon = $isFieldOfficer 
+        ? ($isCompletedView ? 'fa-solid fa-circle-check text-success' : 'fa-solid fa-list-check text-primary') 
+        : 'fa-solid fa-folder';
+@endphp
+
+@section('title', $pageTitle)
 
 @section('content')
 @include('admin.partials.page-hero', [
-    'title' => 'Applications',
-    'subtitle' => 'Review, filter, and track applications across schemes and districts.',
-    'icon' => 'fa-solid fa-folder',
+    'title' => $pageTitle,
+    'subtitle' => $pageSubtitle,
+    'icon' => $pageIcon,
     'actions' => [
         ['label' => 'Export Excel', 'url' => route('admin.applications.export', array_merge(request()->query(), ['format' => 'xlsx'])), 'class' => 'btn btn-success'],
         ['label' => 'Export CSV', 'url' => route('admin.applications.export', array_merge(request()->query(), ['format' => 'csv'])), 'class' => 'btn btn-info text-white'],
@@ -16,9 +30,29 @@
 
 @include('admin.partials.stats', ['stats' => $pageStats])
 
+@if($isFieldOfficer)
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a href="{{ route('admin.applications.index') }}" class="btn {{ ! $isCompletedView ? 'btn-primary shadow-sm fw-bold' : 'btn-outline-secondary' }}">
+            <i class="fa-solid fa-clock-rotate-left me-1"></i> Pending Verification Queue
+            @if(isset($pendingCount))
+                <span class="badge {{ ! $isCompletedView ? 'bg-light text-primary' : 'bg-secondary' }} ms-1">{{ $pendingCount }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.applications.index', ['view' => 'completed']) }}" class="btn {{ $isCompletedView ? 'btn-success shadow-sm fw-bold' : 'btn-outline-secondary' }}">
+            <i class="fa-solid fa-circle-check me-1"></i> Completed Verifications
+            @if(isset($completedCount))
+                <span class="badge {{ $isCompletedView ? 'bg-light text-success' : 'bg-secondary' }} ms-1">{{ $completedCount }}</span>
+            @endif
+        </a>
+    </div>
+@endif
+
 <div class="card alf-panel mb-3">
     <div class="card-body">
         <form method="GET" class="alf-filters mb-3">
+            @if($isCompletedView)
+                <input type="hidden" name="view" value="completed">
+            @endif
             {{-- Row 1: Primary Filters --}}
             <div class="row g-2 mb-2">
                 <div class="col-md-3">
@@ -98,7 +132,7 @@
                         <i class="fa-solid fa-filter me-1"></i> Apply Filters
                     </button>
                     @if(request()->hasAny(['q', 'status', 'department_id', 'district_id', 'scheme_id', 'min_land', 'max_land', 'min_bags', 'max_bags']))
-                        <a href="{{ route('admin.applications.index') }}" class="btn btn-sm btn-outline-secondary" title="Reset all filters">
+                        <a href="{{ route('admin.applications.index', $isCompletedView ? ['view' => 'completed'] : []) }}" class="btn btn-sm btn-outline-secondary" title="Reset all filters">
                             <i class="fa-solid fa-rotate-left me-1"></i> Reset
                         </a>
                     @endif
@@ -178,8 +212,8 @@
                             </span>
                         </td>
                         <td class="text-center">
-                            <a href="{{ route('admin.applications.show', $application) }}" class="btn btn-sm btn-primary">
-                                Review
+                            <a href="{{ route('admin.applications.show', $application) }}" class="btn btn-sm {{ $isCompletedView ? 'btn-outline-primary' : 'btn-primary' }}">
+                                {{ $isCompletedView ? 'View' : 'Review' }}
                             </a>
                         </td>
                     </tr>
@@ -188,7 +222,11 @@
                         <td colspan="10">
                             <div class="alf-empty py-4 text-center text-muted">
                                 <i class="fa-regular fa-folder-open fa-2x mb-2 d-block opacity-50"></i>
-                                No applications found matching the selected filters.
+                                @if($isFieldOfficer)
+                                    {{ $isCompletedView ? 'No completed verifications found.' : 'No pending assigned applications in your queue.' }}
+                                @else
+                                    No applications found matching the selected filters.
+                                @endif
                             </div>
                         </td>
                     </tr>

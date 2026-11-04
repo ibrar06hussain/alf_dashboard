@@ -112,14 +112,28 @@
                         $isCmsActive = request()->routeIs('admin.carousel.*', 'admin.media.*', 'admin.site-info.*', 'admin.sms-templates.*');
                         $isSecurityActive = request()->routeIs('admin.users.*', 'admin.roles.*', 'admin.audit-logs.*');
                         $isAccountActive = request()->routeIs('admin.profile.password.*');
+                        $isFieldOfficer = $user?->hasRole('Field Officer') && ! $user?->hasRole('Super Admin');
                     @endphp
                     <ul class="vertical-nav-menu" id="alfSidebarNav">
-                        <li class="app-sidebar__heading">Overview</li>
-                        <li class="{{ request()->routeIs('admin.dashboard') ? 'mm-active' : '' }}">
-                            <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'mm-active' : '' }}">
-                                <i class="metismenu-icon fa-solid fa-gauge-high"></i> Dashboard
-                            </a>
-                        </li>
+                        <li class="app-sidebar__heading">{{ $isFieldOfficer ? 'Field Verifications' : 'Overview' }}</li>
+                        @if($isFieldOfficer)
+                            <li class="{{ request()->routeIs('admin.applications.*') && request('view') !== 'completed' ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.applications.index') }}" class="{{ request()->routeIs('admin.applications.*') && request('view') !== 'completed' ? 'mm-active' : '' }}">
+                                    <i class="metismenu-icon fa-solid fa-list-check"></i> Assigned Queue (Pending)
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.applications.*') && request('view') === 'completed' ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.applications.index', ['view' => 'completed']) }}" class="{{ request()->routeIs('admin.applications.*') && request('view') === 'completed' ? 'mm-active' : '' }}">
+                                    <i class="metismenu-icon fa-solid fa-circle-check"></i> Completed Verifications
+                                </a>
+                            </li>
+                        @else
+                            <li class="{{ request()->routeIs('admin.dashboard') ? 'mm-active' : '' }}">
+                                <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'mm-active' : '' }}">
+                                    <i class="metismenu-icon fa-solid fa-gauge-high"></i> Dashboard
+                                </a>
+                            </li>
+                        @endif
 
                         @if($canViewCm || $canViewWheatMis || $canManageSchemes)
                             <li class="alf-nav-group {{ $isAnalyticsActive ? 'mm-active' : '' }}">
@@ -175,9 +189,14 @@
                                     </a>
                                 </li>
                                 @if($canViewGbpay)
-                                    <li class="{{ request()->routeIs('admin.gbpay.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.gbpay.index') }}" class="{{ request()->routeIs('admin.gbpay.*') ? 'mm-active' : '' }}">
+                                    <li class="{{ request()->routeIs('admin.gbpay.index') ? 'mm-active' : '' }}">
+                                        <a href="{{ route('admin.gbpay.index') }}" class="{{ request()->routeIs('admin.gbpay.index') ? 'mm-active' : '' }}">
                                             <i class="sub-nav-icon fa-solid fa-money-check-dollar"></i> GBPay Gateway (PSID)
+                                        </a>
+                                    </li>
+                                    <li class="{{ request()->routeIs('admin.gbpay.test*') ? 'mm-active' : '' }}">
+                                        <a href="{{ route('admin.gbpay.test') }}" class="{{ request()->routeIs('admin.gbpay.test*') ? 'mm-active' : '' }}">
+                                            <i class="sub-nav-icon fa-solid fa-flask-vial"></i> GBPay API Tester
                                         </a>
                                     </li>
                                 @endif

@@ -9,13 +9,19 @@ use App\Models\Department;
 use App\Models\District;
 use App\Models\Scheme;
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function index(): View
+    public function index(): View|RedirectResponse
     {
         $user = auth()->user();
+
+        if ($user->hasRole('Field Officer') && ! $user->hasRole('Super Admin')) {
+            return redirect()->route('admin.applications.index');
+        }
+
         $applicationQuery = Application::query();
         $scopedDistrict = null;
 

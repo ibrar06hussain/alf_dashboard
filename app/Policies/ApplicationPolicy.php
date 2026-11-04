@@ -217,6 +217,38 @@ class ApplicationPolicy
     }
 
     /**
+     * Determine whether the user can edit application data.
+     * Allowed for Super Admin, Directorate heads, and assigned District Deputy Director within scope.
+     */
+    public function update(User $user, Application $application): bool
+    {
+        if ($user->hasRole('Super Admin')) {
+            return true;
+        }
+
+        if ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
+            return in_array($application->scheme?->department_id, $user->authorizedDepartmentIds(), true);
+        }
+
+        if ($user->hasAnyRole(['District Deputy Director', 'District Officer'])) {
+            return in_array($application->district_id, $user->authorizedDistrictIds(), true)
+                && in_array($application->current_stage, [
+                    Application::STAGE_SUBMITTED,
+                    Application::STAGE_UNDER_REVIEW,
+                    Application::STAGE_CORRECTION_REQUIRED,
+                    Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                    Application::STAGE_VISIT_SCHEDULED,
+                    Application::STAGE_VISIT_COMPLETED,
+                    Application::STAGE_FINDINGS_SUBMITTED,
+                    Application::STAGE_APPROVED,
+                    Application::STAGE_CHALLAN_ISSUED,
+                ], true);
+        }
+
+        return false;
+    }
+
+    /**
      * Determine whether user is within authorized operational scope (district + department).
      */
     private function isInOperationalScope(User $user, Application $application): bool

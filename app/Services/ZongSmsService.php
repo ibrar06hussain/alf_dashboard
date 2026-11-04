@@ -180,11 +180,11 @@ class ZongSmsService
         $formatQty = fn ($val) => (float) $val == (int) $val ? (string) (int) $val : (string) round((float) $val, 2);
 
         $breakdown = $application->getChallanBreakdown();
-        $challanAmount = (int) round((float) ($application->challan_amount > 0 ? $application->challan_amount : ($breakdown['final_bill'] ?? 0)));
+        $challanAmount = (int) ceil((float) ($application->challan_amount > 0 ? $application->challan_amount : ($breakdown['final_bill'] ?? 0)));
 
         $latestBill = $application->bills?->sortByDesc('bill_id')->first();
         $psid = $application->psid ?: ($latestBill?->psid ?? 'N/A');
-        $paidAmount = (int) round((float) ($extraVars['amount_paid'] ?? $latestBill?->bill_amount ?? $challanAmount));
+        $paidAmount = (int) ceil((float) ($extraVars['amount_paid'] ?? $latestBill?->bill_amount ?? $challanAmount));
         $txnId = (string) ($extraVars['transaction_id'] ?? $application->gbpay_transaction_id ?? $latestBill?->transaction_id ?? 'N/A');
 
         $dueDate = $application->challan_due_date
