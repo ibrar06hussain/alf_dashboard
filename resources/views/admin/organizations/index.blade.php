@@ -3,7 +3,70 @@
 @section('title', 'Organizations (GB)')
 
 @push('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <style>
+    .gb-cluster-marker {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+    }
+    .gb-cluster-bubble {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        color: #ffffff;
+        font-weight: 800;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35), 0 0 0 4px rgba(255, 255, 255, 0.85);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        line-height: 1.05;
+    }
+    .gb-cluster-marker:hover .gb-cluster-bubble {
+        transform: scale(1.12);
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.45), 0 0 0 5px #ffffff;
+    }
+    .gb-cluster-bubble--district {
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #15803d, #1b4332);
+        font-size: 0.95rem;
+    }
+    .gb-cluster-bubble--tehsil {
+        width: 46px;
+        height: 46px;
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        font-size: 0.85rem;
+    }
+    .gb-cluster-bubble--uc {
+        width: 36px;
+        height: 36px;
+        background: linear-gradient(135deg, #7c3aed, #5b21b6);
+        font-size: 0.78rem;
+    }
+    .gb-cluster-sub {
+        font-size: 0.6rem;
+        font-weight: 600;
+        opacity: 0.9;
+    }
+    .gb-cluster-label {
+        margin-top: 3px;
+        background: rgba(15, 23, 42, 0.88);
+        color: #ffffff;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    .admin-map-mode-btn.is-active {
+        background-color: #1b4332 !important;
+        color: #ffffff !important;
+        border-color: #1b4332 !important;
+    }
     .org-sheet-tabs {
         display: flex;
         flex-wrap: wrap;
@@ -197,6 +260,50 @@
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+{{-- 1.5 Interactive Gilgit-Baltistan Multi-Level Cluster Map --}}
+<div class="card alf-panel mb-4">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+            <i class="fa-solid fa-map-location-dot me-2 text-success"></i>
+            <strong>Gilgit-Baltistan Organizations Geospatial Cluster Map</strong>
+            <span class="text-muted small ms-2">(District &rarr; Tehsil / Sub-Division &rarr; Union Council Zoom Clusters)</span>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span id="adminGbMapLevelIndicator" class="badge bg-success-subtle text-success fw-bold px-2 py-1">
+                Level: District Clusters (10)
+            </span>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary admin-map-mode-btn is-active" data-mode="auto" onclick="setAdminGbMapMode('auto', this)">
+                    Auto (Zoom)
+                </button>
+                <button type="button" class="btn btn-outline-secondary admin-map-mode-btn" data-mode="district" onclick="setAdminGbMapMode('district', this)">
+                    Districts ({{ count($mapClusters['districts']) }})
+                </button>
+                <button type="button" class="btn btn-outline-secondary admin-map-mode-btn" data-mode="tehsil" onclick="setAdminGbMapMode('tehsil', this)">
+                    Tehsils ({{ count($mapClusters['tehsils']) }})
+                </button>
+                <button type="button" class="btn btn-outline-secondary admin-map-mode-btn" data-mode="uc" onclick="setAdminGbMapMode('uc', this)">
+                    UCs ({{ count($mapClusters['ucs']) }})
+                </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="resetAdminGbMapView()">
+                <i class="fa-solid fa-expand me-1"></i> Reset View
+            </button>
+        </div>
+    </div>
+    <div class="px-3 py-2 bg-light border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2 small">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <span><span class="badge rounded-pill" style="background:#15803d;">&nbsp;</span> <strong>District Level</strong> (Zoom &le; 8)</span>
+            <span><span class="badge rounded-pill" style="background:#0284c7;">&nbsp;</span> <strong>Tehsil / Sub-Division Level</strong> (Zoom 9–10)</span>
+            <span><span class="badge rounded-pill" style="background:#7c3aed;">&nbsp;</span> <strong>Union Council / MC Level</strong> (Zoom &ge; 11)</span>
+        </div>
+        <span class="text-muted">Zoom in on the map or click any cluster marker to drill down into Tehsils and Union Councils</span>
+    </div>
+    <div class="card-body p-0">
+        <div id="adminGbOrganizationsMap" style="width: 100%; height: 480px; z-index: 1;"></div>
     </div>
 </div>
 
@@ -625,8 +732,160 @@
 @endsection
 
 @push('scripts')
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
+    // --- Admin Gilgit-Baltistan Multi-Level Cluster Map ---
+    let adminGbMap = null;
+    let adminGbMarkerLayer = null;
+    let adminGbMapMode = 'auto';
+    const adminGbClusters = @json($mapClusters);
+    const adminGbBaseUrl = @json(route('admin.organizations.index'));
+
+    function getAdminActiveClusterLevel() {
+        if (adminGbMapMode !== 'auto') return adminGbMapMode;
+        if (!adminGbMap) return 'district';
+        const z = adminGbMap.getZoom();
+        if (z <= 8) return 'district';
+        if (z <= 10) return 'tehsil';
+        return 'uc';
+    }
+
+    function renderAdminGbMapClusters() {
+        if (!adminGbMap || !adminGbMarkerLayer) return;
+        adminGbMarkerLayer.clearLayers();
+
+        const level = getAdminActiveClusterLevel();
+        const indicator = document.getElementById('adminGbMapLevelIndicator');
+
+        if (level === 'district') {
+            if (indicator) indicator.textContent = 'Level: District Clusters (' + adminGbClusters.districts.length + ')';
+            adminGbClusters.districts.forEach(item => {
+                const pct = item.total > 0 ? Math.round((item.formed / item.total) * 100) : 0;
+                const icon = L.divIcon({
+                    className: '',
+                    html: `
+                        <div class="gb-cluster-marker" title="${item.name} District: ${item.total} Villages">
+                            <div class="gb-cluster-bubble gb-cluster-bubble--district">
+                                <span>${item.total}</span>
+                                <span class="gb-cluster-sub">${item.formed} VOs</span>
+                            </div>
+                            <div class="gb-cluster-label">${item.name}</div>
+                        </div>
+                    `,
+                    iconSize: [0, 0]
+                });
+                const marker = L.marker([item.lat, item.lng], { icon });
+                const filterUrl = `${adminGbBaseUrl}?sheet=${encodeURIComponent(item.sheet_code)}#admin-directory-card`;
+                marker.bindPopup(`
+                    <div style="min-width: 210px;">
+                        <div class="fw-bold mb-1">${item.name} District (${item.sheet_code})</div>
+                        <div class="small text-muted mb-2">${item.division} Division</div>
+                        <div class="small d-flex justify-content-between border-bottom py-1"><span>Villages:</span><strong>${item.total}</strong></div>
+                        <div class="small d-flex justify-content-between border-bottom py-1 text-success"><span>VOs Formed:</span><strong>${item.formed} (${pct}%)</strong></div>
+                        <div class="small d-flex justify-content-between py-1 text-warning"><span>No VOs:</span><strong>${item.not_formed}</strong></div>
+                        <div class="d-flex gap-1 mt-2">
+                            <button type="button" class="btn btn-sm btn-primary flex-grow-1" onclick="zoomAdminGbMap(${item.lat}, ${item.lng}, 10)">Zoom Tehsils</button>
+                            <a href="${filterUrl}" class="btn btn-sm btn-outline-success">Filter</a>
+                        </div>
+                    </div>
+                `);
+                adminGbMarkerLayer.addLayer(marker);
+            });
+        } else if (level === 'tehsil') {
+            if (indicator) indicator.textContent = 'Level: Tehsil Clusters (' + adminGbClusters.tehsils.length + ')';
+            adminGbClusters.tehsils.forEach(item => {
+                const pct = item.total > 0 ? Math.round((item.formed / item.total) * 100) : 0;
+                const icon = L.divIcon({
+                    className: '',
+                    html: `
+                        <div class="gb-cluster-marker" title="Tehsil ${item.name} (${item.district}): ${item.total} Villages">
+                            <div class="gb-cluster-bubble gb-cluster-bubble--tehsil">
+                                <span>${item.total}</span>
+                                <span class="gb-cluster-sub">${item.formed} VO</span>
+                            </div>
+                            <div class="gb-cluster-label">${item.name}</div>
+                        </div>
+                    `,
+                    iconSize: [0, 0]
+                });
+                const marker = L.marker([item.lat, item.lng], { icon });
+                const filterUrl = `${adminGbBaseUrl}?sheet=${encodeURIComponent(item.sheet_code)}&q=${encodeURIComponent(item.name)}#admin-directory-card`;
+                marker.bindPopup(`
+                    <div style="min-width: 210px;">
+                        <div class="fw-bold mb-0">Tehsil: ${item.name}</div>
+                        <div class="small text-muted mb-2">District: ${item.district}</div>
+                        <div class="small d-flex justify-content-between border-bottom py-1"><span>Villages:</span><strong>${item.total}</strong></div>
+                        <div class="small d-flex justify-content-between border-bottom py-1 text-success"><span>VOs Formed:</span><strong>${item.formed} (${pct}%)</strong></div>
+                        <div class="small d-flex justify-content-between py-1 text-warning"><span>No VOs:</span><strong>${item.not_formed}</strong></div>
+                        <div class="d-flex gap-1 mt-2">
+                            <button type="button" class="btn btn-sm btn-primary flex-grow-1" onclick="zoomAdminGbMap(${item.lat}, ${item.lng}, 12)">Zoom UCs</button>
+                            <a href="${filterUrl}" class="btn btn-sm btn-outline-success">Filter</a>
+                        </div>
+                    </div>
+                `);
+                adminGbMarkerLayer.addLayer(marker);
+            });
+        } else {
+            if (indicator) indicator.textContent = 'Level: Union Council Clusters (' + adminGbClusters.ucs.length + ')';
+            adminGbClusters.ucs.forEach(item => {
+                const icon = L.divIcon({
+                    className: '',
+                    html: `
+                        <div class="gb-cluster-marker" title="${item.name} (${item.district}): ${item.total} Villages">
+                            <div class="gb-cluster-bubble gb-cluster-bubble--uc">
+                                <span>${item.total}</span>
+                            </div>
+                            <div class="gb-cluster-label">${item.name}</div>
+                        </div>
+                    `,
+                    iconSize: [0, 0]
+                });
+                const marker = L.marker([item.lat, item.lng], { icon });
+                const filterUrl = `${adminGbBaseUrl}?sheet=${encodeURIComponent(item.sheet_code)}&q=${encodeURIComponent(item.name)}#admin-directory-card`;
+                const vList = (item.sample_villages || []).map(v => `<li>${v}</li>`).join('');
+                marker.bindPopup(`
+                    <div style="min-width: 220px;">
+                        <div class="fw-bold mb-0">${item.name}</div>
+                        <div class="small text-muted mb-2">Tehsil: ${item.tehsil} &bull; ${item.district}</div>
+                        <div class="small d-flex justify-content-between border-bottom py-1"><span>Villages:</span><strong>${item.total}</strong></div>
+                        <div class="small d-flex justify-content-between border-bottom py-1 text-success"><span>VOs Formed:</span><strong>${item.formed}</strong></div>
+                        <div class="small d-flex justify-content-between py-1 text-warning"><span>No VOs:</span><strong>${item.not_formed}</strong></div>
+                        ${vList ? `<div class="mt-2 small"><strong>Villages:</strong><ul class="ps-3 mb-2 mt-1">${vList}</ul></div>` : ''}
+                        <a href="${filterUrl}" class="btn btn-sm btn-success w-100 mt-1 text-white">Filter UC in Table</a>
+                    </div>
+                `);
+                adminGbMarkerLayer.addLayer(marker);
+            });
+        }
+    }
+
+    function zoomAdminGbMap(lat, lng, targetZoom) {
+        if (!adminGbMap) return;
+        adminGbMapMode = 'auto';
+        document.querySelectorAll('.admin-map-mode-btn').forEach(b => {
+            b.classList.toggle('is-active', b.getAttribute('data-mode') === 'auto');
+        });
+        adminGbMap.flyTo([lat, lng], targetZoom, { duration: 0.9 });
+    }
+
+    function setAdminGbMapMode(mode, btnEl) {
+        adminGbMapMode = mode;
+        document.querySelectorAll('.admin-map-mode-btn').forEach(b => b.classList.remove('is-active'));
+        if (btnEl) btnEl.classList.add('is-active');
+        renderAdminGbMapClusters();
+    }
+
+    function resetAdminGbMapView() {
+        adminGbMapMode = 'auto';
+        document.querySelectorAll('.admin-map-mode-btn').forEach(b => {
+            b.classList.toggle('is-active', b.getAttribute('data-mode') === 'auto');
+        });
+        if (adminGbMap) {
+            adminGbMap.flyTo([35.65, 74.85], 8, { duration: 0.8 });
+        }
+    }
+
     // Modal Helpers (hoisted to document.body so fixed headers never overlap)
     function openAddOrgModal() {
         const el = document.getElementById('addOrgModalBackdrop');
@@ -690,8 +949,26 @@
         }
     }
 
-    // Charts Initialization
+    // Charts & Map Initialization
     document.addEventListener('DOMContentLoaded', function () {
+        const mapEl = document.getElementById('adminGbOrganizationsMap');
+        if (mapEl && window.L) {
+            adminGbMap = L.map('adminGbOrganizationsMap', {
+                center: [35.65, 74.85],
+                zoom: 8,
+                minZoom: 6,
+                maxZoom: 15,
+                scrollWheelZoom: true
+            });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors &bull; ALF GB Portal',
+                maxZoom: 18
+            }).addTo(adminGbMap);
+            adminGbMarkerLayer = L.layerGroup().addTo(adminGbMap);
+            adminGbMap.on('zoomend', renderAdminGbMapClusters);
+            renderAdminGbMapClusters();
+        }
+
         const summaryData = @json($summaryRows);
         const totalsData = @json($totals);
 

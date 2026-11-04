@@ -3,7 +3,70 @@
 @section('title', 'Farmer & Village Organizations - Gilgit-Baltistan')
 
 @push('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <style>
+    .gb-cluster-marker {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+    }
+    .gb-cluster-bubble {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        color: #ffffff;
+        font-weight: 800;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35), 0 0 0 4px rgba(255, 255, 255, 0.85);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        line-height: 1.05;
+    }
+    .gb-cluster-marker:hover .gb-cluster-bubble {
+        transform: scale(1.12);
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.45), 0 0 0 5px #ffffff;
+    }
+    .gb-cluster-bubble--district {
+        width: 58px;
+        height: 58px;
+        background: linear-gradient(135deg, #15803d, #1b4332);
+        font-size: 1rem;
+    }
+    .gb-cluster-bubble--tehsil {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        font-size: 0.9rem;
+    }
+    .gb-cluster-bubble--uc {
+        width: 38px;
+        height: 38px;
+        background: linear-gradient(135deg, #7c3aed, #5b21b6);
+        font-size: 0.8rem;
+    }
+    .gb-cluster-sub {
+        font-size: 0.62rem;
+        font-weight: 600;
+        opacity: 0.9;
+    }
+    .gb-cluster-label {
+        margin-top: 4px;
+        background: rgba(15, 23, 42, 0.88);
+        color: #ffffff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    .map-level-btn.is-active {
+        background-color: #ffffff !important;
+        color: #1b4332 !important;
+        font-weight: 800 !important;
+    }
     .org-kpi-card {
         background: #ffffff;
         border-radius: 14px;
@@ -298,6 +361,51 @@
             </div>
         </div>
 
+        {{-- 2.5 Interactive Gilgit-Baltistan Multi-Level Cluster Map --}}
+        <div class="org-panel mb-5">
+            <div class="org-panel-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h4><i class="fa-solid fa-map-location-dot me-2"></i>Gilgit-Baltistan Organizations Geospatial Cluster Map</h4>
+                    <small class="text-white-50">
+                        Zoom in or click a cluster to drill down from <strong>District Level</strong> &rarr; <strong>Tehsil / Sub-Division Level</strong> &rarr; <strong>Union Council (UC) Level</strong>
+                    </small>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span id="gbMapLevelIndicator" class="badge bg-warning text-dark fw-bold px-3 py-2">
+                        Level: District Clusters (10)
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Map Cluster Level">
+                        <button type="button" class="btn btn-outline-light map-level-btn is-active" data-mode="auto" onclick="setGbMapMode('auto', this)">
+                            Auto (Zoom)
+                        </button>
+                        <button type="button" class="btn btn-outline-light map-level-btn" data-mode="district" onclick="setGbMapMode('district', this)">
+                            Districts ({{ count($mapClusters['districts']) }})
+                        </button>
+                        <button type="button" class="btn btn-outline-light map-level-btn" data-mode="tehsil" onclick="setGbMapMode('tehsil', this)">
+                            Tehsils ({{ count($mapClusters['tehsils']) }})
+                        </button>
+                        <button type="button" class="btn btn-outline-light map-level-btn" data-mode="uc" onclick="setGbMapMode('uc', this)">
+                            Union Councils ({{ count($mapClusters['ucs']) }})
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-light fw-bold" onclick="resetGbMapView()">
+                        <i class="fa-solid fa-expand me-1"></i> Reset GB View
+                    </button>
+                </div>
+            </div>
+
+            <div class="px-4 py-2 bg-light border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2 small">
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <span><span class="badge rounded-pill" style="background:#15803d;">&nbsp;</span> <strong>District Cluster</strong> (Initial Zoom &le; 8)</span>
+                    <span><span class="badge rounded-pill" style="background:#0284c7;">&nbsp;</span> <strong>Tehsil / Sub-Division Cluster</strong> (Zoom 9–10)</span>
+                    <span><span class="badge rounded-pill" style="background:#7c3aed;">&nbsp;</span> <strong>Union Council / MC Cluster</strong> (Zoom &ge; 11)</span>
+                </div>
+                <span class="text-muted"><i class="fa-solid fa-hand-pointer me-1"></i>Click any cluster bubble to zoom in or view VOs formed breakdown</span>
+            </div>
+
+            <div id="gbOrganizationsMap" style="width: 100%; height: 520px; z-index: 1;"></div>
+        </div>
+
         {{-- 3. Summary Sheet Table (Matching the Summary tab of the Excel Workbook) --}}
         <div class="org-panel mb-5">
             <div class="org-panel-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -563,9 +671,215 @@
 @endsection
 
 @push('scripts')
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
+// --- Gilgit-Baltistan Multi-Level Cluster Map ---
+let gbMap = null;
+let gbMarkerLayer = null;
+let gbMapMode = 'auto';
+const gbClusters = @json($mapClusters);
+const gbBaseDirectoryUrl = @json(route('organizations.index'));
+
+function getActiveClusterLevel() {
+    if (gbMapMode !== 'auto') return gbMapMode;
+    if (!gbMap) return 'district';
+    const z = gbMap.getZoom();
+    if (z <= 8) return 'district';
+    if (z <= 10) return 'tehsil';
+    return 'uc';
+}
+
+function renderGbMapClusters() {
+    if (!gbMap || !gbMarkerLayer) return;
+    gbMarkerLayer.clearLayers();
+
+    const level = getActiveClusterLevel();
+    const indicator = document.getElementById('gbMapLevelIndicator');
+
+    if (level === 'district') {
+        if (indicator) indicator.textContent = 'Level: District Clusters (' + gbClusters.districts.length + ')';
+        gbClusters.districts.forEach(item => {
+            const pct = item.total > 0 ? Math.round((item.formed / item.total) * 100) : 0;
+            const icon = L.divIcon({
+                className: '',
+                html: `
+                    <div class="gb-cluster-marker" title="${item.name} District: ${item.total} Villages (${item.formed} VOs Formed)">
+                        <div class="gb-cluster-bubble gb-cluster-bubble--district">
+                            <span>${item.total}</span>
+                            <span class="gb-cluster-sub">${item.formed} VOs</span>
+                        </div>
+                        <div class="gb-cluster-label">${item.name}</div>
+                    </div>
+                `,
+                iconSize: [0, 0]
+            });
+
+            const marker = L.marker([item.lat, item.lng], { icon });
+            const filterUrl = `${gbBaseDirectoryUrl}?sheet=${encodeURIComponent(item.sheet_code)}#directory-section`;
+            marker.bindPopup(`
+                <div style="min-width: 220px;">
+                    <div class="fw-bold fs-6 mb-1" style="color:#1b4332;">${item.name} District (${item.sheet_code})</div>
+                    <div class="small text-muted mb-2">${item.division} Division</div>
+                    <div class="d-flex justify-content-between small border-bottom py-1">
+                        <span>No. of Villages:</span>
+                        <strong>${item.total}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small border-bottom py-1 text-success">
+                        <span>VOs Formed:</span>
+                        <strong>${item.formed} (${pct}%)</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small py-1 text-warning">
+                        <span>No VOs Formed:</span>
+                        <strong>${item.not_formed}</strong>
+                    </div>
+                    <div class="d-flex gap-2 mt-2 pt-1">
+                        <button type="button" class="btn btn-sm btn-primary flex-grow-1" onclick="zoomToGbLocation(${item.lat}, ${item.lng}, 10)">
+                            Zoom to Tehsils
+                        </button>
+                        <a href="${filterUrl}" class="btn btn-sm btn-outline-success">View List</a>
+                    </div>
+                </div>
+            `);
+            gbMarkerLayer.addLayer(marker);
+        });
+    } else if (level === 'tehsil') {
+        if (indicator) indicator.textContent = 'Level: Tehsil / Sub-Division Clusters (' + gbClusters.tehsils.length + ')';
+        gbClusters.tehsils.forEach(item => {
+            const pct = item.total > 0 ? Math.round((item.formed / item.total) * 100) : 0;
+            const icon = L.divIcon({
+                className: '',
+                html: `
+                    <div class="gb-cluster-marker" title="Tehsil ${item.name} (${item.district}): ${item.total} Villages">
+                        <div class="gb-cluster-bubble gb-cluster-bubble--tehsil">
+                            <span>${item.total}</span>
+                            <span class="gb-cluster-sub">${item.formed} VO</span>
+                        </div>
+                        <div class="gb-cluster-label">${item.name}</div>
+                    </div>
+                `,
+                iconSize: [0, 0]
+            });
+
+            const marker = L.marker([item.lat, item.lng], { icon });
+            const filterUrl = `${gbBaseDirectoryUrl}?sheet=${encodeURIComponent(item.sheet_code)}&q=${encodeURIComponent(item.name)}#directory-section`;
+            marker.bindPopup(`
+                <div style="min-width: 220px;">
+                    <div class="fw-bold fs-6 mb-0" style="color:#0369a1;">Tehsil / Sub-Div: ${item.name}</div>
+                    <div class="small text-muted mb-2">District: ${item.district}</div>
+                    <div class="d-flex justify-content-between small border-bottom py-1">
+                        <span>Total Villages:</span>
+                        <strong>${item.total}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small border-bottom py-1 text-success">
+                        <span>VOs Formed:</span>
+                        <strong>${item.formed} (${pct}%)</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small py-1 text-warning">
+                        <span>No VOs Formed:</span>
+                        <strong>${item.not_formed}</strong>
+                    </div>
+                    <div class="d-flex gap-2 mt-2 pt-1">
+                        <button type="button" class="btn btn-sm btn-primary flex-grow-1" onclick="zoomToGbLocation(${item.lat}, ${item.lng}, 12)">
+                            Zoom to UCs
+                        </button>
+                        <a href="${filterUrl}" class="btn btn-sm btn-outline-success">Filter</a>
+                    </div>
+                </div>
+            `);
+            gbMarkerLayer.addLayer(marker);
+        });
+    } else {
+        if (indicator) indicator.textContent = 'Level: Union Council / MC Clusters (' + gbClusters.ucs.length + ')';
+        gbClusters.ucs.forEach(item => {
+            const icon = L.divIcon({
+                className: '',
+                html: `
+                    <div class="gb-cluster-marker" title="${item.name} (${item.district}): ${item.total} Villages">
+                        <div class="gb-cluster-bubble gb-cluster-bubble--uc">
+                            <span>${item.total}</span>
+                        </div>
+                        <div class="gb-cluster-label">${item.name}</div>
+                    </div>
+                `,
+                iconSize: [0, 0]
+            });
+
+            const marker = L.marker([item.lat, item.lng], { icon });
+            const filterUrl = `${gbBaseDirectoryUrl}?sheet=${encodeURIComponent(item.sheet_code)}&q=${encodeURIComponent(item.name)}#directory-section`;
+            const villagesHtml = (item.sample_villages || []).map(v => `<li>${v}</li>`).join('');
+            marker.bindPopup(`
+                <div style="min-width: 240px;">
+                    <div class="fw-bold fs-6 mb-0" style="color:#5b21b6;">${item.name}</div>
+                    <div class="small text-muted mb-2">Tehsil: ${item.tehsil} &bull; District: ${item.district}</div>
+                    <div class="d-flex justify-content-between small border-bottom py-1">
+                        <span>Villages in UC:</span>
+                        <strong>${item.total}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small border-bottom py-1 text-success">
+                        <span>VOs Formed:</span>
+                        <strong>${item.formed}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small py-1 text-warning">
+                        <span>No VOs Formed:</span>
+                        <strong>${item.not_formed}</strong>
+                    </div>
+                    ${villagesHtml ? `<div class="mt-2 small"><strong>Villages / VOs:</strong><ul class="ps-3 mb-2 mt-1">${villagesHtml}</ul></div>` : ''}
+                    <a href="${filterUrl}" class="btn btn-sm btn-success w-100 mt-1 text-white">Show UC Records in Table</a>
+                </div>
+            `);
+            gbMarkerLayer.addLayer(marker);
+        });
+    }
+}
+
+function zoomToGbLocation(lat, lng, targetZoom) {
+    if (!gbMap) return;
+    gbMapMode = 'auto';
+    document.querySelectorAll('.map-level-btn').forEach(b => {
+        b.classList.toggle('is-active', b.getAttribute('data-mode') === 'auto');
+    });
+    gbMap.flyTo([lat, lng], targetZoom, { duration: 0.9 });
+}
+
+function setGbMapMode(mode, btnEl) {
+    gbMapMode = mode;
+    document.querySelectorAll('.map-level-btn').forEach(b => b.classList.remove('is-active'));
+    if (btnEl) btnEl.classList.add('is-active');
+    renderGbMapClusters();
+}
+
+function resetGbMapView() {
+    gbMapMode = 'auto';
+    document.querySelectorAll('.map-level-btn').forEach(b => {
+        b.classList.toggle('is-active', b.getAttribute('data-mode') === 'auto');
+    });
+    if (gbMap) {
+        gbMap.flyTo([35.65, 74.85], 8, { duration: 0.8 });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+    const mapContainer = document.getElementById('gbOrganizationsMap');
+    if (mapContainer && window.L) {
+        gbMap = L.map('gbOrganizationsMap', {
+            center: [35.65, 74.85],
+            zoom: 8,
+            minZoom: 6,
+            maxZoom: 15,
+            scrollWheelZoom: true
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors &bull; Gilgit-Baltistan ALF Portal',
+            maxZoom: 18
+        }).addTo(gbMap);
+
+        gbMarkerLayer = L.layerGroup().addTo(gbMap);
+        gbMap.on('zoomend', renderGbMapClusters);
+        renderGbMapClusters();
+    }
+
     const summaryData = @json($summaryRows);
     const totalsData = @json($totals);
 

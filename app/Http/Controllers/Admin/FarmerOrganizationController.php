@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AccessAuditLog;
 use App\Models\District;
 use App\Models\FarmerOrganization;
+use App\Support\GbGeoCoordinates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -102,11 +103,17 @@ class FarmerOrganizationController extends Controller
         $organizations = $query->orderBy('id')->paginate(50)->withQueryString();
         $districts = District::orderBy('name')->get();
 
+        $allRecords = FarmerOrganization::query()
+            ->select(['district_name', 'sheet_code', 'division_name', 'sub_division', 'uc_mc', 'village_name', 'organization_name', 'is_vo_formed'])
+            ->get();
+        $mapClusters = GbGeoCoordinates::buildMapClusters($allRecords);
+
         return view('admin.organizations.index', compact(
             'summaryRows',
             'totals',
             'organizations',
             'districts',
+            'mapClusters',
             'activeSheet',
             'activeDistrict',
             'activeDivision',

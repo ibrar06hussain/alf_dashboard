@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FarmerOrganization;
+use App\Support\GbGeoCoordinates;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -102,10 +103,17 @@ class FarmerOrganizationPublicController extends Controller
 
         $organizations = $query->orderBy('id')->paginate(50)->withQueryString();
 
+        $allActiveRecords = FarmerOrganization::query()
+            ->where('is_active', true)
+            ->select(['district_name', 'sheet_code', 'division_name', 'sub_division', 'uc_mc', 'village_name', 'organization_name', 'is_vo_formed'])
+            ->get();
+        $mapClusters = GbGeoCoordinates::buildMapClusters($allActiveRecords);
+
         return view('public.organizations.index', compact(
             'summaryRows',
             'totals',
             'organizations',
+            'mapClusters',
             'activeSheet',
             'activeDistrict',
             'activeDivision',
