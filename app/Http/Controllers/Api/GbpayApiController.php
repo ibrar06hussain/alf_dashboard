@@ -169,7 +169,8 @@ class GbpayApiController extends Controller
             $generatedAt = $bill->generated_at ?? $application?->challan_issued_at ?? now();
             $dueDate = $bill->due_date ?? $application?->challan_due_date ?? $generatedAt->copy()->addDays(10);
 
-            $rcoCode = $template?->rco_code ?: ($psidConfig->rco ?? 'GL1800');
+            $rcoCode = $bill->challan_data['rco']
+                ?? PsidConfig::resolveDistrictRco($district, $template?->rco_code ?: ($psidConfig->rco ?? 'GL-1618'));
             $headCode = $template?->head_code ?: ($psidConfig->head ?? 'C03870');
             $payableAmount = (int) ceil((float) $bill->bill_amount);
 

@@ -118,7 +118,7 @@
                                 $activeBill = $application->bills->firstWhere('status', 'pending') ?? $application->bills->first();
                                 $psidNumber = $activeBill?->psid ?? $application->psid;
                                 $psidConfig = \App\Models\PsidConfig::getActive();
-                                $rcoCode = $challanTpl->rco_code ?: ($psidConfig->rco ?: 'GL1800');
+                                $rcoCode = $activeBill?->challan_data['rco'] ?? \App\Models\PsidConfig::resolveDistrictRco($application->district, $challanTpl->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
                                 $headCode = $challanTpl->head_code ?: ($psidConfig->head ?: 'C03870');
                             @endphp
                             <div class="alert alert-info mt-4 p-3 border-info">

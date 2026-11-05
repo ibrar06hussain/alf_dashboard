@@ -838,7 +838,7 @@
                         $activeBill = $application->activeBill;
                         $psidDisplay = $activeBill?->psid ?: $application->psid;
                         $psidCfg = \App\Models\PsidConfig::active();
-                        $rcoDisplay = $challanTpl->rco_code ?: ($psidCfg?->rco ?? 'GL1800');
+                        $rcoDisplay = $activeBill?->challan_data['rco'] ?? \App\Models\PsidConfig::resolveDistrictRco($application->district, $challanTpl->rco_code ?: ($psidCfg?->rco ?? 'GL-1618'));
                         $headDisplay = $challanTpl->head_code ?: ($psidCfg?->head ?? 'C03870');
                     @endphp
                     <div class="small mb-2">

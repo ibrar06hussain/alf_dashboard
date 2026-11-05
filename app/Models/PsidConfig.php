@@ -66,7 +66,7 @@ class PsidConfig extends Model
             'department_code' => '09',
             'district_code' => '01',
             'department_service_no' => '01',
-            'rco' => 'GL1800',
+            'rco' => 'GL1618',
             'head' => 'C03870',
             'is_active' => true,
         ]);
@@ -91,7 +91,7 @@ class PsidConfig extends Model
      */
     public static function resolveDistrictDigits(?District $district = null): ?string
     {
-        if (! $district) {
+        if (!$district) {
             return null;
         }
 
@@ -119,16 +119,27 @@ class PsidConfig extends Model
         }
 
         $mapByCode = [
-            'GL' => '01', 'GLT' => '01',
-            'NG' => '02', 'NGR' => '02',
-            'HN' => '03', 'HNZ' => '03',
-            'GZ' => '04', 'GHZ' => '04',
-            'AT' => '05', 'AST' => '05',
-            'DM' => '06', 'DMR' => '06',
-            'SD' => '07', 'SKD' => '07',
-            'RG' => '08', 'KMG' => '08', 'KH' => '08',
-            'SS' => '09', 'SHG' => '09',
-            'GN' => '10', 'GHC' => '10',
+            'GL' => '01',
+            'GLT' => '01',
+            'NG' => '02',
+            'NGR' => '02',
+            'HN' => '03',
+            'HNZ' => '03',
+            'GZ' => '04',
+            'GHZ' => '04',
+            'AT' => '05',
+            'AST' => '05',
+            'DM' => '06',
+            'DMR' => '06',
+            'SD' => '07',
+            'SKD' => '07',
+            'RG' => '08',
+            'KMG' => '08',
+            'KH' => '08',
+            'SS' => '09',
+            'SHG' => '09',
+            'GN' => '10',
+            'GHC' => '10',
         ];
 
         return $mapByCode[$code] ?? null;
@@ -160,5 +171,65 @@ class PsidConfig extends Model
         ];
 
         return $districts[$code ?? '01'] ?? 'GL';
+    }
+
+    /**
+     * Map of District codes/names to Government of GB Agriculture RCO codes.
+     */
+    public const DISTRICT_RCO_CODES = [
+        'GL' => 'GL1618', // Deputy Director Agriculture Gilgit
+        'GZ' => 'GZ1050', // Deputy Director Agriculture Ghizer
+        'HN' => 'HN1006', // Deputy Director Agriculture Hunza
+        'NG' => 'NG1002', // Deputy Director Agriculture Nagar
+        'DM' => 'DM1035', // Deputy Director Agriculture Diamer
+        'AT' => 'AT1042', // Deputy Director Agriculture Astore
+        'SD' => 'SD1066', // Deputy Director Agriculture Skardu
+        'SS' => 'SS1008', // Deputy Director Agriculture Shigar
+        'RG' => 'RG1002', // Deputy Director Agriculture Kharmang
+        'GN' => 'GN1042', // Deputy Director Agriculture Ghanche
+    ];
+
+    /**
+     * Regional / Directorate RCO codes.
+     */
+    public const REGIONAL_RCO_CODES = [
+        'gilgit_region' => 'GL1617', // Director Agriculture (Gilgit Region)
+        'baltistan_region' => 'SD1811', // Director Agriculture Baltistan Region
+        'diamer_astore_region' => 'DM1015', // Director Agriculture Diamer-Astore Region
+    ];
+
+    /**
+     * Resolve district RCO code for GBPay and challan_data.
+     */
+    public static function resolveDistrictRco(?District $district = null, ?string $fallback = null): string
+    {
+        if ($district) {
+            $code = strtoupper(trim((string) $district->code));
+            if (isset(self::DISTRICT_RCO_CODES[$code])) {
+                return self::DISTRICT_RCO_CODES[$code];
+            }
+
+            $name = strtolower(trim((string) $district->name));
+            $byName = [
+                'gilgit' => 'GL1618',
+                'ghizer' => 'GZ1050',
+                'hunza' => 'HN1006',
+                'nagar' => 'NG1002',
+                'diamer' => 'DM1035',
+                'astore' => 'AT1042',
+                'skardu' => 'SD1066',
+                'shigar' => 'SS1008',
+                'kharmang' => 'RG1002',
+                'roundu' => 'RG1002',
+                'ghanche' => 'GN1042',
+            ];
+            foreach ($byName as $k => $rco) {
+                if (str_contains($name, $k)) {
+                    return $rco;
+                }
+            }
+        }
+
+        return $fallback ?: 'GL1618';
     }
 }

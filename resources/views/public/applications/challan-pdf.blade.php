@@ -224,7 +224,7 @@
     $psidConfig = $psidConfig ?? \App\Models\PsidConfig::getActive();
     $bill = $bill ?? ($application->relationLoaded('bills') ? $application->bills->first() : null);
     $psidNumber = $bill?->psid ?? $application->psid ?? null;
-    $rcoCode = $template->rco_code ?: ($psidConfig->rco ?: 'GL1800');
+    $rcoCode = $bill?->challan_data['rco'] ?? \App\Models\PsidConfig::resolveDistrictRco($district, $template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
     $headCode = $template->head_code ?: ($psidConfig->head ?: 'C03870');
     $qrCodeBase64 = $qrCodeBase64 ?? ($psidNumber ? \App\Support\QrCodeGenerator::toBase64Png($psidNumber, 3, 2) : null);
 @endphp

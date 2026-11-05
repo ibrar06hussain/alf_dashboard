@@ -6,6 +6,7 @@ use App\Models\AccessAuditLog;
 use App\Models\Application;
 use App\Models\ApplicationStatusLog;
 use App\Models\Bill;
+use App\Models\District;
 use App\Models\GbpayResponse;
 use App\Models\PsidConfig;
 use Illuminate\Support\Facades\DB;
@@ -71,7 +72,12 @@ class GbpayService
             ? $application->challan_due_date->toDateString()
             : now()->addDays($validityDays)->toDateString();
 
-        $rcoCode = $template->rco_code ?: ($psidConfig->rco ?: 'GL1800');
+        $district = $application->district
+            ?? $application->applicant?->district
+            ?? ($application->district_id ? District::find($application->district_id) : null);
+        $districtCode = $district?->code ?? PsidConfig::getDistrictAbbreviation(district: $district) ?? 'GL';
+
+        $rcoCode = PsidConfig::resolveDistrictRco($district, $template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
         $headCode = $template->head_code ?: ($psidConfig->head ?: 'C03870');
 
         $challanData = [
@@ -83,7 +89,7 @@ class GbpayService
             'application_no' => $application->application_no,
             'challan_no' => $application->challan_no,
             'scheme_title' => $application->scheme?->title ?? 'ALF Scheme',
-            'district_name' => $application->district?->name ?? 'Gilgit',
+            'district_name' => $districtCode,
             'approved_bags' => $breakdown['approved_bags'] ?? 1,
             'rco' => $rcoCode,
             'head' => $headCode,
@@ -166,7 +172,8 @@ class GbpayService
             $psidConfig = PsidConfig::getActive();
             $template = $bill->application?->scheme?->getChallanTemplate();
 
-            $rco = $template?->rco_code ?: ($psidConfig->rco ?? 'GL1800');
+            $district = $bill->application?->district ?? $bill->application?->applicant?->district ?? null;
+            $rco = $bill->challan_data['rco'] ?? PsidConfig::resolveDistrictRco($district, $template?->rco_code ?: ($psidConfig->rco ?? 'GL-1618'));
             $head = $template?->head_code ?: ($psidConfig->head ?? 'C03870');
 
             $requestData = [

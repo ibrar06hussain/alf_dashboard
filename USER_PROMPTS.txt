@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 134
+Total Prompts Logged: 136
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-04T20:43:02+05:00 (UTC: 2026-11-04T15:43:02Z)
-File Last Updated  : 2026-11-04 20:43:02 (PKT)
+Latest Prompt Date : 2026-11-05T12:45:20+05:00 (UTC: 2026-11-05T07:45:20Z)
+File Last Updated  : 2026-11-05 12:45:20 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1593,6 +1593,22 @@ Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
 7 / 3500
 Approved / Disbursed vs quota for Diamer
 In this case the no 7 should represent the no of bags approved currently it is counting the no of applications  Fix this no and apply it to all the pages where it is visible
+
+================================================================================
+PROMPT #135
+Date & Time (Local) : 2026-11-05T12:10:00+05:00
+Date & Time (UTC)   : 2026-11-05T07:10:00Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+In the bills table the challan_data the district_name value should be the code of the district from which the applicant has applied fix it
+
+================================================================================
+PROMPT #136
+Date & Time (Local) : 2026-11-05T12:45:20+05:00
+Date & Time (UTC)   : 2026-11-05T07:45:20Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+These are the RCO codes for each district, In the bills table the rco value for column challan_data will be according to this table e.g for each district the rco code will be selected from this data
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             
