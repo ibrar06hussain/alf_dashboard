@@ -801,7 +801,53 @@ class ApplicationLifecycleService
     }
 
     /**
-     * Expire unpaid challans that have exceeded the 14 calendar day window into Dormant status.
+     * Expire a single unpaid application challan into Dormant status.
+     */
+    public function expireApplicationChallan(Application $app): bool
+    {
+        if ($app->current_stage !== Application::STAGE_CHALLAN_ISSUED) {
+            return false;
+        }
+
+        DB::transaction(function () use ($app) {
+            $app->update([
+                'current_stage' => Application::STAGE_DORMANT,
+                'stage_updated_at' => now(),
+                'lock_version' => $app->lock_version + 1,
+            ]);
+
+            $app->bills()->where('status', 'pending')->update([
+                'status' => 'cancelled',
+            ]);
+
+            $daysText = $app->challan_due_date && $app->challan_issued_at
+                ? round($app->challan_issued_at->diffInDays($app->challan_due_date)) . ' days'
+                : 'validity period';
+
+            ApplicationStatusLog::create([
+                'application_id' => $app->id,
+                'from_status' => Application::STAGE_CHALLAN_ISSUED,
+                'to_status' => Application::STAGE_DORMANT,
+                'note' => "Unpaid challan expired after {$daysText}. Status moved to dormant.",
+            ]);
+
+            AccessAuditLog::log('challan_expired_to_dormant', Application::class, (string) $app->id, [
+                'due_date' => $app->challan_due_date,
+                'challan_no' => $app->challan_no,
+            ]);
+
+            try {
+                app(\App\Services\ZongSmsService::class)->sendForApplicationEvent($app, 'dormant');
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Dormant SMS dispatch failed', ['application_id' => $app->id]);
+            }
+        });
+
+        return true;
+    }
+
+    /**
+     * Expire unpaid challans that have exceeded the due date into Dormant status.
      */
     public function expireUnpaidChallans(): int
     {
@@ -813,36 +859,9 @@ class ApplicationLifecycleService
 
         $count = 0;
         foreach ($expiredApps as $app) {
-            DB::transaction(function () use ($app) {
-                $app->update([
-                    'current_stage' => Application::STAGE_DORMANT,
-                    'stage_updated_at' => now(),
-                    'lock_version' => $app->lock_version + 1,
-                ]);
-
-                $app->bills()->where('status', 'pending')->update([
-                    'status' => 'cancelled',
-                ]);
-
-                ApplicationStatusLog::create([
-                    'application_id' => $app->id,
-                    'from_status' => Application::STAGE_CHALLAN_ISSUED,
-                    'to_status' => Application::STAGE_DORMANT,
-                    'note' => 'Unpaid challan expired after 14 calendar days. Status moved to dormant.',
-                ]);
-
-                AccessAuditLog::log('challan_expired_to_dormant', Application::class, (string) $app->id, [
-                    'due_date' => $app->challan_due_date,
-                    'challan_no' => $app->challan_no,
-                ]);
-
-                try {
-                    app(\App\Services\ZongSmsService::class)->sendForApplicationEvent($app, 'dormant');
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('Dormant SMS dispatch failed', ['application_id' => $app->id]);
-                }
-            });
-            $count++;
+            if ($this->expireApplicationChallan($app)) {
+                $count++;
+            }
         }
 
         return $count;

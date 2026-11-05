@@ -8,5 +8,6 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('applications:expire-challans')->hourly();
 Schedule::command('schemes:close-expired')->dailyAt('00:15');
 Schedule::command('stats:refresh')->hourly();

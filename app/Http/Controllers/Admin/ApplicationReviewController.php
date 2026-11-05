@@ -420,6 +420,12 @@ class ApplicationReviewController extends Controller
             abort(403, 'Unauthorized access to application in another administrative scope.');
         }
 
+        // Self-heal: expire unpaid challan into dormant status if past due date
+        if ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired()) {
+            $this->lifecycle->expireApplicationChallan($application);
+            $application->refresh();
+        }
+
         // Self-heal: if application is in a field survey stage but missing ApplicationSurvey or ApplicationAssignment record, create it automatically
         if (in_array($application->current_stage, [
             Application::STAGE_FIELD_SURVEY_ASSIGNED,

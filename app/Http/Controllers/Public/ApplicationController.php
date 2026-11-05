@@ -468,9 +468,14 @@ class ApplicationController extends Controller
                 ]);
             }
 
-            if ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && ! $application->psid) {
-                app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application);
-                $application->load('bills');
+            if ($application->current_stage === Application::STAGE_CHALLAN_ISSUED) {
+                if ($application->isChallanExpired()) {
+                    app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
+                    $application->refresh();
+                } elseif (! $application->psid) {
+                    app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application);
+                    $application->load('bills');
+                }
             }
         }
 
@@ -485,6 +490,12 @@ class ApplicationController extends Controller
         $application = Application::with(['scheme.department', 'scheme.challanTemplate', 'applicant', 'district'])
             ->where('application_no', $application_no)
             ->firstOrFail();
+
+        if ($application->current_stage === Application::STAGE_DORMANT || ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired())) {
+            app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
+            return redirect()->route('applications.track', ['application_no' => $application->application_no])
+                ->with('error', 'This fee deposit challan has expired past its due date. Please contact the Deputy Director office for reactivation.');
+        }
 
         $breakdown = $application->getChallanBreakdown();
         $template = $breakdown['template'];
@@ -527,6 +538,12 @@ class ApplicationController extends Controller
     public function uploadPaymentProof(Request $request, string $application_no): RedirectResponse
     {
         $application = Application::where('application_no', $application_no)->firstOrFail();
+
+        if ($application->current_stage === Application::STAGE_DORMANT || ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired())) {
+            app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
+            return redirect()->route('applications.track', ['application_no' => $application->application_no])
+                ->with('error', 'Cannot submit payment receipt for an expired challan. Please contact the Deputy Director office for reactivation.');
+        }
 
         $request->validate([
             'payment_receipt' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],

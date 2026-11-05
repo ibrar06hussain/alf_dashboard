@@ -139,6 +139,13 @@ class GbpayApiController extends Controller
 
             $application = $bill->application;
 
+            // On-the-fly expiration check if challan due date has passed
+            if ($application && $application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired()) {
+                app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
+                $application->refresh();
+                $bill->refresh();
+            }
+
             // Check if bill is cancelled or application is rejected/dormant
             if (
                 $bill->status === 'cancelled' ||
@@ -269,6 +276,13 @@ class GbpayApiController extends Controller
             }
 
             $application = $bill->application;
+
+            // On-the-fly expiration check if challan due date has passed
+            if ($application && $application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired()) {
+                app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
+                $application->refresh();
+                $bill->refresh();
+            }
 
             // Check if bill is blocked/cancelled
             if (

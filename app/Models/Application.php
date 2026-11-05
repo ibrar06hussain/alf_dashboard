@@ -462,6 +462,22 @@ class Application extends Model
     }
 
     /**
+     * Check if the application challan has exceeded its due date.
+     */
+    public function isChallanExpired(): bool
+    {
+        if ($this->current_stage === self::STAGE_DORMANT) {
+            return true;
+        }
+
+        if ($this->current_stage === self::STAGE_CHALLAN_ISSUED && $this->challan_due_date) {
+            return $this->challan_due_date->format('Y-m-d') < now()->toDateString();
+        }
+
+        return false;
+    }
+
+    /**
      * Current SLA clock status: normal, warning (>=75%), breached (>100%)
      */
     public function slaStatus(): array
