@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Log;
 
 class GbpayApiController extends Controller
 {
-    public function __construct(private GbpayService $gbpayService) {}
+    public function __construct(private GbpayService $gbpayService)
+    {
+    }
 
     /**
      * Authenticate GBPay API request using username & bcrypt password stored in gbpay_api_credentials.
@@ -30,7 +32,7 @@ class GbpayApiController extends Controller
 
         $credential = GbpayApiCredential::getActiveByUsername($username);
 
-        if (! $credential) {
+        if (!$credential) {
             Log::warning('GBPay API authentication failed: Username not found', [
                 'username' => $username,
                 'ip' => $ipAddress,
@@ -38,7 +40,7 @@ class GbpayApiController extends Controller
             return false;
         }
 
-        if (! $credential->verifyPassword($password)) {
+        if (!$credential->verifyPassword($password)) {
             Log::warning('GBPay API authentication failed: Invalid password', [
                 'username' => $username,
                 'ip' => $ipAddress,
@@ -118,7 +120,7 @@ class GbpayApiController extends Controller
             ]);
 
             $credential = $this->authenticate($request->username, $request->password, $request->ip());
-            if (! $credential) {
+            if (!$credential) {
                 return response()->json([
                     'response_code' => '04',
                     'message' => 'Username/password Incorrect',
@@ -128,7 +130,7 @@ class GbpayApiController extends Controller
             $psid = (string) $request->voucher_number;
             $bill = $this->findBillByVoucher($psid);
 
-            if (! $bill) {
+            if (!$bill) {
                 return response()->json([
                     'response_code' => '01',
                     'message' => 'Bill Not Found',
@@ -245,7 +247,7 @@ class GbpayApiController extends Controller
             ]);
 
             $credential = $this->authenticate($request->username, $request->password, $request->ip());
-            if (! $credential) {
+            if (!$credential) {
                 return response()->json([
                     'response_code' => '04',
                     'message' => 'Username/password Incorrect',
@@ -259,7 +261,7 @@ class GbpayApiController extends Controller
 
             $bill = $this->findBillByVoucher($psid);
 
-            if (! $bill) {
+            if (!$bill) {
                 return response()->json([
                     'response_code' => '01',
                     'message' => 'Bill Not Found',
@@ -300,7 +302,7 @@ class GbpayApiController extends Controller
             $paidIntAmount = (int) ceil($transactionAmount);
             if ($paidIntAmount !== $expectedBillAmount) {
                 return response()->json([
-                    'response_code' => '05',
+                    'response_code' => '01',
                     'message' => 'Transaction amount mismatch',
                 ], 400);
             }
@@ -366,7 +368,7 @@ class GbpayApiController extends Controller
             ]);
 
             $credential = $this->authenticate($request->username, $request->password, $request->ip());
-            if (! $credential) {
+            if (!$credential) {
                 return response()->json([
                     'response_code' => '04',
                     'message' => 'Username/password Incorrect',
@@ -391,12 +393,12 @@ class GbpayApiController extends Controller
                         ->pluck('id');
 
                     if ($applicantIds->isNotEmpty()) {
-                        $bill = Bill::whereHas('application', fn ($q) => $q->whereIn('applicant_id', $applicantIds))
+                        $bill = Bill::whereHas('application', fn($q) => $q->whereIn('applicant_id', $applicantIds))
                             ->orderByDesc('generated_at')
                             ->orderByDesc('bill_id')
                             ->first();
 
-                        if (! $bill) {
+                        if (!$bill) {
                             $app = Application::whereIn('applicant_id', $applicantIds)
                                 ->whereNotNull('challan_no')
                                 ->orderByDesc('id')
@@ -415,12 +417,12 @@ class GbpayApiController extends Controller
                         ->pluck('id');
 
                     if ($applicantIds->isNotEmpty()) {
-                        $bill = Bill::whereHas('application', fn ($q) => $q->whereIn('applicant_id', $applicantIds))
+                        $bill = Bill::whereHas('application', fn($q) => $q->whereIn('applicant_id', $applicantIds))
                             ->orderByDesc('generated_at')
                             ->orderByDesc('bill_id')
                             ->first();
 
-                        if (! $bill) {
+                        if (!$bill) {
                             $app = Application::whereIn('applicant_id', $applicantIds)
                                 ->whereNotNull('challan_no')
                                 ->orderByDesc('id')
@@ -445,7 +447,7 @@ class GbpayApiController extends Controller
                         ->orderByDesc('bill_id')
                         ->first();
 
-                    if (! $bill) {
+                    if (!$bill) {
                         $app = Application::where('application_no', $searchValue)
                             ->orWhere('challan_no', $searchValue)
                             ->orWhere('psid', $searchValue)
@@ -463,7 +465,7 @@ class GbpayApiController extends Controller
                     ], 400);
             }
 
-            if (! $bill) {
+            if (!$bill) {
                 return response()->json([
                     'response_code' => '01',
                     'message' => 'PSID Not Found',
