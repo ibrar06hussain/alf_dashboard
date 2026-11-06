@@ -20,21 +20,24 @@ class CmDashboardController extends Controller
     {
         $user = auth()->user();
         $departments = $this->departmentsFor($user);
-        if ($user->isDistrictScopedOfficer()) {
+
+        if (! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
             $userDistricts = $user->authorizedDistrictIds();
             $districts = District::whereIn('id', $userDistricts)->orderBy('name')->get();
         } else {
             $districts = District::orderBy('name')->get();
         }
+
+        $userDepts = $user->authorizedDepartmentIds();
         $schemes = Scheme::query()
-            ->when($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries']) && $user->department_id,
-                fn ($q) => $q->where('department_id', $user->department_id))
+            ->when(! $user->isGlobalScope() && ! empty($userDepts),
+                fn ($q) => $q->whereIn('department_id', $userDepts))
             ->orderBy('title')
             ->get(['id', 'title', 'department_id']);
 
         $filters = $this->filters($request);
-        if ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries']) && $user->department_id) {
-            $filters['department_id'] = $user->department_id;
+        if (! $user->isGlobalScope() && count($userDepts) === 1) {
+            $filters['department_id'] = $userDepts[0];
         }
 
         return view('admin.cm-dashboard.index', compact('departments', 'districts', 'schemes', 'filters'));
@@ -157,21 +160,30 @@ class CmDashboardController extends Controller
         $user = auth()->user();
         $query = Application::query();
 
-        if ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries']) && $user->department_id) {
-            $query->whereHas('scheme', fn ($q) => $q->where('department_id', $user->department_id));
-        } elseif ($request->filled('department_id')) {
-            $query->whereHas('scheme', fn ($q) => $q->where('department_id', $request->integer('department_id')));
-        }
+        $userDistricts = $user->authorizedDistrictIds();
+        $userDepts = $user->authorizedDepartmentIds();
 
-        if ($user->isDistrictScopedOfficer()) {
-            $userDistricts = $user->authorizedDistrictIds();
-            if ($request->filled('district_id') && in_array($request->integer('district_id'), $userDistricts, true)) {
-                $query->where('district_id', $request->integer('district_id'));
-            } else {
+        if (! $user->isGlobalScope()) {
+            if (! empty($userDistricts)) {
                 $query->whereIn('district_id', $userDistricts);
             }
-        } elseif ($request->filled('district_id')) {
-            $query->where('district_id', $request->integer('district_id'));
+            if (! empty($userDepts)) {
+                $query->whereHas('scheme', fn ($q) => $q->whereIn('department_id', $userDepts));
+            }
+        }
+
+        if ($request->filled('department_id')) {
+            $deptId = $request->integer('department_id');
+            if ($user->isGlobalScope() || in_array($deptId, $userDepts, true)) {
+                $query->whereHas('scheme', fn ($q) => $q->where('department_id', $deptId));
+            }
+        }
+
+        if ($request->filled('district_id')) {
+            $distId = $request->integer('district_id');
+            if ($user->isGlobalScope() || in_array($distId, $userDistricts, true)) {
+                $query->where('district_id', $distId);
+            }
         }
         if ($request->filled('scheme_id')) {
             $query->where('scheme_id', $request->integer('scheme_id'));
@@ -196,10 +208,12 @@ class CmDashboardController extends Controller
             'department_id', 'district_id', 'scheme_id', 'status', 'from_date', 'to_date',
         ]);
 
-        if ($user && $user->isDistrictScopedOfficer()) {
+        if ($user && ! $user->isGlobalScope()) {
             $userDistricts = $user->authorizedDistrictIds();
             if (empty($filters['district_id']) || ! in_array((int) $filters['district_id'], $userDistricts, true)) {
-                $filters['district_id'] = $userDistricts[0] ?? null;
+                if (count($userDistricts) === 1) {
+                    $filters['district_id'] = $userDistricts[0];
+                }
             }
         }
 
@@ -208,8 +222,8 @@ class CmDashboardController extends Controller
 
     private function departmentsFor($user)
     {
-        if ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries']) && $user->department_id) {
-            return Department::where('id', $user->department_id)->get();
+        if ($user && ! $user->isGlobalScope() && ! empty($user->authorizedDepartmentIds())) {
+            return Department::whereIn('id', $user->authorizedDepartmentIds())->orderBy('display_order')->get();
         }
 
         return Department::orderBy('display_order')->get();

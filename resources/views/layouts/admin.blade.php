@@ -20,8 +20,8 @@
     $user = auth()->user();
     $isSuperAdmin = $user?->hasRole('Super Admin');
     $isSecretary = $user?->hasRole('Secretary');
-    $canManageSchemes = ! $isSecretary && $user?->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
-    $canViewCm = $isSecretary || $user?->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'Division Director']);
+    $canManageSchemes = (! $isSecretary && $user?->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries'])) || (bool) $user?->can('pages.schemes');
+    $canViewCm = $isSecretary || $user?->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'Division Director']) || (bool) $user?->can('pages.cm_dashboard');
 @endphp
 <div class="app-container app-theme-white body-tabs-shadow fixed-header fixed-sidebar">
     <div class="app-header header-shadow">
@@ -100,9 +100,21 @@
             <div class="scrollbar-sidebar">
                 <div class="app-sidebar__inner">
                     @php
-                        $canViewGbpay = $user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'Accounts Officer']);
-                        $canViewWheatMis = $user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'District Officer', 'District Deputy Director', 'Division Director', 'Field Officer', 'Accounts Officer', 'Distribution Officer']);
-                        $canViewStock = $user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'District Officer', 'District Deputy Director', 'Division Director', 'Distribution Officer']);
+                        $canViewGbpay = $isSuperAdmin;
+                        $canViewWheatMis = $user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'District Officer', 'District Deputy Director', 'Division Director', 'Field Officer', 'Accounts Officer', 'Distribution Officer']) || (bool) $user?->can('pages.wheat_mis');
+                        $canViewStock = $user?->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries', 'District Officer', 'District Deputy Director', 'Division Director', 'Distribution Officer']) || (bool) $user?->can('pages.stock');
+                        $canViewStats = $canManageSchemes || (bool) $user?->can('pages.stats');
+                        $canManageForms = $canManageSchemes || (bool) $user?->can('pages.form_builder');
+                        $canManageChallan = $canManageSchemes || (bool) $user?->can('pages.challan_templates');
+                        $canManageSchemesMenu = $canManageSchemes || $canManageForms || $canManageChallan;
+                        $canManageDepartments = $isSuperAdmin || (bool) $user?->can('pages.departments');
+                        $canManageDistricts = $isSuperAdmin || (bool) $user?->can('pages.districts');
+                        $canManageCms = $isSuperAdmin || (bool) $user?->can('pages.cms');
+                        $canManageSms = $isSuperAdmin;
+                        $canManageUsers = $isSuperAdmin || (bool) $user?->can('pages.users');
+                        $canViewRoles = $isSuperAdmin || (bool) $user?->can('pages.roles');
+                        $canViewAuditLogs = $isSuperAdmin || (bool) $user?->can('pages.audit_logs');
+                        $canViewAdminHeading = $canManageCms || $canManageSms || $canManageUsers || $canViewRoles || $canViewAuditLogs;
 
                         $isAnalyticsActive = request()->routeIs('admin.cm-dashboard.*', 'admin.wheat-mis.*', 'admin.stats.*');
                         $isApplicationsActive = request()->routeIs('admin.applications.*', 'admin.interests.*', 'admin.gbpay.*');
@@ -157,7 +169,7 @@
                                             </a>
                                         </li>
                                     @endif
-                                    @if($canManageSchemes)
+                                    @if($canManageSchemes || $canViewStats)
                                         <li class="{{ request()->routeIs('admin.stats.*') ? 'mm-active' : '' }}">
                                             <a href="{{ route('admin.stats.index') }}" class="{{ request()->routeIs('admin.stats.*') ? 'mm-active' : '' }}">
                                                 <i class="sub-nav-icon fa-solid fa-chart-simple"></i> Department Stats
@@ -204,7 +216,7 @@
                         </li>
 
                         {{-- Collapsible Group: Schemes & Forms --}}
-                        @if($canManageSchemes)
+                        @if($canManageSchemesMenu)
                             <li class="alf-nav-group {{ $isSchemesActive ? 'mm-active' : '' }}">
                                 <a href="#" data-alf-collapse="true" aria-expanded="{{ $isSchemesActive ? 'true' : 'false' }}">
                                     <i class="metismenu-icon fa-solid fa-file-signature"></i>
@@ -212,26 +224,32 @@
                                     <i class="metismenu-state-icon fa-solid fa-chevron-down"></i>
                                 </a>
                                 <ul class="mm-collapse {{ $isSchemesActive ? 'mm-show' : '' }}">
-                                    <li class="{{ request()->routeIs('admin.schemes.*') && request('type') !== 'proposed' ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.schemes.index') }}" class="{{ request()->routeIs('admin.schemes.*') && request('type') !== 'proposed' ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-file-lines"></i> Running Schemes
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.schemes.*') && request('type') === 'proposed' ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.schemes.index', ['type' => 'proposed']) }}" class="{{ request()->routeIs('admin.schemes.*') && request('type') === 'proposed' ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-flag"></i> Proposed (CM)
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.form-builder.index') }}" class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-file-pen"></i> Application Forms
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.challan-templates.index') }}" class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-receipt"></i> Challan Templates
-                                        </a>
-                                    </li>
+                                    @if($canManageSchemes)
+                                        <li class="{{ request()->routeIs('admin.schemes.*') && request('type') !== 'proposed' ? 'mm-active' : '' }}">
+                                            <a href="{{ route('admin.schemes.index') }}" class="{{ request()->routeIs('admin.schemes.*') && request('type') !== 'proposed' ? 'mm-active' : '' }}">
+                                                <i class="sub-nav-icon fa-solid fa-file-lines"></i> Running Schemes
+                                            </a>
+                                        </li>
+                                        <li class="{{ request()->routeIs('admin.schemes.*') && request('type') === 'proposed' ? 'mm-active' : '' }}">
+                                            <a href="{{ route('admin.schemes.index', ['type' => 'proposed']) }}" class="{{ request()->routeIs('admin.schemes.*') && request('type') === 'proposed' ? 'mm-active' : '' }}">
+                                                <i class="sub-nav-icon fa-solid fa-flag"></i> Proposed (CM)
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if($canManageForms)
+                                        <li class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
+                                            <a href="{{ route('admin.form-builder.index') }}" class="{{ request()->routeIs('admin.form-builder.*') ? 'mm-active' : '' }}">
+                                                <i class="sub-nav-icon fa-solid fa-file-pen"></i> Application Forms
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if($canManageChallan)
+                                        <li class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
+                                            <a href="{{ route('admin.challan-templates.index') }}" class="{{ request()->routeIs('admin.challan-templates.*') ? 'mm-active' : '' }}">
+                                                <i class="sub-nav-icon fa-solid fa-receipt"></i> Challan Templates
+                                            </a>
+                                        </li>
+                                    @endif
                                 </ul>
                             </li>
                         @endif
@@ -297,12 +315,14 @@
                                         <i class="sub-nav-icon fa-solid fa-building-wheat"></i> Organizations (GB)
                                     </a>
                                 </li>
-                                @if($isSuperAdmin)
+                                @if($canManageDepartments)
                                     <li class="{{ request()->routeIs('admin.departments.*') ? 'mm-active' : '' }}">
                                         <a href="{{ route('admin.departments.index') }}" class="{{ request()->routeIs('admin.departments.*') ? 'mm-active' : '' }}">
                                             <i class="sub-nav-icon fa-solid fa-landmark"></i> Departments
                                         </a>
                                     </li>
+                                @endif
+                                @if($canManageDistricts)
                                     <li class="{{ request()->routeIs('admin.districts.*') ? 'mm-active' : '' }}">
                                         <a href="{{ route('admin.districts.index') }}" class="{{ request()->routeIs('admin.districts.*') ? 'mm-active' : '' }}">
                                             <i class="sub-nav-icon fa-solid fa-location-dot"></i> Districts
@@ -312,65 +332,79 @@
                             </ul>
                         </li>
 
-                        @if($isSuperAdmin)
+                        @if($canViewAdminHeading)
                             <li class="app-sidebar__heading">Administration</li>
 
                             {{-- Collapsible Group: Website Content & SMS --}}
-                            <li class="alf-nav-group {{ $isCmsActive ? 'mm-active' : '' }}">
-                                <a href="#" data-alf-collapse="true" aria-expanded="{{ $isCmsActive ? 'true' : 'false' }}">
-                                    <i class="metismenu-icon fa-solid fa-globe"></i>
-                                    Portal CMS &amp; SMS
-                                    <i class="metismenu-state-icon fa-solid fa-chevron-down"></i>
-                                </a>
-                                <ul class="mm-collapse {{ $isCmsActive ? 'mm-show' : '' }}">
-                                    <li class="{{ request()->routeIs('admin.carousel.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.carousel.index') }}" class="{{ request()->routeIs('admin.carousel.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-images"></i> Carousel Slides
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.media.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.media.edit') }}" class="{{ request()->routeIs('admin.media.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-photo-film"></i> Site Media
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.site-info.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.site-info.edit') }}" class="{{ request()->routeIs('admin.site-info.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-address-card"></i> Site Information
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.sms-templates.index') }}" class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-comment-sms"></i> SMS Gateway
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
+                            @if($canManageCms || $canManageSms)
+                                <li class="alf-nav-group {{ $isCmsActive ? 'mm-active' : '' }}">
+                                    <a href="#" data-alf-collapse="true" aria-expanded="{{ $isCmsActive ? 'true' : 'false' }}">
+                                        <i class="metismenu-icon fa-solid fa-globe"></i>
+                                        Portal CMS &amp; SMS
+                                        <i class="metismenu-state-icon fa-solid fa-chevron-down"></i>
+                                    </a>
+                                    <ul class="mm-collapse {{ $isCmsActive ? 'mm-show' : '' }}">
+                                        @if($canManageCms)
+                                            <li class="{{ request()->routeIs('admin.carousel.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.carousel.index') }}" class="{{ request()->routeIs('admin.carousel.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-images"></i> Carousel Slides
+                                                </a>
+                                            </li>
+                                            <li class="{{ request()->routeIs('admin.media.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.media.edit') }}" class="{{ request()->routeIs('admin.media.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-photo-film"></i> Site Media
+                                                </a>
+                                            </li>
+                                            <li class="{{ request()->routeIs('admin.site-info.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.site-info.edit') }}" class="{{ request()->routeIs('admin.site-info.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-address-card"></i> Site Information
+                                                </a>
+                                            </li>
+                                        @endif
+                                        @if($canManageSms)
+                                            <li class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.sms-templates.index') }}" class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-comment-sms"></i> SMS Gateway
+                                                </a>
+                                            </li>
+                                        @endif
+                                    </ul>
+                                </li>
+                            @endif
 
                             {{-- Collapsible Group: Users, Roles & Audit --}}
-                            <li class="alf-nav-group {{ $isSecurityActive ? 'mm-active' : '' }}">
-                                <a href="#" data-alf-collapse="true" aria-expanded="{{ $isSecurityActive ? 'true' : 'false' }}">
-                                    <i class="metismenu-icon fa-solid fa-user-shield"></i>
-                                    Users &amp; Security
-                                    <i class="metismenu-state-icon fa-solid fa-chevron-down"></i>
-                                </a>
-                                <ul class="mm-collapse {{ $isSecurityActive ? 'mm-show' : '' }}">
-                                    <li class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-users"></i> Users &amp; Hierarchy
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.roles.matrix') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.roles.matrix') }}" class="{{ request()->routeIs('admin.roles.matrix') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-shield-halved"></i> Roles &amp; Matrix
-                                        </a>
-                                    </li>
-                                    <li class="{{ request()->routeIs('admin.audit-logs.*') ? 'mm-active' : '' }}">
-                                        <a href="{{ route('admin.audit-logs.index') }}" class="{{ request()->routeIs('admin.audit-logs.*') ? 'mm-active' : '' }}">
-                                            <i class="sub-nav-icon fa-solid fa-clock-rotate-left"></i> Access Audit Logs
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
+                            @if($canManageUsers || $canViewRoles || $canViewAuditLogs)
+                                <li class="alf-nav-group {{ $isSecurityActive ? 'mm-active' : '' }}">
+                                    <a href="#" data-alf-collapse="true" aria-expanded="{{ $isSecurityActive ? 'true' : 'false' }}">
+                                        <i class="metismenu-icon fa-solid fa-user-shield"></i>
+                                        Users &amp; Security
+                                        <i class="metismenu-state-icon fa-solid fa-chevron-down"></i>
+                                    </a>
+                                    <ul class="mm-collapse {{ $isSecurityActive ? 'mm-show' : '' }}">
+                                        @if($canManageUsers)
+                                            <li class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-users"></i> Users &amp; Hierarchy
+                                                </a>
+                                            </li>
+                                        @endif
+                                        @if($canViewRoles)
+                                            <li class="{{ request()->routeIs('admin.roles.matrix') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.roles.matrix') }}" class="{{ request()->routeIs('admin.roles.matrix') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-shield-halved"></i> Roles &amp; Matrix
+                                                </a>
+                                            </li>
+                                        @endif
+                                        @if($canViewAuditLogs)
+                                            <li class="{{ request()->routeIs('admin.audit-logs.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.audit-logs.index') }}" class="{{ request()->routeIs('admin.audit-logs.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-clock-rotate-left"></i> Access Audit Logs
+                                                </a>
+                                            </li>
+                                        @endif
+                                    </ul>
+                                </li>
+                            @endif
                         @endif
 
                         <li class="app-sidebar__heading">Account</li>

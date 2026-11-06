@@ -46,14 +46,9 @@ class ApplicationPolicy
             return $hasAssignment || $hasSurvey;
         }
 
-        // Division Directors: authorized within their division's districts
-        if ($user->hasRole('Division Director')) {
-            return in_array((int) $application->district_id, $user->authorizedDistrictIds(), true);
-        }
-
-        // District Deputy Directors, Accounts, Distribution: match both district and department
-        $districtOk = in_array($application->district_id, $user->authorizedDistrictIds(), true);
-        $deptOk = in_array($application->scheme->department_id, $user->authorizedDepartmentIds(), true);
+        // Scoped access: match both authorized district and authorized department
+        $districtOk = in_array((int) $application->district_id, $user->authorizedDistrictIds(), true);
+        $deptOk = in_array((int) $application->scheme->department_id, $user->authorizedDepartmentIds(), true);
 
         return $districtOk && $deptOk;
     }

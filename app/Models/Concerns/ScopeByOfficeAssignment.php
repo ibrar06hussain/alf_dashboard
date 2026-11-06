@@ -35,14 +35,7 @@ trait ScopeByOfficeAssignment
             return $query;
         }
 
-        // Division Directors: Scoped to the districts in their assigned division(s)
-        if ($user->hasRole('Division Director')) {
-            $divisionDistricts = $user->authorizedDistrictIds();
-
-            return $query->whereIn('district_id', $divisionDistricts);
-        }
-
-        // District Deputy Directors / District Officers / Accounts / Distribution
+        // All scoped users (Division Directors, Department Directors, District Deputy Directors, Officers, etc.)
         $districtIds = $user->authorizedDistrictIds();
         $departmentIds = $user->authorizedDepartmentIds();
 

@@ -27,21 +27,23 @@ return new class extends Migration
             ]);
         }
 
-        if (Schema::hasTable('bills') && Schema::hasColumn('bills', 'bill_amount')) {
-            DB::table('bills')
-                ->whereRaw('bill_amount != CEIL(bill_amount)')
-                ->update([
-                    'bill_amount' => DB::raw('CEIL(bill_amount)'),
-                ]);
-        }
+        if (DB::getDriverName() !== 'sqlite') {
+            if (Schema::hasTable('bills') && Schema::hasColumn('bills', 'bill_amount')) {
+                DB::table('bills')
+                    ->whereRaw('bill_amount != CEIL(bill_amount)')
+                    ->update([
+                        'bill_amount' => DB::raw('CEIL(bill_amount)'),
+                    ]);
+            }
 
-        if (Schema::hasTable('applications') && Schema::hasColumn('applications', 'challan_amount')) {
-            DB::table('applications')
-                ->whereNotNull('challan_amount')
-                ->whereRaw('challan_amount != CEIL(challan_amount)')
-                ->update([
-                    'challan_amount' => DB::raw('CEIL(challan_amount)'),
-                ]);
+            if (Schema::hasTable('applications') && Schema::hasColumn('applications', 'challan_amount')) {
+                DB::table('applications')
+                    ->whereNotNull('challan_amount')
+                    ->whereRaw('challan_amount != CEIL(challan_amount)')
+                    ->update([
+                        'challan_amount' => DB::raw('CEIL(challan_amount)'),
+                    ]);
+            }
         }
     }
 

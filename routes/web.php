@@ -134,7 +134,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('applications/surveys/{survey}/findings', [ApplicationReviewController::class, 'submitSurveyFindings'])->name('applications.surveys.findings');
         Route::post('applications/{application}/correction-request', [ApplicationReviewController::class, 'requestCorrection'])->name('applications.correction-request');
         Route::post('applications/{application}/verify-payment', [ApplicationReviewController::class, 'verifyPayment'])->name('applications.verify-payment');
-        Route::post('applications/{application}/generate-gbpay-bill', [GbpayController::class, 'generateApplicationBill'])->name('applications.generate-gbpay-bill');
+        Route::post('applications/{application}/generate-gbpay-bill', [GbpayController::class, 'generateApplicationBill'])->middleware('role:Super Admin')->name('applications.generate-gbpay-bill');
         Route::post('applications/{application}/allocate-stock', [ApplicationReviewController::class, 'allocateStock'])->name('applications.allocate-stock');
         Route::post('applications/{application}/reactivate', [ApplicationReviewController::class, 'reactivateDormant'])->name('applications.reactivate');
         Route::post('applications/{application}/assign-dd', [ApplicationReviewController::class, 'assignDeputyDirector'])->name('applications.assign-dd');
@@ -146,7 +146,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('organizations', [FarmerOrganizationController::class, 'index'])->name('organizations.index');
 
         // Dedicated Scheme MIS: Distribution of Wheat Seed (Cost Sharing 50:50)
-        Route::middleware('role:Super Admin|Secretary|Director Agriculture|District Officer|District Deputy Director|Division Director|Field Officer|Accounts Officer|Distribution Officer')->group(function () {
+        Route::middleware('role_or_permission:Super Admin|Secretary|Director Agriculture|District Officer|District Deputy Director|Division Director|Field Officer|Accounts Officer|Distribution Officer|pages.wheat_mis')->group(function () {
             Route::get('schemes/wheat-mis', [WheatSeedMisController::class, 'index'])->name('wheat-mis.index');
             Route::get('schemes/wheat-mis/analytics', [WheatSeedMisController::class, 'analytics'])->name('wheat-mis.analytics');
             Route::get('schemes/wheat-mis/beneficiaries', [WheatSeedMisController::class, 'beneficiaries'])->name('wheat-mis.beneficiaries');
@@ -155,7 +155,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // Stock & Distribution Management (Centers, Receipts, Transfers, Damages, Demand vs Stock)
-        Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|District Officer|District Deputy Director|Division Director|Distribution Officer')->prefix('stock')->name('stock.')->group(function () {
+        Route::middleware('role_or_permission:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|District Officer|District Deputy Director|Division Director|Distribution Officer|pages.stock')->prefix('stock')->name('stock.')->group(function () {
             Route::get('/', [StockManagementController::class, 'index'])->name('index');
             Route::get('demand-vs-stock', [StockManagementController::class, 'demandVsStock'])->name('demand');
             
@@ -188,14 +188,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // CM Executive Analytics Dashboard
-        Route::middleware('role:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|Division Director')->group(function () {
+        Route::middleware('role_or_permission:Super Admin|Secretary|Director Agriculture|Director Livestock|Director Fisheries|Division Director|pages.cm_dashboard')->group(function () {
             Route::get('cm-dashboard', [CmDashboardController::class, 'index'])->name('cm-dashboard.index');
             Route::get('cm-dashboard/analytics', [CmDashboardController::class, 'analytics'])->name('cm-dashboard.analytics');
             Route::get('cm-dashboard/export', [CmDashboardController::class, 'export'])->name('cm-dashboard.export');
         });
 
         // Scheme & Form Configuration (Super Admin & Directorate Heads ONLY - Secretary is executive oversight, not web modification)
-        Route::middleware('role:Super Admin|Director Agriculture|Director Livestock|Director Fisheries')->group(function () {
+        Route::middleware('role_or_permission:Super Admin|Director Agriculture|Director Livestock|Director Fisheries|pages.schemes|pages.stats|pages.form_builder|pages.challan_templates')->group(function () {
             Route::resource('schemes', AdminSchemeController::class);
             Route::resource('challan-templates', ChallanTemplateController::class)->names('challan-templates');
             Route::get('challan-templates/{challan_template}/preview', [ChallanTemplateController::class, 'preview'])->name('challan-templates.preview');
@@ -214,47 +214,65 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('stats/{stat}', [DepartmentStatController::class, 'destroy'])->name('stats.destroy');
         });
 
-        // Super Admin only (System, CMS & Technical Web Application Configuration)
-        Route::middleware('role:Super Admin')->group(function () {
-            // SMS Manual Application Dispatch & Gateway Testing (Super Admin Only)
-            Route::post('applications/{application}/send-sms', [SmsTemplateController::class, 'sendForApplication'])->name('applications.send-sms');
-            Route::post('sms-templates/gateway', [SmsTemplateController::class, 'updateGateway'])->name('sms-templates.gateway.update');
-            Route::post('sms-templates/check-balance', [SmsTemplateController::class, 'checkBalance'])->name('sms-templates.check-balance');
-            Route::post('sms-templates/send-test', [SmsTemplateController::class, 'sendTest'])->name('sms-templates.send-test');
-            Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
-            Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
+        // System, CMS & Technical Web Application Configuration (Super Admin or Delegated Page Permissions)
+        Route::middleware('role_or_permission:Super Admin|pages.departments|pages.districts|pages.organizations|pages.cms|pages.users|pages.roles|pages.audit_logs')->group(function () {
+            // SMS Manual Application Dispatch & Gateway Testing (Admin roles only)
+            Route::middleware('role:Super Admin')->group(function () {
+                Route::post('applications/{application}/send-sms', [SmsTemplateController::class, 'sendForApplication'])->name('applications.send-sms');
+                Route::post('sms-templates/gateway', [SmsTemplateController::class, 'updateGateway'])->name('sms-templates.gateway.update');
+                Route::post('sms-templates/check-balance', [SmsTemplateController::class, 'checkBalance'])->name('sms-templates.check-balance');
+                Route::post('sms-templates/send-test', [SmsTemplateController::class, 'sendTest'])->name('sms-templates.send-test');
+                Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
+                Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
+            });
 
-            Route::resource('departments', AdminDepartmentController::class);
-            Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
-            Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');
-            Route::put('districts/{district}', [DistrictController::class, 'update'])->name('districts.update');
+            Route::middleware('role_or_permission:Super Admin|pages.departments')->group(function () {
+                Route::resource('departments', AdminDepartmentController::class);
+            });
 
-            // Farmer / Village Organizations CRUD (Super Admin Only)
-            Route::post('organizations', [FarmerOrganizationController::class, 'store'])->name('organizations.store');
-            Route::put('organizations/{organization}', [FarmerOrganizationController::class, 'update'])->name('organizations.update');
-            Route::delete('organizations/{organization}', [FarmerOrganizationController::class, 'destroy'])->name('organizations.destroy');
+            Route::middleware('role_or_permission:Super Admin|pages.districts')->group(function () {
+                Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
+                Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');
+                Route::put('districts/{district}', [DistrictController::class, 'update'])->name('districts.update');
+            });
 
-            Route::resource('carousel', CarouselSlideController::class)->except(['show']);
-            Route::get('media', [SiteMediaController::class, 'edit'])->name('media.edit');
-            Route::put('media', [SiteMediaController::class, 'update'])->name('media.update');
-            Route::get('site-info', [SiteInfoController::class, 'edit'])->name('site-info.edit');
-            Route::put('site-info', [SiteInfoController::class, 'update'])->name('site-info.update');
+            // Farmer / Village Organizations CRUD
+            Route::middleware('role_or_permission:Super Admin|pages.organizations')->group(function () {
+                Route::post('organizations', [FarmerOrganizationController::class, 'store'])->name('organizations.store');
+                Route::put('organizations/{organization}', [FarmerOrganizationController::class, 'update'])->name('organizations.update');
+                Route::delete('organizations/{organization}', [FarmerOrganizationController::class, 'destroy'])->name('organizations.destroy');
+            });
 
-            Route::get('users', [UserController::class, 'index'])->name('users.index');
-            Route::get('users/create', [UserController::class, 'create'])->name('users.create');
-            Route::post('users', [UserController::class, 'store'])->name('users.store');
-            Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
-            Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
-            Route::get('users/{user}/assignments', [UserController::class, 'assignments'])->name('users.assignments');
-            Route::post('users/{user}/assignments', [UserController::class, 'storeAssignment'])->name('users.assignments.store');
-            Route::delete('users/assignments/{assignment}', [UserController::class, 'destroyAssignment'])->name('users.assignments.destroy');
+            Route::middleware('role_or_permission:Super Admin|pages.cms')->group(function () {
+                Route::resource('carousel', CarouselSlideController::class)->except(['show']);
+                Route::get('media', [SiteMediaController::class, 'edit'])->name('media.edit');
+                Route::put('media', [SiteMediaController::class, 'update'])->name('media.update');
+                Route::get('site-info', [SiteInfoController::class, 'edit'])->name('site-info.edit');
+                Route::put('site-info', [SiteInfoController::class, 'update'])->name('site-info.update');
+            });
 
-            Route::get('roles-matrix', [UserController::class, 'rolesMatrix'])->name('roles.matrix');
-            Route::get('audit-logs', [UserController::class, 'auditLogs'])->name('audit-logs.index');
+            Route::middleware('role_or_permission:Super Admin|pages.users')->group(function () {
+                Route::get('users', [UserController::class, 'index'])->name('users.index');
+                Route::get('users/create', [UserController::class, 'create'])->name('users.create');
+                Route::post('users', [UserController::class, 'store'])->name('users.store');
+                Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+                Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+                Route::get('users/{user}/assignments', [UserController::class, 'assignments'])->name('users.assignments');
+                Route::post('users/{user}/assignments', [UserController::class, 'storeAssignment'])->name('users.assignments.store');
+                Route::delete('users/assignments/{assignment}', [UserController::class, 'destroyAssignment'])->name('users.assignments.destroy');
+            });
+
+            Route::middleware('role_or_permission:Super Admin|pages.roles')->group(function () {
+                Route::get('roles-matrix', [UserController::class, 'rolesMatrix'])->name('roles.matrix');
+            });
+
+            Route::middleware('role_or_permission:Super Admin|pages.audit_logs')->group(function () {
+                Route::get('audit-logs', [UserController::class, 'auditLogs'])->name('audit-logs.index');
+            });
         });
 
-        // GBPay Payment Gateway Configuration, Credentials & PSID Ledger
-        Route::middleware('role:Super Admin|Accounts Officer|Secretary|Director Agriculture|Director Livestock|Director Fisheries')->prefix('gbpay')->name('gbpay.')->group(function () {
+        // GBPay Payment Gateway Configuration, Credentials & PSID Ledger (Admin roles only)
+        Route::middleware('role:Super Admin')->prefix('gbpay')->name('gbpay.')->group(function () {
             Route::get('/', [GbpayController::class, 'index'])->name('index');
             Route::match(['post', 'put'], 'psid-config', [GbpayController::class, 'updatePsidConfig'])->name('psid-config.update');
             Route::post('credentials', [GbpayController::class, 'storeCredential'])->name('credentials.store');

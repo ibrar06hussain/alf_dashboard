@@ -920,7 +920,7 @@
                                 <i class="fa-solid fa-receipt me-1"></i> View Payment Receipt
                             </a>
                         @endif
-                        @if($activeBill?->status !== 'paid')
+                        @if(auth()->user()?->hasRole('Super Admin') && $activeBill?->status !== 'paid')
                             <form method="POST" action="{{ route('admin.applications.generate-gbpay-bill', $application) }}" class="d-inline">
                                 @csrf
                                 <button type="submit" class="btn btn-sm btn-outline-dark">

@@ -21,10 +21,31 @@ class SchemeController extends Controller
 {
     public function index(Request $request): View
     {
+        $user = auth()->user();
         $query = Scheme::with(['department', 'challanTemplate'])->withCount(['applications', 'interests'])->latest();
 
+        // Scope by authorized departments and districts if user is not global
+        if ($user && ! $user->isGlobalScope()) {
+            $userDepts = $user->authorizedDepartmentIds();
+            $userDistricts = $user->authorizedDistrictIds();
+
+            if (! empty($userDepts)) {
+                $query->whereIn('department_id', $userDepts);
+            }
+
+            if (! empty($userDistricts)) {
+                $query->where(function ($sq) use ($userDistricts) {
+                    $sq->whereIn('scope', ['gb', 'province_wide'])
+                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $userDistricts));
+                });
+            }
+        }
+
         if ($request->filled('department_id')) {
-            $query->where('department_id', $request->integer('department_id'));
+            $deptId = $request->integer('department_id');
+            if (! $user || $user->isGlobalScope() || in_array($deptId, $user->authorizedDepartmentIds(), true)) {
+                $query->where('department_id', $deptId);
+            }
         }
         if ($request->filled('type')) {
             $query->where('type', $request->string('type'));
@@ -42,11 +63,32 @@ class SchemeController extends Controller
         }
 
         $schemes = $query->paginate(20)->withQueryString();
-        $departments = Department::orderBy('display_order')->get();
+        $departments = Department::when($user && ! $user->isGlobalScope() && ! empty($user->authorizedDepartmentIds()), function ($q) use ($user) {
+            $q->whereIn('id', $user->authorizedDepartmentIds());
+        })->orderBy('display_order')->get();
 
         $base = Scheme::query();
+        if ($user && ! $user->isGlobalScope()) {
+            $userDepts = $user->authorizedDepartmentIds();
+            $userDistricts = $user->authorizedDistrictIds();
+
+            if (! empty($userDepts)) {
+                $base->whereIn('department_id', $userDepts);
+            }
+
+            if (! empty($userDistricts)) {
+                $base->where(function ($sq) use ($userDistricts) {
+                    $sq->whereIn('scope', ['gb', 'province_wide'])
+                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $userDistricts));
+                });
+            }
+        }
+
         if ($request->filled('department_id')) {
-            $base->where('department_id', $request->integer('department_id'));
+            $deptId = $request->integer('department_id');
+            if (! $user || $user->isGlobalScope() || in_array($deptId, $user->authorizedDepartmentIds(), true)) {
+                $base->where('department_id', $deptId);
+            }
         }
         if ($request->filled('type')) {
             $base->where('type', $request->string('type'));

@@ -250,7 +250,7 @@ class WheatSeedMisService
     public function getAllDistrictRatesTable(?User $user = null): Collection
     {
         $districtsQuery = District::orderBy('name');
-        if ($user && $user->isDistrictScopedOfficer()) {
+        if ($user && ! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
             $districtsQuery->whereIn('id', $user->authorizedDistrictIds());
         }
         $districts = $districtsQuery->get();
@@ -319,8 +319,8 @@ class WheatSeedMisService
             ->where('applications.scheme_id', $schemeId)
             ->with(['applicant', 'district', 'statusLogs.user']);
 
-        // Staff role scoping: officers other than Directors, Secretary, and Admin see their respective district only
-        if ($user && $user->isDistrictScopedOfficer()) {
+        // Staff role scoping: scope non-global users to their authorized districts
+        if ($user && ! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
             $userDistricts = $user->authorizedDistrictIds();
             $query->whereIn('applications.district_id', $userDistricts);
         }
@@ -341,7 +341,7 @@ class WheatSeedMisService
         // Filter: District
         if (! empty($filters['district_id'])) {
             $filterDistrictId = (int) $filters['district_id'];
-            if ($user && $user->isDistrictScopedOfficer()) {
+            if ($user && ! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
                 $userDistricts = $user->authorizedDistrictIds();
                 if (in_array($filterDistrictId, $userDistricts, true)) {
                     $query->where('applications.district_id', $filterDistrictId);
@@ -569,7 +569,7 @@ class WheatSeedMisService
         $schemeId = $this->getScheme()?->id ?? self::SCHEME_ID;
         $quotaQuery = SchemeDistrict::query()->where('scheme_id', $schemeId);
 
-        if ($user && $user->isDistrictScopedOfficer()) {
+        if ($user && ! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
             $userDistricts = $user->authorizedDistrictIds();
             if (! empty($filters['district_id']) && in_array((int) $filters['district_id'], $userDistricts, true)) {
                 $quotaQuery->where('district_id', (int) $filters['district_id']);
@@ -735,7 +735,7 @@ class WheatSeedMisService
     {
         $schemeId = $this->getScheme()?->id ?? self::SCHEME_ID;
         $districtsQuery = District::orderBy('name');
-        if ($user && $user->isDistrictScopedOfficer()) {
+        if ($user && ! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
             $districtsQuery->whereIn('id', $user->authorizedDistrictIds());
         } elseif (! empty($filters['district_id'])) {
             $districtsQuery->where('id', (int) $filters['district_id']);

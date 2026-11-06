@@ -106,17 +106,16 @@ class User extends Authenticatable
 
         $divisionIds = $activeAssignments->pluck('division_id')->filter()->unique()->values()->all();
 
-        if (empty($divisionIds)) {
-            // Check if district assignments belong to divisions
-            $districtIds = $this->authorizedDistrictIds();
-            if (! empty($districtIds)) {
-                $divisionIds = \Illuminate\Support\Facades\DB::table('division_districts')
-                    ->whereIn('district_id', $districtIds)
-                    ->pluck('division_id')
-                    ->unique()
-                    ->values()
-                    ->all();
-            }
+        // Also check if district assignments belong to divisions
+        $districtIds = $this->authorizedDistrictIds();
+        if (! empty($districtIds)) {
+            $mappedDivisionIds = \Illuminate\Support\Facades\DB::table('division_districts')
+                ->whereIn('district_id', $districtIds)
+                ->pluck('division_id')
+                ->unique()
+                ->values()
+                ->all();
+            $divisionIds = array_merge($divisionIds, $mappedDivisionIds);
         }
 
         return array_values(array_unique(array_map('intval', $divisionIds)));
@@ -132,28 +131,44 @@ class User extends Authenticatable
         }
 
         $activeAssignments = $this->activeOfficeAssignments()->get();
+        $districtIds = [];
 
-        // If user is a Division Director or assigned to a division
-        if ($this->hasRole('Division Director') || $activeAssignments->contains(fn ($a) => $a->division_id && ! $a->district_id)) {
-            $divIds = $activeAssignments->pluck('division_id')->filter()->all();
-            if (! empty($divIds)) {
-                return \Illuminate\Support\Facades\DB::table('division_districts')
-                    ->whereIn('division_id', $divIds)
-                    ->pluck('district_id')
-                    ->map(fn ($id) => (int) $id)
-                    ->unique()
-                    ->values()
-                    ->all();
-            }
+        // 1. Districts from division-wide assignments (division_id is set and district_id is null, or Division Director)
+        $divisionScopeAssignments = $activeAssignments->filter(function ($a) {
+            return $a->division_id && ! $a->district_id;
+        });
+
+        $divIds = $divisionScopeAssignments->pluck('division_id')->filter()->unique()->all();
+        if ($this->hasRole('Division Director')) {
+            $divIds = array_unique(array_merge($divIds, $activeAssignments->pluck('division_id')->filter()->all()));
         }
 
-        $assignedDistrictIds = $activeAssignments->pluck('district_id')->filter()->all();
+        if (! empty($divIds)) {
+            $divDistrictIds = \Illuminate\Support\Facades\DB::table('division_districts')
+                ->whereIn('division_id', $divIds)
+                ->pluck('district_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $districtIds = array_merge($districtIds, $divDistrictIds);
+        }
 
+        // 2. Districts from explicit district assignments
+        $assignedDistrictIds = $activeAssignments->pluck('district_id')->filter()->map(fn ($id) => (int) $id)->all();
+        $districtIds = array_merge($districtIds, $assignedDistrictIds);
+
+        // 3. User direct district_id
         if ($this->district_id) {
-            $assignedDistrictIds[] = $this->district_id;
+            $districtIds[] = (int) $this->district_id;
         }
 
-        return array_values(array_unique(array_map('intval', $assignedDistrictIds)));
+        $districtIds = array_values(array_unique(array_filter($districtIds)));
+
+        // 4. Fallback for Director roles with NO explicit district or division assignments -> province-wide (all districts)
+        if (empty($districtIds) && $this->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
+            return array_map('intval', District::pluck('id')->all());
+        }
+
+        return $districtIds;
     }
 
     /**
@@ -161,18 +176,45 @@ class User extends Authenticatable
      */
     public function authorizedDepartmentIds(): array
     {
-        if ($this->isGlobalScope() || $this->hasRole('Division Director')) {
+        if ($this->isGlobalScope()) {
             return array_map('intval', Department::pluck('id')->all());
         }
 
         $activeAssignments = $this->activeOfficeAssignments()->get();
-        $deptIds = $activeAssignments->pluck('department_id')->filter()->all();
+        $deptIds = $activeAssignments->pluck('department_id')->filter()->map(fn ($id) => (int) $id)->all();
 
         if ($this->department_id) {
-            $deptIds[] = $this->department_id;
+            $deptIds[] = (int) $this->department_id;
         }
 
-        return array_values(array_unique(array_map('intval', $deptIds)));
+        // Infer from role names if none explicitly set in assignments
+        if (empty($deptIds)) {
+            if ($this->hasRole('Director Agriculture')) {
+                $agri = Department::where('slug', 'agriculture')->value('id');
+                if ($agri) {
+                    $deptIds[] = (int) $agri;
+                }
+            } elseif ($this->hasRole('Director Livestock')) {
+                $live = Department::where('slug', 'livestock')->value('id');
+                if ($live) {
+                    $deptIds[] = (int) $live;
+                }
+            } elseif ($this->hasRole('Director Fisheries')) {
+                $fish = Department::where('slug', 'fisheries')->value('id');
+                if ($fish) {
+                    $deptIds[] = (int) $fish;
+                }
+            }
+        }
+
+        $deptIds = array_values(array_unique(array_filter($deptIds)));
+
+        // If user has NO department restriction specified, they oversee all departments in their jurisdiction
+        if (empty($deptIds)) {
+            return array_map('intval', Department::pluck('id')->all());
+        }
+
+        return $deptIds;
     }
 
     /**

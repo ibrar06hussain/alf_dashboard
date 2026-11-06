@@ -34,7 +34,7 @@ class WheatSeedMisController extends Controller
 
         $filters = $this->extractFilters($request, $user);
 
-        if ($user->isDistrictScopedOfficer()) {
+        if (! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds())) {
             $userDistricts = $user->authorizedDistrictIds();
             $districts = District::whereIn('id', $userDistricts)->orderBy('name')->get();
             $userDivisions = $districts->map(fn ($d) => WheatSeedMisService::divisionForDistrict($d->name))->unique()->values()->all();
@@ -475,10 +475,17 @@ class WheatSeedMisController extends Controller
      */
     private function authorizeAccess(User $user): void
     {
-        $allowed = $user->isDirectorSecretaryOrAdmin() || $user->isDistrictScopedOfficer();
+        $allowed = $user->isDirectorSecretaryOrAdmin() || $user->isDistrictScopedOfficer() || $user->can('pages.wheat_mis');
 
         if (! $allowed) {
             abort(403, 'Unauthorized access to Wheat Seed MIS dashboard.');
+        }
+
+        if (! $user->isGlobalScope() && ! $user->can('pages.wheat_mis')) {
+            $agriDeptId = \App\Models\Department::where('slug', 'agriculture')->value('id') ?? 1;
+            if (! in_array((int) $agriDeptId, $user->authorizedDepartmentIds(), true)) {
+                abort(403, 'Unauthorized: Your role or office assignment does not have access to Agriculture Department schemes.');
+            }
         }
     }
 

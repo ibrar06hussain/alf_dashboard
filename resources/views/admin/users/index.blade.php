@@ -43,6 +43,14 @@
                             @empty
                                 <span class="text-muted">—</span>
                             @endforelse
+
+                            @if($user->permissions->isNotEmpty())
+                                <div>
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle small mt-1" title="{{ $user->permissions->pluck('name')->implode(', ') }}">
+                                        <i class="fa-solid fa-sliders me-1"></i>+{{ $user->permissions->count() }} custom page(s)
+                                    </span>
+                                </div>
+                            @endif
                         </td>
                         <td>
                             @php
@@ -69,14 +77,39 @@
                         </td>
                         <td>
                             <div class="small">
-                                @if($user->department)
-                                    <span class="d-block"><i class="fa-solid fa-layer-group text-muted me-1"></i>{{ $user->department->name }}</span>
-                                @endif
-                                @if($user->district)
-                                    <span class="d-block"><i class="fa-solid fa-location-dot text-muted me-1"></i>{{ $user->district->name }}</span>
-                                @endif
-                                @if(!$user->department && !$user->district)
-                                    <span class="text-muted">Global / All</span>
+                                @php
+                                    $authDepts = $user->authorizedDepartmentIds();
+                                    $authDistricts = $user->authorizedDistrictIds();
+                                    $isAllDistricts = count($authDistricts) >= 10;
+                                    $divNames = \App\Models\Division::whereIn('id', $user->authorizedDivisionIds())->pluck('name')->all();
+                                @endphp
+                                @if($user->isGlobalScope())
+                                    <span class="badge bg-purple-subtle text-purple"><i class="fa-solid fa-globe me-1"></i>Global Scope</span>
+                                @else
+                                    @if(!empty($authDepts))
+                                        <div class="mb-1 text-dark">
+                                            <i class="fa-solid fa-building-columns text-primary me-1"></i>
+                                            @php
+                                                $deptNames = \App\Models\Department::whereIn('id', $authDepts)->pluck('name');
+                                            @endphp
+                                            <strong>{{ $deptNames->implode(', ') }}</strong>
+                                        </div>
+                                    @endif
+                                    @if($isAllDistricts)
+                                        <div class="text-success"><i class="fa-solid fa-map text-success me-1"></i>All 10 Districts</div>
+                                    @elseif(!empty($divNames) && count($divNames) === 1 && count($authDistricts) > 1)
+                                        <div class="text-dark"><i class="fa-solid fa-map-location-dot text-success me-1"></i><strong>{{ $divNames[0] }}</strong> ({{ count($authDistricts) }} dist.)</div>
+                                    @elseif(!empty($authDistricts))
+                                        <div class="text-dark">
+                                            <i class="fa-solid fa-location-dot text-success me-1"></i>
+                                            @php
+                                                $distNames = \App\Models\District::whereIn('id', $authDistricts)->pluck('name');
+                                            @endphp
+                                            {{ $distNames->implode(', ') }}
+                                        </div>
+                                    @else
+                                        <span class="text-muted">Unassigned</span>
+                                    @endif
                                 @endif
                             </div>
                         </td>

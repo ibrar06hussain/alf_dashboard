@@ -30,13 +30,20 @@ class StockManagementController extends Controller
     protected function getEffectiveDistrictId(Request $request): ?int
     {
         $user = $request->user();
+        $districts = $user ? $user->authorizedDistrictIds() : [];
 
-        if ($user->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture', 'Director Livestock', 'Director Fisheries'])) {
-            return $request->filled('district_id') ? (int) $request->district_id : null;
+        if ($request->filled('district_id')) {
+            $requestedId = (int) $request->district_id;
+            if ($user && ($user->isGlobalScope() || in_array($requestedId, $districts, true))) {
+                return $requestedId;
+            }
         }
 
-        $districts = $user->authorizedDistrictIds();
-        return ! empty($districts) ? (int) $districts[0] : null;
+        if ($user && $user->isGlobalScope()) {
+            return null;
+        }
+
+        return count($districts) === 1 ? (int) $districts[0] : null;
     }
 
     /**
@@ -44,13 +51,21 @@ class StockManagementController extends Controller
      */
     public function index(Request $request): View
     {
+        $user = $request->user();
         $districtId = $this->getEffectiveDistrictId($request);
         $schemeId = $request->filled('scheme_id') ? (int) $request->scheme_id : null;
 
         $metrics = $this->stockService->getDemandVsStockMetrics($districtId, $schemeId);
 
-        $districts = District::orderBy('name')->get();
-        $schemes = Scheme::where('status', 'active')->orderBy('title')->get();
+        $districts = District::when($user && ! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds()), function ($q) use ($user) {
+            $q->whereIn('id', $user->authorizedDistrictIds());
+        })->orderBy('name')->get();
+
+        $schemes = Scheme::where('status', 'active')
+            ->when($user && ! $user->isGlobalScope() && ! empty($user->authorizedDepartmentIds()), function ($q) use ($user) {
+                $q->whereIn('department_id', $user->authorizedDepartmentIds());
+            })
+            ->orderBy('title')->get();
 
         // Recent receipts
         $recentReceiptsQuery = StockReceipt::with(['item.scheme', 'center.district', 'receiver'])

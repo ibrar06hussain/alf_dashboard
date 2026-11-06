@@ -33,16 +33,26 @@ class ApplicationReviewController extends Controller
         $user = auth()->user();
         $query = $this->filteredQuery($request);
 
-        $departments = Department::when(! $user->isGlobalScope() && ! $user->hasRole('Division Director'), function ($q) use ($user) {
+        $departments = Department::when(! $user->isGlobalScope() && ! empty($user->authorizedDepartmentIds()), function ($q) use ($user) {
             $q->whereIn('id', $user->authorizedDepartmentIds());
         })->orderBy('display_order')->get();
 
-        $districts = District::when(! $user->isGlobalScope(), function ($q) use ($user) {
+        $districts = District::when(! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds()), function ($q) use ($user) {
             $q->whereIn('id', $user->authorizedDistrictIds());
         })->orderBy('name')->get();
 
-        $schemes = Scheme::when(! $user->isGlobalScope() && ! $user->hasRole('Division Director'), function ($q) use ($user) {
-            $q->whereIn('department_id', $user->authorizedDepartmentIds());
+        $schemes = Scheme::when(! $user->isGlobalScope(), function ($q) use ($user) {
+            $authorizedDepts = $user->authorizedDepartmentIds();
+            $authorizedDistricts = $user->authorizedDistrictIds();
+            if (! empty($authorizedDepts)) {
+                $q->whereIn('department_id', $authorizedDepts);
+            }
+            if (! empty($authorizedDistricts)) {
+                $q->where(function ($sq) use ($authorizedDistricts) {
+                    $sq->whereIn('scope', ['gb', 'province_wide'])
+                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $authorizedDistricts));
+                });
+            }
         })->orderBy('title')->get(['id', 'title', 'department_id']);
 
         $statuses = Application::STATUSES;
@@ -308,7 +318,7 @@ class ApplicationReviewController extends Controller
 
         if ($request->filled('department_id')) {
             $deptId = $request->integer('department_id');
-            if ($user->isGlobalScope() || $user->hasRole('Division Director') || in_array($deptId, $authorizedDepts, true)) {
+            if ($user->isGlobalScope() || in_array($deptId, $authorizedDepts, true)) {
                 $query->whereHas('scheme', fn ($q) => $q->where('department_id', $deptId));
             }
         }

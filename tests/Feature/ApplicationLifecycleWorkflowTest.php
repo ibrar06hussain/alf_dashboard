@@ -303,7 +303,7 @@ class ApplicationLifecycleWorkflowTest extends TestCase
         $this->assertNotNull($app->challan_no);
         $this->assertEquals(12000.00, (float) $app->challan_amount);
         $this->assertNotNull($app->challan_issued_at);
-        $this->assertEquals(now()->addDays(14)->toDateString(), $app->challan_due_date->toDateString());
+        $this->assertEquals(now()->addDays(10)->toDateString(), $app->challan_due_date->toDateString());
 
         // Approved != Paid != Eligible != Distributed
         $this->assertNull($app->challan_paid_at);
@@ -472,7 +472,7 @@ class ApplicationLifecycleWorkflowTest extends TestCase
         $this->assertEquals($dd->id, $reactivated->reactivated_by);
         $this->assertEquals($reason, $reactivated->reactivation_reason);
         $this->assertNotNull($reactivated->reactivated_at);
-        $this->assertEquals(now()->addDays(14)->toDateString(), $reactivated->challan_due_date->toDateString());
+        $this->assertEquals(now()->addDays(10)->toDateString(), $reactivated->challan_due_date->toDateString());
     }
 
     public function test_cross_district_isolation_strictly_enforced(): void

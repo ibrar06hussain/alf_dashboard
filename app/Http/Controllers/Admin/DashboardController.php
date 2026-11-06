@@ -66,11 +66,16 @@ class DashboardController extends Controller
             ];
         } else {
             // Directors, Secretary, and Super Admin
-            if ($user->hasRole('Division Director')) {
-                $divisionDistricts = $user->authorizedDistrictIds();
-                $applicationQuery->whereIn('district_id', $divisionDistricts);
-            } elseif ($user->hasAnyRole(['Director Agriculture', 'Director Livestock', 'Director Fisheries']) && $user->department_id) {
-                $applicationQuery->whereHas('scheme', fn ($q) => $q->where('department_id', $user->department_id));
+            $userDistricts = $user->authorizedDistrictIds();
+            $userDepartments = $user->authorizedDepartmentIds();
+
+            if (! $user->isGlobalScope()) {
+                if (! empty($userDistricts)) {
+                    $applicationQuery->whereIn('district_id', $userDistricts);
+                }
+                if (! empty($userDepartments)) {
+                    $applicationQuery->whereHas('scheme', fn ($q) => $q->whereIn('department_id', $userDepartments));
+                }
             }
 
             $statusCounts = (clone $applicationQuery)
@@ -78,11 +83,20 @@ class DashboardController extends Controller
                 ->groupBy('status')
                 ->pluck('total', 'status');
 
+            $schemesCount = Scheme::when(! $user->isGlobalScope() && ! empty($userDepartments), fn ($q) => $q->whereIn('department_id', $userDepartments))
+                ->when(! $user->isGlobalScope() && ! empty($userDistricts), fn ($q) => $q->where(function ($sq) use ($userDistricts) {
+                    $sq->whereIn('scope', ['gb', 'province_wide'])
+                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $userDistricts));
+                }))
+                ->count();
+
+            $applicantsCount = Applicant::when(! $user->isGlobalScope() && ! empty($userDistricts), fn ($q) => $q->whereIn('district_id', $userDistricts))->count();
+
             $kpis = [
-                'departments' => Department::count(),
-                'districts' => District::count(),
-                'schemes' => Scheme::count(),
-                'applicants' => Applicant::count(),
+                'departments' => ! $user->isGlobalScope() ? count($userDepartments) : Department::count(),
+                'districts' => ! $user->isGlobalScope() ? count($userDistricts) : District::count(),
+                'schemes' => $schemesCount,
+                'applicants' => $applicantsCount,
                 'applications' => (clone $applicationQuery)->count(),
                 'users' => User::count(),
                 'pending' => (int) ($statusCounts['pending'] ?? 0),
@@ -92,11 +106,27 @@ class DashboardController extends Controller
                 'rejected' => (int) ($statusCounts['rejected'] ?? 0),
             ];
 
-            // Compute performance matrix across all 3 departments and their projects/schemes
-            $allDepts = Department::orderBy('display_order')->get();
-            $schemes = Scheme::with('department')->orderBy('department_id')->orderBy('display_order')->get();
+            // Compute performance matrix across authorized departments and schemes
+            $allDepts = Department::when(! $user->isGlobalScope() && ! empty($userDepartments), fn ($q) => $q->whereIn('id', $userDepartments))
+                ->orderBy('display_order')->get();
 
-            $schemeStats = Application::query()
+            $schemes = Scheme::with('department')
+                ->when(! $user->isGlobalScope() && ! empty($userDepartments), fn ($q) => $q->whereIn('department_id', $userDepartments))
+                ->when(! $user->isGlobalScope() && ! empty($userDistricts), fn ($q) => $q->where(function ($sq) use ($userDistricts) {
+                    $sq->whereIn('scope', ['gb', 'province_wide'])
+                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $userDistricts));
+                }))
+                ->orderBy('department_id')->orderBy('display_order')->get();
+
+            $schemeStatsQuery = Application::query();
+            if (! $user->isGlobalScope() && ! empty($userDistricts)) {
+                $schemeStatsQuery->whereIn('district_id', $userDistricts);
+            }
+            if (! $user->isGlobalScope() && ! empty($userDepartments)) {
+                $schemeStatsQuery->whereHas('scheme', fn ($q) => $q->whereIn('department_id', $userDepartments));
+            }
+
+            $schemeStats = $schemeStatsQuery
                 ->selectRaw('scheme_id, status, current_stage, COUNT(*) as count')
                 ->groupBy('scheme_id', 'status', 'current_stage')
                 ->get();
