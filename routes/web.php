@@ -234,6 +234,18 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('districts', [DistrictController::class, 'index'])->name('districts.index');
                 Route::post('districts', [DistrictController::class, 'store'])->name('districts.store');
                 Route::put('districts/{district}', [DistrictController::class, 'update'])->name('districts.update');
+
+                // Tehsils CRUD against District
+                Route::post('districts/{district}/tehsils', [DistrictController::class, 'storeTehsil'])->name('districts.tehsils.store');
+                Route::post('tehsils', [DistrictController::class, 'storeTehsilGeneral'])->name('tehsils.store');
+                Route::put('tehsils/{tehsil}', [DistrictController::class, 'updateTehsil'])->name('tehsils.update');
+                Route::delete('tehsils/{tehsil}', [DistrictController::class, 'destroyTehsil'])->name('tehsils.destroy');
+
+                // Union Councils CRUD against Tehsil / District
+                Route::post('tehsils/{tehsil}/union-councils', [DistrictController::class, 'storeUnionCouncil'])->name('tehsils.union-councils.store');
+                Route::post('union-councils', [DistrictController::class, 'storeUnionCouncilGeneral'])->name('union-councils.store');
+                Route::put('union-councils/{unionCouncil}', [DistrictController::class, 'updateUnionCouncil'])->name('union-councils.update');
+                Route::delete('union-councils/{unionCouncil}', [DistrictController::class, 'destroyUnionCouncil'])->name('union-councils.destroy');
             });
 
             // Farmer / Village Organizations CRUD
