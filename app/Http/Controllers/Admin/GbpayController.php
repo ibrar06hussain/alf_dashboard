@@ -213,11 +213,14 @@ class GbpayController extends Controller
         AccessAuditLog::log('gbpay_bill_generated', Application::class, (string) $application->id, [
             'bill_id' => $bill->bill_id,
             'psid' => $bill->psid,
+            'voucher_serial' => $bill->voucher_serial,
             'bill_amount' => $bill->bill_amount,
             'force_new' => $forceNew,
         ]);
 
-        return back()->with('success', "GBPay Bill generated/synced with 20-digit PSID: {$bill->psid}");
+        $serialNote = $bill->voucher_serial ? " · Voucher Serial #: {$bill->voucher_serial}" : '';
+
+        return back()->with('success', "GBPay Bill generated/synced with 20-digit PSID: {$bill->psid}{$serialNote}");
     }
 
     /**

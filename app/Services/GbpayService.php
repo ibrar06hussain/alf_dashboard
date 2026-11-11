@@ -9,6 +9,7 @@ use App\Models\Bill;
 use App\Models\District;
 use App\Models\GbpayResponse;
 use App\Models\PsidConfig;
+use App\Models\VoucherSerial;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -27,25 +28,32 @@ class GbpayService
     }
 
     /**
-     * Generate unique 20-digit PSID for an application bill.
+     * Generate unique 20-digit PSID with sequential 10-digit voucher serial number.
      */
-    public function generatePsid(?Application $application = null): string
+    public function generatePsid(?Application $application = null, ?VoucherSerial &$allocatedSerial = null): string
     {
-        $config = PsidConfig::getActive();
-        $districtDigits = $application?->district
-            ? PsidConfig::resolveDistrictDigits($application->district)
-            : null;
+        return DB::transaction(function () use ($application, &$allocatedSerial) {
+            $config = PsidConfig::getActive();
+            $districtDigits = $application?->district
+                ? PsidConfig::resolveDistrictDigits($application->district)
+                : null;
 
-        $psid = $config->generatePsid($districtDigits);
+            $voucherSerial = VoucherSerial::allocateNext($application, $application?->challan_no);
+            $psid = $config->generatePsid($districtDigits, $voucherSerial->serial_no);
 
-        while (
-            Bill::where('psid', $psid)->exists() ||
-            Application::where('psid', $psid)->exists()
-        ) {
-            $psid = $config->generatePsid($districtDigits);
-        }
+            while (
+                Bill::where('psid', $psid)->exists() ||
+                Application::where('psid', $psid)->exists()
+            ) {
+                $voucherSerial = VoucherSerial::allocateNext($application, $application?->challan_no);
+                $psid = $config->generatePsid($districtDigits, $voucherSerial->serial_no);
+            }
 
-        return $psid;
+            $voucherSerial->update(['psid' => $psid]);
+            $allocatedSerial = $voucherSerial;
+
+            return $psid;
+        });
     }
 
     /**
@@ -109,10 +117,15 @@ class GbpayService
             // 2. Reuse and sync existing pending bill if available
             $pendingBill = $application->bills()->where('status', 'pending')->first();
             if ($pendingBill) {
+                $mergedChallanData = array_merge($challanData, array_filter([
+                    'voucher_serial_no' => $pendingBill->voucher_serial,
+                    'unique_voucher_id' => $pendingBill->formattedVoucherId(),
+                ], fn ($v) => $v !== null));
+
                 $pendingBill->update([
                     'bill_amount' => $billAmount,
                     'due_date' => $dueDate,
-                    'challan_data' => $challanData,
+                    'challan_data' => $mergedChallanData,
                 ]);
 
                 if ($application->psid !== $pendingBill->psid) {
@@ -129,32 +142,53 @@ class GbpayService
             ]);
         }
 
-        $psid = $this->generatePsid($application);
+        $bill = DB::transaction(function () use ($application, $billAmount, $dueDate, $challanData) {
+            if (!$application->challan_no) {
+                $application->challan_no = 'CHL-' . now()->format('Y') . '-' . str_pad((string) $application->id, 6, '0', STR_PAD_LEFT);
+            }
 
-        $bill = Bill::create([
-            'application_id' => $application->id,
-            'psid' => $psid,
-            'bill_amount' => $billAmount,
-            'status' => 'pending',
-            'generated_at' => now(),
-            'due_date' => $dueDate,
-            'challan_data' => $challanData,
-        ]);
+            $allocatedSerial = null;
+            $psid = $this->generatePsid($application, $allocatedSerial);
 
-        $application->psid = $psid;
-        if (!$application->challan_no) {
-            $application->challan_no = 'CHL-' . now()->format('Y') . '-' . str_pad((string) $application->id, 6, '0', STR_PAD_LEFT);
-        }
-        if (!$application->challan_amount) {
-            $application->challan_amount = $billAmount;
-        }
-        if (!$application->challan_issued_at) {
-            $application->challan_issued_at = now();
-        }
-        if (!$application->challan_due_date) {
-            $application->challan_due_date = $dueDate;
-        }
-        $application->saveQuietly();
+            $challanData['challan_no'] = $application->challan_no;
+            if ($allocatedSerial) {
+                $challanData['voucher_serial_no'] = $allocatedSerial->serial_no;
+                $challanData['unique_voucher_id'] = $allocatedSerial->voucher_code;
+            }
+
+            $bill = Bill::create([
+                'application_id' => $application->id,
+                'psid' => $psid,
+                'voucher_serial' => $allocatedSerial?->serial_no,
+                'bill_amount' => $billAmount,
+                'status' => 'pending',
+                'generated_at' => now(),
+                'due_date' => $dueDate,
+                'challan_data' => $challanData,
+            ]);
+
+            if ($allocatedSerial) {
+                $allocatedSerial->update([
+                    'bill_id' => $bill->bill_id,
+                    'psid' => $psid,
+                    'challan_no' => $application->challan_no,
+                ]);
+            }
+
+            $application->psid = $psid;
+            if (!$application->challan_amount) {
+                $application->challan_amount = $billAmount;
+            }
+            if (!$application->challan_issued_at) {
+                $application->challan_issued_at = now();
+            }
+            if (!$application->challan_due_date) {
+                $application->challan_due_date = $dueDate;
+            }
+            $application->saveQuietly();
+
+            return $bill;
+        });
 
         // Register/log bill generation with GBPay
         $this->generateBill($bill);

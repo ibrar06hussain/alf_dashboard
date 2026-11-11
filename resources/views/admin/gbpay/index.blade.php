@@ -298,6 +298,9 @@
                         <tr>
                             <td>
                                 <code class="fw-bold text-dark">{{ $bill->psid }}</code>
+                                @if($bill->voucher_serial)
+                                    <span class="d-block text-muted" style="font-size: 11px;">Voucher Serial #{{ $bill->voucher_serial }} ({{ $bill->formattedVoucherId() }})</span>
+                                @endif
                             </td>
                             <td>
                                 @if($bill->application)

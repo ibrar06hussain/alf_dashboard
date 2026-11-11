@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Bill extends Model
 {
@@ -17,6 +18,7 @@ class Bill extends Model
     protected $fillable = [
         'application_id',
         'psid',
+        'voucher_serial',
         'bill_amount',
         'status',
         'generated_at',
@@ -31,6 +33,7 @@ class Bill extends Model
     protected function casts(): array
     {
         return [
+            'voucher_serial' => 'integer',
             'generated_at' => 'datetime',
             'due_date' => 'date',
             'paid_at' => 'datetime',
@@ -67,6 +70,20 @@ class Bill extends Model
     public function gbpayResponses(): HasMany
     {
         return $this->hasMany(GbpayResponse::class, 'bill_id', 'bill_id')->latest();
+    }
+
+    public function voucherSerialRecord(): HasOne
+    {
+        return $this->hasOne(VoucherSerial::class, 'bill_id', 'bill_id');
+    }
+
+    public function formattedVoucherId(): ?string
+    {
+        if ($this->voucher_serial !== null) {
+            return VoucherSerial::formatVoucherId((int) $this->voucher_serial);
+        }
+
+        return $this->psid ? substr((string) $this->psid, -10) : null;
     }
 
     public function isPaid(): bool

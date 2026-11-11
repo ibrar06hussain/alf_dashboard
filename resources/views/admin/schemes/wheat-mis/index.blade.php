@@ -66,6 +66,31 @@
         padding: 4px 8px;
         border-radius: 6px;
     }
+    .btn-xs-export {
+        font-size: 0.72rem;
+        padding: 0.2rem 0.5rem;
+        line-height: 1.25;
+        border-radius: 5px;
+    }
+    .mis-export-toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        background: #0f172a;
+        color: #ffffff;
+        padding: 0.75rem 1.15rem;
+        border-radius: 10px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+        display: none;
+        align-items: center;
+        gap: 0.65rem;
+        font-size: 0.88rem;
+        font-weight: 500;
+    }
+    .mis-export-toast.show {
+        display: flex;
+    }
 </style>
 @endpush
 
@@ -123,6 +148,61 @@
     </div>
 
     <div class="d-flex flex-wrap gap-2">
+        <div class="btn-group">
+            <button type="button" class="btn btn-dark btn-sm dropdown-toggle" data-bs-toggle="dropdown" data-toggle="dropdown" aria-expanded="false" id="btn-hd-export-dropdown" title="Export high-resolution 3x HD PNG images for PowerPoint & executive presentations">
+                <i class="fa-solid fa-camera-retro me-1"></i> Export HD Images (Presentation)
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm" id="hd-export-dropdown-menu">
+                <li><h6 class="dropdown-header text-uppercase small fw-bold">Executive Snapshots (3x HD PNG)</h6></li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-section-hd" data-target="#mis-presentation-bundle" data-title="Wheat Seed MIS — Executive Figures &amp; Graphs Overview" data-filename="wheat-mis-executive-summary-hd.png">
+                        <i class="fa-solid fa-display text-primary me-2"></i> Full Executive Snapshot (KPIs + All Graphs)
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-section-hd" data-target="#mis-kpis-export-area" data-title="Wheat Seed MIS — Key Figures &amp; Executive KPIs" data-filename="wheat-mis-kpi-figures-hd.png">
+                        <i class="fa-solid fa-gauge-high text-success me-2"></i> Key Figures &amp; KPI Cards Only
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-section-hd" data-target="#mis-charts-export-area" data-title="Wheat Seed MIS — Analytical Graphs Overview" data-filename="wheat-mis-all-charts-hd.png">
+                        <i class="fa-solid fa-chart-pie text-info me-2"></i> All 5 Analytical Graphs Combined
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-section-hd" data-target="#mis-matrix-export-area" data-title="District Demand-Supply &amp; Quota Matrix" data-filename="wheat-mis-district-matrix-hd.png" data-wide="true">
+                        <i class="fa-solid fa-table-list text-warning me-2"></i> District Demand-Supply Matrix Table
+                    </button>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header text-uppercase small fw-bold">Individual HD Graphs (3x Resolution)</h6></li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-chart-hd" data-chart-id="#chart-demand-supply" data-title="District Demand-Supply Gap (Allocated Quota vs Approved Bags)" data-filename="chart-demand-supply-gap-hd.png">
+                        <i class="fa-solid fa-chart-column text-primary me-2"></i> District Demand-Supply Gap
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-chart-hd" data-chart-id="#chart-status-donut" data-title="Application Status Breakdown" data-filename="chart-application-status-hd.png">
+                        <i class="fa-solid fa-chart-pie text-info me-2"></i> Application Status Breakdown
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-chart-hd" data-chart-id="#chart-land-bands" data-title="Landholding Size Distribution Bands (Kanals)" data-filename="chart-landholding-bands-hd.png">
+                        <i class="fa-solid fa-layer-group text-success me-2"></i> Landholding Size Bands
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-chart-hd" data-chart-id="#chart-water-donut" data-title="Farm Land Water Availability" data-filename="chart-water-availability-hd.png">
+                        <i class="fa-solid fa-droplet text-primary me-2"></i> Water Availability
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item btn-export-chart-hd" data-chart-id="#chart-road-bar" data-title="Road Access to Farm Land" data-filename="chart-road-access-hd.png">
+                        <i class="fa-solid fa-road text-purple me-2"></i> Road Access to Farm Land
+                    </button>
+                </li>
+            </ul>
+        </div>
         @if(auth()->user()->hasAnyRole(['Super Admin', 'Secretary', 'Director Agriculture']))
             <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#rateConfigModal" data-toggle="modal" data-target="#rateConfigModal" id="btn-configure-seed-data">
                 <i class="fa-solid fa-seedling me-1"></i> Configure Seed Data
@@ -247,6 +327,23 @@
         </form>
     </div>
 </div>
+
+<div id="mis-presentation-bundle">
+    {{-- EXECUTIVE KPIS WRAPPER (EXPORTABLE AS HD IMAGE) --}}
+    <div id="mis-kpis-export-area" class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-bold text-uppercase text-muted">
+                <i class="fa-solid fa-gauge-high text-primary me-1"></i> Key Figures &amp; Executive KPIs
+            </span>
+            <button type="button" class="btn btn-outline-secondary btn-xs-export btn-export-section-hd"
+                    data-target="#mis-kpis-export-area"
+                    data-title="Wheat Seed MIS — Key Figures &amp; Executive KPIs"
+                    data-filename="wheat-mis-kpi-figures-hd.png"
+                    data-html2canvas-ignore="true"
+                    title="Download Key Figures & KPIs as HD PNG Image">
+                <i class="fa-solid fa-image me-1"></i> HD Image
+            </button>
+        </div>
 
 {{-- EXECUTIVE KPIS ROW 1: CORE APPLICATIONS & LAND METRICS --}}
 <div class="row g-3 mb-3">
@@ -426,89 +523,146 @@
             </div>
         </div>
     </div>
-</div>
+    </div> {{-- End #mis-kpis-export-area --}}
 
-{{-- INTERACTIVE CHARTS ROW 1 --}}
-<div class="row g-3 mb-4">
-    {{-- Chart 1: District Demand vs Supply Gap --}}
-    <div class="col-lg-8">
-        <div class="card alf-panel h-100">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <span><i class="fa-solid fa-chart-column text-primary me-2"></i>District Demand-Supply Gap (Allocated Quota vs Approved Bags)</span>
-                <span class="badge bg-light text-secondary border">50kg Bags</span>
+    {{-- ANALYTICAL CHARTS WRAPPER (EXPORTABLE AS HD IMAGE) --}}
+    <div id="mis-charts-export-area" class="mb-2">
+        {{-- INTERACTIVE CHARTS ROW 1 --}}
+        <div class="row g-3 mb-4">
+            {{-- Chart 1: District Demand vs Supply Gap --}}
+            <div class="col-lg-8">
+                <div class="card alf-panel h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span><i class="fa-solid fa-chart-column text-primary me-2"></i>District Demand-Supply Gap (Allocated Quota vs Approved Bags)</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-light text-secondary border">50kg Bags</span>
+                            <button type="button" class="btn btn-outline-primary btn-xs-export btn-export-chart-hd"
+                                    data-chart-id="#chart-demand-supply"
+                                    data-title="District Demand-Supply Gap (Allocated Quota vs Approved Bags)"
+                                    data-filename="chart-demand-supply-gap-hd.png"
+                                    data-html2canvas-ignore="true"
+                                    title="Export Graph as HD PNG">
+                                <i class="fa-solid fa-image me-1"></i> HD PNG
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="chart-demand-supply" style="min-height: 350px;"></div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div id="chart-demand-supply" style="min-height: 350px;"></div>
-            </div>
-        </div>
-    </div>
 
-    {{-- Chart 2: Application Decision & Lifecycle Pipeline --}}
-    <div class="col-lg-4">
-        <div class="card alf-panel h-100">
-            <div class="card-header bg-light">
-                <i class="fa-solid fa-chart-pie text-primary me-2"></i>Application Status Breakdown
-            </div>
-            <div class="card-body">
-                <div id="chart-status-donut" style="min-height: 350px;"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- INTERACTIVE CHARTS ROW 2 --}}
-<div class="row g-3 mb-4">
-    {{-- Chart 3: Landholding Size Distribution Bands --}}
-    <div class="col-md-6 col-lg-4">
-        <div class="card alf-panel h-100">
-            <div class="card-header bg-light">
-                <i class="fa-solid fa-layer-group text-primary me-2"></i>Landholding Size Distribution Bands
-            </div>
-            <div class="card-body">
-                <div id="chart-land-bands" style="min-height: 280px;"></div>
-                <div class="small text-muted mt-2">
-                    <i class="fa-solid fa-info-circle me-1"></i> Categorized by available wheat land (Kanals).
+            {{-- Chart 2: Application Decision & Lifecycle Pipeline --}}
+            <div class="col-lg-4">
+                <div class="card alf-panel h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-chart-pie text-primary me-2"></i>Application Status Breakdown</span>
+                        <button type="button" class="btn btn-outline-primary btn-xs-export btn-export-chart-hd"
+                                data-chart-id="#chart-status-donut"
+                                data-title="Application Status Breakdown"
+                                data-filename="chart-application-status-hd.png"
+                                data-html2canvas-ignore="true"
+                                title="Export Graph as HD PNG">
+                            <i class="fa-solid fa-image me-1"></i> HD PNG
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="chart-status-donut" style="min-height: 350px;"></div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    {{-- Chart 4: Water Availability --}}
-    <div class="col-md-6 col-lg-4">
-        <div class="card alf-panel h-100">
-            <div class="card-header bg-light">
-                <i class="fa-solid fa-droplet text-primary me-2"></i>Water Availability
+        {{-- INTERACTIVE CHARTS ROW 2 --}}
+        <div class="row g-3 mb-4">
+            {{-- Chart 3: Landholding Size Distribution Bands --}}
+            <div class="col-md-6 col-lg-4">
+                <div class="card alf-panel h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-layer-group text-primary me-2"></i>Landholding Size Bands</span>
+                        <button type="button" class="btn btn-outline-primary btn-xs-export btn-export-chart-hd"
+                                data-chart-id="#chart-land-bands"
+                                data-title="Landholding Size Distribution Bands (Kanals)"
+                                data-filename="chart-landholding-bands-hd.png"
+                                data-html2canvas-ignore="true"
+                                title="Export Graph as HD PNG">
+                            <i class="fa-solid fa-image me-1"></i> HD PNG
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="chart-land-bands" style="min-height: 280px;"></div>
+                        <div class="small text-muted mt-2">
+                            <i class="fa-solid fa-info-circle me-1"></i> Categorized by available wheat land (Kanals).
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div id="chart-water-donut" style="min-height: 280px;"></div>
-                <div class="small text-muted mt-2">
-                    <i class="fa-solid fa-seedling me-1"></i> Confirms irrigation feasibility on farm land.
+
+            {{-- Chart 4: Water Availability --}}
+            <div class="col-md-6 col-lg-4">
+                <div class="card alf-panel h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-droplet text-primary me-2"></i>Water Availability</span>
+                        <button type="button" class="btn btn-outline-primary btn-xs-export btn-export-chart-hd"
+                                data-chart-id="#chart-water-donut"
+                                data-title="Farm Land Water Availability"
+                                data-filename="chart-water-availability-hd.png"
+                                data-html2canvas-ignore="true"
+                                title="Export Graph as HD PNG">
+                            <i class="fa-solid fa-image me-1"></i> HD PNG
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="chart-water-donut" style="min-height: 280px;"></div>
+                        <div class="small text-muted mt-2">
+                            <i class="fa-solid fa-seedling me-1"></i> Confirms irrigation feasibility on farm land.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Chart 5: Road Accessibility --}}
+            <div class="col-md-12 col-lg-4">
+                <div class="card alf-panel h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-road text-primary me-2"></i>Road Access to Farm Land</span>
+                        <button type="button" class="btn btn-outline-primary btn-xs-export btn-export-chart-hd"
+                                data-chart-id="#chart-road-bar"
+                                data-title="Road Access to Farm Land"
+                                data-filename="chart-road-access-hd.png"
+                                data-html2canvas-ignore="true"
+                                title="Export Graph as HD PNG">
+                            <i class="fa-solid fa-image me-1"></i> HD PNG
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="chart-road-bar" style="min-height: 280px;"></div>
+                        <div class="small text-muted mt-2">
+                            <i class="fa-solid fa-truck me-1"></i> Logistics feasibility for seed bag delivery.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-
-    {{-- Chart 5: Road Accessibility --}}
-    <div class="col-md-12 col-lg-4">
-        <div class="card alf-panel h-100">
-            <div class="card-header bg-light">
-                <i class="fa-solid fa-road text-primary me-2"></i>Road Access to Farm Land
-            </div>
-            <div class="card-body">
-                <div id="chart-road-bar" style="min-height: 280px;"></div>
-                <div class="small text-muted mt-2">
-                    <i class="fa-solid fa-truck me-1"></i> Logistics feasibility for seed bag delivery.
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+    </div> {{-- End #mis-charts-export-area --}}
+</div> {{-- End #mis-presentation-bundle --}}
 
 {{-- DISTRICT DEMAND-SUPPLY GAP MATRIX TABLE --}}
-<div class="card alf-panel mb-4">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <span><i class="fa-solid fa-table-list text-primary me-2"></i>District Demand-Supply & Quota Matrix</span>
-        <span class="small text-muted">Supply from Scheme Quota (500 Bags Total across GB)</span>
+<div class="card alf-panel mb-4" id="mis-matrix-export-area">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa-solid fa-table-list text-primary me-2"></i>District Demand-Supply &amp; Quota Matrix</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted">Supply from Scheme Quota ({{ number_format($demandSupplyGap->sum('quota')) }} Bags Total across GB)</span>
+            <button type="button" class="btn btn-outline-primary btn-xs-export btn-export-section-hd"
+                    data-target="#mis-matrix-export-area"
+                    data-title="District Demand-Supply &amp; Quota Matrix"
+                    data-filename="wheat-mis-district-matrix-hd.png"
+                    data-wide="true"
+                    data-html2canvas-ignore="true"
+                    title="Export District Matrix Table as HD PNG">
+                <i class="fa-solid fa-image me-1"></i> HD Image
+            </button>
+        </div>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -1167,11 +1321,18 @@
         </div>
     </div>
 </div>
+
+{{-- Toast notification for HD Presentation Image generation --}}
+<div class="mis-export-toast" id="misExportToast" aria-live="polite">
+    <div class="spinner-border spinner-border-sm text-success" role="status"></div>
+    <span id="misExportToastMsg">Rendering 3x HD Presentation Image...</span>
+</div>
 @endpush
 
 @push('scripts')
-{{-- Load Standalone ApexCharts Library --}}
+{{-- Load Standalone ApexCharts & html2canvas Libraries for Analytics & HD Image Export --}}
 <script src="{{ asset('admin-assets/assets/scripts/apexcharts.min.js') }}"></script>
+<script src="{{ asset('admin-assets/assets/scripts/html2canvas.min.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -1627,6 +1788,292 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     initWhenReady();
+
+    // --- HD PRESENTATION IMAGE EXPORT ENGINE (3x Ultra-HD PNG) ---
+    const exportToast = document.getElementById('misExportToast');
+    const exportToastMsg = document.getElementById('misExportToastMsg');
+
+    function showExportToast(msg) {
+        if (exportToastMsg) exportToastMsg.textContent = msg || 'Rendering 3x HD Presentation Image...';
+        if (exportToast) exportToast.classList.add('show');
+    }
+
+    function hideExportToast() {
+        if (exportToast) exportToast.classList.remove('show');
+    }
+
+    // Ensure Presentation HD Dropdown works reliably across Bootstrap 4 & 5
+    const hdDropdownBtn = document.getElementById('btn-hd-export-dropdown');
+    const hdDropdownMenu = document.getElementById('hd-export-dropdown-menu');
+    if (hdDropdownBtn && hdDropdownMenu) {
+        hdDropdownBtn.addEventListener('click', function (e) {
+            setTimeout(() => {
+                // Fallback toggle if Bootstrap dropdown didn't activate it
+                if (!hdDropdownMenu.classList.contains('show')) {
+                    hdDropdownMenu.classList.toggle('show');
+                    hdDropdownBtn.setAttribute('aria-expanded', hdDropdownMenu.classList.contains('show') ? 'true' : 'false');
+                }
+            }, 30);
+        });
+        document.addEventListener('click', function (e) {
+            if (!hdDropdownBtn.contains(e.target) && !hdDropdownMenu.contains(e.target)) {
+                hdDropdownMenu.classList.remove('show');
+                hdDropdownBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    function getActiveFilterSummary() {
+        const parts = [];
+        const form = document.getElementById('wheat-mis-filters');
+        if (form) {
+            const divSel = form.querySelector('select[name="division"]');
+            if (divSel && divSel.value) parts.push('Division: ' + divSel.value);
+            const distSel = form.querySelector('select[name="district_id"]');
+            if (distSel && distSel.value) {
+                parts.push('District: ' + distSel.options[distSel.selectedIndex].text.trim());
+            }
+            const statusSel = form.querySelector('select[name="status"]');
+            if (statusSel && statusSel.value) {
+                parts.push('Status: ' + statusSel.options[statusSel.selectedIndex].text.trim());
+            }
+        }
+        const scope = parts.length > 0 ? parts.join(' | ') : 'All Divisions & Districts (Gilgit-Baltistan)';
+        const nowStr = new Date().toLocaleString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        return `Scope: ${scope}   •   Generated: ${nowStr}   •   3x Ultra-HD`;
+    }
+
+    function loadImageAsync(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = (err) => reject(err);
+            img.src = src;
+        });
+    }
+
+    function wrapWithPresentationFrame(sourceVisual, title, subtitle, minCanvasWidth = 1920) {
+        const padX = 90;
+        const headerH = 210;
+        const footerH = 95;
+        const srcW = sourceVisual.width;
+        const srcH = sourceVisual.height;
+        const canvasW = Math.max(srcW + padX * 2, minCanvasWidth);
+        const canvasH = headerH + srcH + footerH;
+
+        const out = document.createElement('canvas');
+        out.width = canvasW;
+        out.height = canvasH;
+        const ctx = out.getContext('2d');
+
+        // Crisp white slide background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        // Subtle outer presentation border
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, canvasW - 4, canvasH - 4);
+
+        // Top Department accent stripe (emerald -> blue gradient)
+        const grad = ctx.createLinearGradient(0, 0, canvasW, 0);
+        grad.addColorStop(0, '#059669');
+        grad.addColorStop(0.6, '#0d9488');
+        grad.addColorStop(1, '#2563eb');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvasW, 14);
+
+        // Eyebrow Department label
+        ctx.fillStyle = '#059669';
+        ctx.font = 'bold 26px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('AGRICULTURE, LIVESTOCK & FISHERIES DEPARTMENT · GILGIT-BALTISTAN', padX, 66);
+
+        // Slide Title
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 46px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(title, padX, 122);
+
+        // Filter context subtitle
+        ctx.fillStyle = '#64748b';
+        ctx.font = '500 24px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(subtitle, padX, 166);
+
+        // Header divider line
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padX, headerH - 22);
+        ctx.lineTo(canvasW - padX, headerH - 22);
+        ctx.stroke();
+
+        // Draw captured visual centered horizontally
+        const drawX = Math.round((canvasW - srcW) / 2);
+        ctx.drawImage(sourceVisual, drawX, headerH, srcW, srcH);
+
+        // Footer divider & branding
+        const footerTop = canvasH - footerH + 14;
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padX, footerTop);
+        ctx.lineTo(canvasW - padX, footerTop);
+        ctx.stroke();
+
+        ctx.fillStyle = '#475569';
+        ctx.font = '600 22px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('Wheat Seed (50:50 Cost Sharing) — Scheme MIS Dashboard', padX, canvasH - 36);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '500 21px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        const rightText = 'ALFGB Official Presentation Export';
+        const rightW = ctx.measureText(rightText).width;
+        ctx.fillText(rightText, canvasW - padX - rightW, canvasH - 36);
+
+        return out;
+    }
+
+    function triggerCanvasDownload(canvas, filename) {
+        const safeName = (filename || 'wheat-mis-hd-export.png').replace(/[^a-zA-Z0-9._-]/g, '-');
+        if (canvas.toBlob) {
+            canvas.toBlob(function (blob) {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = safeName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 1500);
+            }, 'image/png', 1.0);
+        } else {
+            const a = document.createElement('a');
+            a.href = canvas.toDataURL('image/png', 1.0);
+            a.download = safeName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    }
+
+    async function exportChartHd(chartSelector, title, filename) {
+        const chartInstance = charts[chartSelector];
+        if (!chartInstance) {
+            alert('Chart is still rendering. Please wait a moment and try again.');
+            return;
+        }
+
+        if (hdDropdownMenu) hdDropdownMenu.classList.remove('show');
+        showExportToast('Generating 3x HD chart image for presentation...');
+
+        try {
+            const uriResult = await chartInstance.dataURI({ scale: 3 });
+            const imgURI = uriResult?.imgURI;
+            if (!imgURI) {
+                throw new Error('Empty chart image URI');
+            }
+            const img = await loadImageAsync(imgURI);
+            const finalCanvas = wrapWithPresentationFrame(img, title, getActiveFilterSummary(), 1800);
+            triggerCanvasDownload(finalCanvas, filename);
+        } catch (err) {
+            console.warn('Direct SVG HD export fell back to DOM capture:', err);
+            const cardEl = document.querySelector(chartSelector)?.closest('.card');
+            if (cardEl && typeof html2canvas !== 'undefined') {
+                await exportElementHd(cardEl, title, filename, { wide: false });
+            } else {
+                alert('Failed to export HD chart image.');
+            }
+        } finally {
+            hideExportToast();
+        }
+    }
+
+    async function exportElementHd(targetSelectorOrEl, title, filename, options = {}) {
+        const el = typeof targetSelectorOrEl === 'string'
+            ? document.querySelector(targetSelectorOrEl)
+            : targetSelectorOrEl;
+
+        if (!el || typeof html2canvas === 'undefined') {
+            alert('HD image capture engine is not ready yet. Please try again.');
+            return;
+        }
+
+        if (hdDropdownMenu) hdDropdownMenu.classList.remove('show');
+        showExportToast('Rendering 3x HD presentation image...');
+
+        try {
+            if (document.fonts && document.fonts.ready) {
+                await document.fonts.ready;
+            }
+
+            const capturedCanvas = await html2canvas(el, {
+                scale: 3,
+                useCORS: true,
+                allowTaint: false,
+                backgroundColor: '#ffffff',
+                logging: false,
+                ignoreElements: (node) => node?.dataset?.html2canvasIgnore === 'true',
+                onclone: (clonedDoc) => {
+                    clonedDoc.querySelectorAll('.table-responsive').forEach(tr => {
+                        tr.style.overflow = 'visible';
+                        tr.style.maxWidth = 'none';
+                    });
+                    const clonedTarget = typeof targetSelectorOrEl === 'string'
+                        ? clonedDoc.querySelector(targetSelectorOrEl)
+                        : null;
+                    if (clonedTarget) {
+                        clonedTarget.style.backgroundColor = '#ffffff';
+                        clonedTarget.style.padding = '16px';
+                        if (options.wide) {
+                            clonedTarget.style.width = '1440px';
+                            clonedTarget.style.maxWidth = 'none';
+                        }
+                    }
+                }
+            });
+
+            const finalCanvas = wrapWithPresentationFrame(
+                capturedCanvas,
+                title,
+                getActiveFilterSummary(),
+                Math.max(capturedCanvas.width + 160, 1920)
+            );
+            triggerCanvasDownload(finalCanvas, filename);
+        } catch (err) {
+            console.error('HD section export failed:', err);
+            alert('Could not generate HD image: ' + (err.message || 'Unknown error'));
+        } finally {
+            hideExportToast();
+        }
+    }
+
+    document.querySelectorAll('.btn-export-chart-hd').forEach(btn => {
+        btn.addEventListener('click', function () {
+            exportChartHd(
+                this.dataset.chartId,
+                this.dataset.title || 'Wheat Seed MIS Chart',
+                this.dataset.filename || 'wheat-mis-chart-hd.png'
+            );
+        });
+    });
+
+    document.querySelectorAll('.btn-export-section-hd').forEach(btn => {
+        btn.addEventListener('click', function () {
+            exportElementHd(
+                this.dataset.target,
+                this.dataset.title || 'Wheat Seed MIS Executive Summary',
+                this.dataset.filename || 'wheat-mis-summary-hd.png',
+                { wide: this.dataset.wide === 'true' }
+            );
+        });
+    });
 });
 </script>
 @endpush

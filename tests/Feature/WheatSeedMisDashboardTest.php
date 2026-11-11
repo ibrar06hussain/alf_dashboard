@@ -477,6 +477,25 @@ class WheatSeedMisDashboardTest extends TestCase
         $this->assertStringContainsString('application/pdf', $pdfRes->headers->get('content-type'));
     }
 
+    public function test_wheat_mis_dashboard_includes_hd_presentation_image_export_controls(): void
+    {
+        $response = $this->actingAs($this->superAdmin)->get(route('admin.wheat-mis.index'));
+
+        $response->assertOk();
+        $response->assertSee('Export HD Images (Presentation)', false);
+        $response->assertSee('mis-presentation-bundle', false);
+        $response->assertSee('mis-kpis-export-area', false);
+        $response->assertSee('mis-charts-export-area', false);
+        $response->assertSee('mis-matrix-export-area', false);
+        $response->assertSee('chart-demand-supply-gap-hd.png', false);
+        $response->assertSee('chart-application-status-hd.png', false);
+        $response->assertSee('chart-landholding-bands-hd.png', false);
+        $response->assertSee('chart-water-availability-hd.png', false);
+        $response->assertSee('chart-road-access-hd.png', false);
+        $response->assertSee('html2canvas.min.js', false);
+        $this->assertFileExists(public_path('admin-assets/assets/scripts/html2canvas.min.js'));
+    }
+
     private function createWheatApplication(District $district, string $cnic, string $phone, float $kanals, string $status): Application
     {
         $applicant = Applicant::create([

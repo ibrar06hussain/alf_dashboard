@@ -20,12 +20,14 @@ class PsidConfig extends Model
         'rco',
         'head',
         'is_active',
+        'last_voucher_serial',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'last_voucher_serial' => 'integer',
         ];
     }
 
@@ -73,15 +75,26 @@ class PsidConfig extends Model
     }
 
     /**
-     * Generate 20-digit PSID with unique 10-digit voucher number.
-     * Format: 1Link Prefix (6) + Dept Code (2) + Service Code (2) + Voucher Number (10) = 20 digits
+     * Generate 20-digit PSID with sequential unique 10-digit voucher number.
+     * Format: 1Link Prefix (6) + Dept Code (2) + Service Code (2) + Sequential Voucher Number (10) = 20 digits
      */
-    public function generatePsid(?string $districtCodeOverride = null): string
+    public function generatePsid(?string $districtCodeOverride = null, ?int $serialNo = null): string
     {
         $prefix = str_pad(substr((string) ($this->one_link_prefix ?: '101530'), 0, 6), 6, '0', STR_PAD_LEFT);
         $deptCode = str_pad(substr((string) ($this->department_code ?: '09'), 0, 2), 2, '0', STR_PAD_LEFT);
         $serviceNo = str_pad(substr((string) ($this->department_service_no ?: '01'), 0, 2), 2, '0', STR_PAD_LEFT);
-        $uniqueVoucherId = str_pad((string) random_int(1, 9999999999), 10, '0', STR_PAD_LEFT);
+
+        if ($serialNo === null) {
+            $allocated = VoucherSerial::allocateNext();
+            $serialNo = $allocated->serial_no;
+            $uniqueVoucherId = VoucherSerial::formatVoucherId($serialNo);
+            $psid = $prefix . $deptCode . $serviceNo . $uniqueVoucherId;
+            $allocated->update(['psid' => $psid]);
+
+            return $psid;
+        }
+
+        $uniqueVoucherId = VoucherSerial::formatVoucherId($serialNo);
 
         return $prefix . $deptCode . $serviceNo . $uniqueVoucherId;
     }
