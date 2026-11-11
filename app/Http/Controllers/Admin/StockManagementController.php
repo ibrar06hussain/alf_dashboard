@@ -10,6 +10,7 @@ use App\Models\Scheme;
 use App\Models\SchemeStockItem;
 use App\Models\StockDamage;
 use App\Models\StockDisbursement;
+use App\Models\StockEditAuditLog;
 use App\Models\StockReceipt;
 use App\Models\StockTransfer;
 use App\Models\Tehsil;
@@ -236,12 +237,16 @@ class StockManagementController extends Controller
      */
     public function receiptsIndex(Request $request): View
     {
+        $user = $request->user();
         $districtId = $this->getEffectiveDistrictId($request);
+        $authorizedDistricts = ($user && ! $user->isGlobalScope()) ? $user->authorizedDistrictIds() : [];
 
         $query = StockReceipt::with(['item.scheme', 'center.district', 'receiver', 'editLogs.user']);
 
         if ($districtId) {
             $query->where('district_id', $districtId);
+        } elseif (! empty($authorizedDistricts)) {
+            $query->whereIn('district_id', $authorizedDistricts);
         }
 
         if ($request->filled('center_id')) {
@@ -257,13 +262,28 @@ class StockManagementController extends Controller
         $centersQuery = CollectionCenter::where('is_active', true);
         if ($districtId) {
             $centersQuery->where('district_id', $districtId);
+        } elseif (! empty($authorizedDistricts)) {
+            $centersQuery->whereIn('district_id', $authorizedDistricts);
         }
         $centers = $centersQuery->orderBy('name')->get();
 
         $items = SchemeStockItem::with('scheme')->where('is_active', true)->get();
         $districts = District::orderBy('name')->get();
 
-        return view('admin.stock.receipts', compact('receipts', 'centers', 'items', 'districts', 'districtId'));
+        $editHistoryQuery = StockEditAuditLog::with('user')
+            ->where('stock_type', 'receipt')
+            ->latest();
+
+        if ($districtId || ! empty($authorizedDistricts)) {
+            $scopedReceiptIds = StockReceipt::when($districtId, fn ($q) => $q->where('district_id', $districtId))
+                ->when(! $districtId && ! empty($authorizedDistricts), fn ($q) => $q->whereIn('district_id', $authorizedDistricts))
+                ->pluck('id');
+            $editHistoryQuery->whereIn('stock_id', $scopedReceiptIds);
+        }
+
+        $recentEditLogs = $editHistoryQuery->limit(25)->get();
+
+        return view('admin.stock.receipts', compact('receipts', 'centers', 'items', 'districts', 'districtId', 'recentEditLogs'));
     }
 
     /**
@@ -294,15 +314,15 @@ class StockManagementController extends Controller
 
     /**
      * Update an existing Stock Receipt (Stock In).
-     * Non-admin users can edit within 10 minutes of creation; afterwards only Super Admin can edit.
-     * Mandatory justification is required and recorded in audit log.
+     * Super Admin and scoped Distribution Officers can edit anytime; other recording staff within 10 minutes.
+     * Mandatory justification is required and permanently recorded in the edit audit log.
      */
     public function receiptsUpdate(Request $request, StockReceipt $receipt): RedirectResponse
     {
         $user = $request->user();
 
         if (! $receipt->canUserEdit($user)) {
-            return back()->with('error', 'Edit window expired. This Stock In entry was created more than 10 minutes ago and can only be modified by Super Admin.');
+            return back()->with('error', 'You are not authorized to modify this Stock In entry (10-minute grace window expired; only Super Admin or authorized Distribution Officer can modify).');
         }
 
         $validated = $request->validate([

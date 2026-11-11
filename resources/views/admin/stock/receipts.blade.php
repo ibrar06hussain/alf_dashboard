@@ -78,17 +78,19 @@
             <tbody>
                 @forelse($receipts as $r)
                 @php
-                    $canEditReceipt = $r->canUserEdit(auth()->user());
+                    $currentUser = auth()->user();
+                    $canEditReceipt = $r->canUserEdit($currentUser);
+                    $hasUnrestrictedEdit = $currentUser?->hasAnyRole(['Super Admin', 'Distribution Officer']) ?? false;
                     $minsLeft = $r->editMinutesRemaining();
                     $hasAudit = $r->editLogs->isNotEmpty();
                 @endphp
                 <tr>
                     <td>
-                        <span class="font-weight-bold text-primary">#{{ $r->receipt_no }}</span>
+                        <span class="fw-bold font-weight-bold text-primary">#{{ $r->receipt_no }}</span>
                         @if($hasAudit)
                             <div class="mt-1">
-                                <span class="badge badge-warning text-dark font-weight-normal" style="font-size: 10px;" title="This entry was edited">
-                                    <i class="fa-solid fa-clock-rotate-left mr-1"></i> Edited ({{ $r->editLogs->count() }})
+                                <span class="badge bg-warning text-dark fw-semibold" style="font-size: 11px;" title="This entry was edited {{ $r->editLogs->count() }} time(s)">
+                                    <i class="fa-solid fa-clock-rotate-left me-1"></i> Edited ({{ $r->editLogs->count() }})
                                 </span>
                             </div>
                         @endif
@@ -98,16 +100,16 @@
                         <div class="small text-muted">{{ $r->item->scheme->title ?? '' }}</div>
                     </td>
                     <td>
-                        <div class="font-weight-bold text-dark">{{ $r->center->name ?? 'N/A' }}</div>
+                        <div class="fw-bold font-weight-bold text-dark">{{ $r->center->name ?? 'N/A' }}</div>
                         <small class="text-muted">{{ $r->center->district->name ?? '' }} ({{ $r->center->level }})</small>
                     </td>
-                    <td class="text-right">
-                        <span class="badge badge-success font-size-md px-2 py-1">
+                    <td class="text-end text-right">
+                        <span class="badge fw-bold px-3 py-2" style="background-color: #dcfce7; color: #064e3b; border: 1.5px solid #15803d; font-size: 0.92rem; letter-spacing: 0.01em;">
                             +{{ number_format($r->quantity_received) }} {{ $r->item->unit ?? 'Units' }}
                         </span>
                     </td>
                     <td>
-                        <i class="fa-solid fa-calendar-day text-muted mr-1"></i> {{ $r->received_date->format('d M Y') }}
+                        <i class="fa-solid fa-calendar-day text-muted me-1"></i> {{ $r->received_date->format('d M Y') }}
                     </td>
                     <td>
                         <span class="text-dark">{{ $r->supplier_source ?? 'Government Supply Depot' }}</span>
@@ -120,12 +122,12 @@
                         @endif
                     </td>
                     <td>
-                        <small class="d-block">{{ $r->receiver->name ?? 'Staff' }}</small>
+                        <small class="d-block text-dark">{{ $r->receiver->name ?? 'Staff' }}</small>
                     </td>
                     <td class="text-center">
                         @if($r->proof_attachment_path)
-                            <a href="{{ asset('storage/' . $r->proof_attachment_path) }}" target="_blank" class="btn btn-xs btn-outline-info" title="View Proof Voucher">
-                                <i class="fa-solid fa-paperclip mr-1"></i> View Proof
+                            <a href="{{ asset('storage/' . $r->proof_attachment_path) }}" target="_blank" class="btn btn-sm btn-outline-info" title="View Proof Voucher">
+                                <i class="fa-solid fa-paperclip me-1"></i> View Proof
                             </a>
                         @else
                             <span class="text-muted small">None</span>
@@ -133,7 +135,7 @@
                     </td>
                     <td class="text-center text-nowrap">
                         @if($canEditReceipt)
-                            <button type="button" class="btn btn-sm btn-outline-warning font-weight-bold shadow-sm"
+                            <button type="button" class="btn btn-sm btn-warning text-dark fw-bold font-weight-bold shadow-sm"
                                     onclick="openEditReceiptModal({{ json_encode([
                                         'id' => $r->id,
                                         'receipt_no' => $r->receipt_no,
@@ -146,22 +148,24 @@
                                         'notes' => $r->notes,
                                         'update_url' => route('admin.stock.receipts.update', $r),
                                         'mins_left' => $minsLeft,
-                                        'is_super_admin' => auth()->user()->hasRole('Super Admin'),
+                                        'has_unrestricted_edit' => $hasUnrestrictedEdit,
+                                        'is_super_admin' => $currentUser?->hasRole('Super Admin') ?? false,
+                                        'is_distribution_officer' => $currentUser?->hasRole('Distribution Officer') ?? false,
                                     ]) }})"
-                                    title="{{ auth()->user()->hasRole('Super Admin') ? 'Admin Edit Stock In' : 'User Edit ('.$minsLeft.' mins left in 10-min grace window)' }}">
-                                <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
-                                @if(!auth()->user()->hasRole('Super Admin'))
-                                    <span class="badge badge-light border ml-1">{{ $minsLeft }}m</span>
+                                    title="{{ $hasUnrestrictedEdit ? 'Edit Stock In Entry' : 'User Edit ('.$minsLeft.' mins left in 10-min grace window)' }}">
+                                <i class="fa-solid fa-pen-to-square me-1"></i> Edit
+                                @if(!$hasUnrestrictedEdit)
+                                    <span class="badge bg-light text-dark border ms-1">{{ $minsLeft }}m</span>
                                 @endif
                             </button>
                         @else
-                            <span class="badge badge-light text-muted border" title="Edit window expired (>10 mins). Only Super Admin can modify.">
-                                <i class="fa-solid fa-lock mr-1"></i> Locked
+                            <span class="badge bg-light text-secondary border" title="Edit window expired (>10 mins). Only Super Admin or authorized Distribution Officer can modify.">
+                                <i class="fa-solid fa-lock me-1"></i> Locked
                             </span>
                         @endif
 
                         @if($hasAudit)
-                            <button type="button" class="btn btn-sm btn-outline-secondary ml-1"
+                            <button type="button" class="btn btn-sm btn-info text-white fw-bold ms-1"
                                     onclick="showAuditLogModal('Receipt #{{ $r->receipt_no }}', {{ json_encode($r->editLogs->map(function($l) {
                                         return [
                                             'date' => $l->created_at->format('d M Y H:i:s'),
@@ -171,8 +175,8 @@
                                             'changed_fields' => $l->changed_fields,
                                         ];
                                     })) }})"
-                                    title="View Audit Trail of Edits & Justifications">
-                                <i class="fa-solid fa-history"></i>
+                                    title="View Full Edit History & Justifications">
+                                <i class="fa-solid fa-clock-rotate-left me-1"></i> History ({{ $r->editLogs->count() }})
                             </button>
                         @endif
                     </td>
@@ -202,6 +206,65 @@
         <span class="text-muted small">Showing {{ $receipts->firstItem() ?? 0 }} to {{ $receipts->lastItem() ?? 0 }} of {{ $receipts->total() }}</span>
         {{ $receipts->links() }}
     </div>
+</div>
+
+{{-- Permanent Edit History & Audit Log Table --}}
+<div class="main-card mb-4 card shadow-sm" id="receiptEditHistoryCard">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <span class="fw-bold font-weight-bold text-dark font-size-md">
+            <i class="fa-solid fa-clock-rotate-left me-2 text-warning"></i> Stock Receipt Edit History Log ({{ isset($recentEditLogs) ? $recentEditLogs->count() : 0 }})
+        </span>
+        <span class="badge bg-light text-dark border">Immutable Audit Trail</span>
+    </div>
+    @if(isset($recentEditLogs) && $recentEditLogs->isNotEmpty())
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+                <thead class="table-light thead-light">
+                    <tr>
+                        <th>Edited At</th>
+                        <th>Receipt No</th>
+                        <th>Edited By</th>
+                        <th>Justification</th>
+                        <th>Field Changes (Old &rarr; New)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($recentEditLogs as $log)
+                        <tr>
+                            <td class="text-nowrap text-muted">{{ $log->created_at?->format('d M Y H:i:s') }}</td>
+                            <td class="fw-bold text-primary">#{{ $log->reference_no }}</td>
+                            <td>
+                                <strong class="text-dark">{{ $log->user?->name ?? 'System' }}</strong>
+                                <span class="badge bg-secondary text-white ms-1">{{ $log->user_role ?? 'Officer' }}</span>
+                            </td>
+                            <td class="text-dark">{{ $log->justification }}</td>
+                            <td>
+                                @if(!empty($log->changed_fields))
+                                    <div class="d-flex flex-column gap-1">
+                                        @foreach($log->changed_fields as $fieldKey => $diff)
+                                            @continue(in_array($fieldKey, ['collection_center_id', 'scheme_stock_item_id'], true) && (isset($log->changed_fields['collection_center_name']) || isset($log->changed_fields['scheme_stock_item_name'])))
+                                            <div>
+                                                <span class="fw-semibold text-dark">{{ \Illuminate\Support\Str::title(str_replace('_', ' ', $fieldKey)) }}:</span>
+                                                <span class="text-danger text-decoration-line-through">{{ $diff['from'] ?? '—' }}</span>
+                                                <i class="fa-solid fa-arrow-right mx-1 text-muted"></i>
+                                                <span class="fw-bold" style="color: #064e3b;">{{ $diff['to'] ?? '—' }}</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <span class="text-muted">Proof attachment or minor details updated</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @else
+        <div class="card-body text-center text-muted py-4 small">
+            <i class="fa-solid fa-shield-check text-success me-1"></i> No stock receipt edits have been recorded yet. All future edits will be logged permanently here with old values, new values, and justification.
+        </div>
+    @endif
 </div>
 @endsection
 
@@ -324,7 +387,6 @@
     </div>
 </div>
 
-@push('modals')
 {{-- Create Receipt Modal --}}
 <div class="modal fade" id="createReceiptModal" tabindex="-1" role="dialog" aria-labelledby="createReceiptModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
@@ -371,7 +433,7 @@
                     <div class="form-row">
                         <div class="col-md-6 form-group">
                             <label class="font-weight-bold text-dark">Quantity Received *</label>
-                            <input type="number" step="any" min="0.01" name="quantity_received" class="form-control form-control-lg font-weight-bold text-success" placeholder="e.g. 500" required>
+                            <input type="number" step="any" min="0.01" name="quantity_received" class="form-control form-control-lg fw-bold font-weight-bold text-dark" style="color: #064e3b;" placeholder="e.g. 500" required>
                         </div>
                         <div class="col-md-6 form-group">
                             <label class="font-weight-bold text-dark">Received Date *</label>
@@ -454,6 +516,44 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+function showBsOrFallbackModal(modalId) {
+    var m = document.getElementById(modalId);
+    if (!m) return;
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(m).show();
+    } else if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#' + modalId).modal('show');
+    } else {
+        m.classList.add('show');
+        m.style.display = 'block';
+        document.body.classList.add('modal-open');
+    }
+}
+
+function hideBsOrFallbackModal(modalId) {
+    var m = document.getElementById(modalId);
+    if (!m) return;
+    if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(m).hide();
+    } else if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+        $('#' + modalId).modal('hide');
+    } else {
+        m.classList.remove('show');
+        m.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    }
+}
+
+function escapeReceiptHtml(val) {
+    if (val === null || val === undefined) return '';
+    return String(val)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function openEditReceiptModal(data) {
     document.getElementById('editReceiptForm').action = data.update_url;
     document.getElementById('editReceiptNoLabel').innerText = '#' + data.receipt_no;
@@ -470,35 +570,20 @@ function openEditReceiptModal(data) {
     var alertBox = document.getElementById('editReceiptGraceAlert');
     if (data.is_super_admin) {
         alertBox.className = 'alert alert-primary py-2 small mb-3';
-        windowText.innerHTML = '<i class="fa-solid fa-shield-halved mr-1"></i> <strong>Super Admin Access:</strong> You can edit this entry anytime. All changes require justification and are logged.';
+        windowText.innerHTML = '<i class="fa-solid fa-shield-halved me-1"></i> <strong>Super Admin Access:</strong> You can edit this entry anytime. All changes require justification and are logged permanently.';
+    } else if (data.is_distribution_officer || data.has_unrestricted_edit) {
+        alertBox.className = 'alert alert-primary py-2 small mb-3';
+        windowText.innerHTML = '<i class="fa-solid fa-user-check me-1"></i> <strong>Distribution Officer Access:</strong> You can edit this entry anytime within your assigned district. Every change requires justification and is saved in the permanent edit history.';
     } else {
         alertBox.className = 'alert alert-warning py-2 small mb-3';
-        windowText.innerHTML = '<i class="fa-solid fa-stopwatch mr-1"></i> <strong>Initial Edit Window Active:</strong> ' + data.mins_left + ' minutes remaining to adjust values. After 10 minutes, editing locks to Admin only.';
+        windowText.innerHTML = '<i class="fa-solid fa-stopwatch me-1"></i> <strong>Initial Edit Window Active:</strong> ' + data.mins_left + ' minutes remaining to adjust values. After 10 minutes, only Super Admin or Distribution Officer can modify.';
     }
 
-    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
-        $('#editReceiptModal').modal('show');
-    } else {
-        var m = document.getElementById('editReceiptModal');
-        if (m) {
-            m.classList.add('show');
-            m.style.display = 'block';
-            document.body.classList.add('modal-open');
-        }
-    }
+    showBsOrFallbackModal('editReceiptModal');
 }
 
 function closeEditReceiptModal() {
-    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
-        $('#editReceiptModal').modal('hide');
-    } else {
-        var m = document.getElementById('editReceiptModal');
-        if (m) {
-            m.classList.remove('show');
-            m.style.display = 'none';
-            document.body.classList.remove('modal-open');
-        }
-    }
+    hideBsOrFallbackModal('editReceiptModal');
 }
 
 function showAuditLogModal(title, logs) {
@@ -515,53 +600,36 @@ function showAuditLogModal(title, logs) {
 
             var changesHtml = '';
             if (log.changed_fields && Object.keys(log.changed_fields).length > 0) {
-                changesHtml += '<table class="table table-sm table-bordered mt-2 mb-0" style="font-size: 11px;">';
-                changesHtml += '<thead class="thead-light"><tr><th>Field</th><th>Original Value</th><th>Modified Value</th></tr></thead><tbody>';
+                changesHtml += '<table class="table table-sm table-bordered mt-2 mb-0" style="font-size: 12px;">';
+                changesHtml += '<thead class="table-light thead-light"><tr><th>Field</th><th>Original Value</th><th>Modified Value</th></tr></thead><tbody>';
                 for (var f in log.changed_fields) {
                     var change = log.changed_fields[f];
-                    var fromVal = (change.from !== null && change.from !== undefined) ? change.from : '<em>empty</em>';
-                    var toVal = (change.to !== null && change.to !== undefined) ? change.to : '<em>empty</em>';
-                    changesHtml += '<tr><td class="font-weight-bold">' + f + '</td><td class="text-danger">' + fromVal + '</td><td class="text-success">' + toVal + '</td></tr>';
+                    var fromVal = (change.from !== null && change.from !== undefined && change.from !== '') ? escapeReceiptHtml(change.from) : '<em>empty</em>';
+                    var toVal = (change.to !== null && change.to !== undefined && change.to !== '') ? escapeReceiptHtml(change.to) : '<em>empty</em>';
+                    var fieldLabel = escapeReceiptHtml(f.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }));
+                    changesHtml += '<tr><td class="fw-bold font-weight-bold">' + fieldLabel + '</td><td class="text-danger">' + fromVal + '</td><td class="fw-bold font-weight-bold" style="color: #064e3b;">' + toVal + '</td></tr>';
                 }
                 changesHtml += '</tbody></table>';
             }
 
             card.innerHTML =
                 '<div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">' +
-                    '<div><strong>' + log.user + '</strong> <span class="badge badge-secondary ml-1">' + log.role + '</span></div>' +
-                    '<small class="text-muted"><i class="fa-solid fa-clock mr-1"></i>' + log.date + '</small>' +
+                    '<div><strong>' + escapeReceiptHtml(log.user) + '</strong> <span class="badge bg-secondary text-white ms-1">' + escapeReceiptHtml(log.role) + '</span></div>' +
+                    '<small class="text-muted"><i class="fa-solid fa-clock me-1"></i>' + escapeReceiptHtml(log.date) + '</small>' +
                 '</div>' +
                 '<div class="card-body p-3">' +
-                    '<div class="mb-2"><strong class="text-dark">Reason / Justification:</strong> <span class="text-primary font-weight-bold">' + (log.justification || 'None') + '</span></div>' +
+                    '<div class="mb-2"><strong class="text-dark">Reason / Justification:</strong> <span class="text-primary fw-bold font-weight-bold">' + escapeReceiptHtml(log.justification || 'None') + '</span></div>' +
                     changesHtml +
                 '</div>';
             container.appendChild(card);
         });
     }
 
-    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
-        $('#stockAuditModal').modal('show');
-    } else {
-        var m = document.getElementById('stockAuditModal');
-        if (m) {
-            m.classList.add('show');
-            m.style.display = 'block';
-            document.body.classList.add('modal-open');
-        }
-    }
+    showBsOrFallbackModal('stockAuditModal');
 }
 
 function closeAuditModal() {
-    if (window.jQuery && typeof jQuery.fn.modal === 'function') {
-        $('#stockAuditModal').modal('hide');
-    } else {
-        var m = document.getElementById('stockAuditModal');
-        if (m) {
-            m.classList.remove('show');
-            m.style.display = 'none';
-            document.body.classList.remove('modal-open');
-        }
-    }
+    hideBsOrFallbackModal('stockAuditModal');
 }
 </script>
 @endpush

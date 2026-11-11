@@ -58,8 +58,8 @@ class StockReceipt extends Model
 
     /**
      * Check if the given user can edit this stock receipt.
-     * Rule: Within 10 minutes of creation, creator or admin can edit.
-     * After 10 minutes, ONLY Super Admin can edit.
+     * Rule: Super Admin and scoped Distribution Officers can edit anytime (with mandatory audit justification).
+     * Other authorized officers/creators can edit within 10 minutes of creation.
      */
     public function canUserEdit(?User $user): bool
     {
@@ -71,7 +71,18 @@ class StockReceipt extends Model
             return true;
         }
 
-        // Within 10 minutes of creation
+        if ($user->hasRole('Distribution Officer')) {
+            if (! $user->isGlobalScope()) {
+                $authorizedDistricts = $user->authorizedDistrictIds();
+                if (! empty($authorizedDistricts) && ! in_array((int) $this->district_id, $authorizedDistricts, true)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Within 10 minutes of creation for other recording staff/officers
         $isWithinWindow = $this->created_at && $this->created_at->diffInMinutes(now()) <= 10;
         if (! $isWithinWindow) {
             return false;

@@ -512,7 +512,7 @@ class StockManagementService
     {
         if (! $receipt->canUserEdit($actor)) {
             throw ValidationException::withMessages([
-                'justification' => 'Edit window expired. Stock In entries older than 10 minutes can only be edited by Super Admin.',
+                'justification' => 'You do not have permission to edit this Stock In entry (10-minute grace window expired; only Super Admin or authorized Distribution Officer can modify).',
             ]);
         }
 
@@ -528,6 +528,9 @@ class StockManagementService
             $newCenterId = (int) ($data['collection_center_id'] ?? $oldCenterId);
             $newItemId = (int) ($data['scheme_stock_item_id'] ?? $oldItemId);
 
+            if ($receipt->center) {
+                $this->validateUserCenterAccess($actor, $receipt->center);
+            }
             $targetCenter = CollectionCenter::findOrFail($newCenterId);
             $this->validateUserCenterAccess($actor, $targetCenter);
 
