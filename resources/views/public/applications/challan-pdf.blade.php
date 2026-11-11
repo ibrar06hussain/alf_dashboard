@@ -221,11 +221,11 @@
     $applicant = $applicant ?? $application->applicant;
     $district = $district ?? $application->district;
     $scheme = $scheme ?? $application->scheme;
-    $psidConfig = $psidConfig ?? \App\Models\PsidConfig::getActive();
+    $psidConfig = $psidConfig ?? \App\Models\PsidConfig::getActive($application->scheme_id);
     $bill = $bill ?? ($application->relationLoaded('bills') ? $application->bills->first() : null);
     $psidNumber = $bill?->psid ?? $application->psid ?? null;
     $rcoCode = $bill?->challan_data['rco'] ?? \App\Models\PsidConfig::resolveDistrictRco($district, $template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
-    $headCode = $template->head_code ?: ($psidConfig->head ?: 'C03870');
+    $headCode = $bill?->challan_data['head'] ?? (($psidConfig->scheme_id && $psidConfig->head) ? $psidConfig->head : ($template->head_code ?: ($psidConfig->head ?: 'C03870')));
     $qrCodeBase64 = $qrCodeBase64 ?? ($psidNumber ? \App\Support\QrCodeGenerator::toBase64Png($psidNumber, 3, 2) : null);
 @endphp
 

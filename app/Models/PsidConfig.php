@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PsidConfig extends Model
 {
@@ -13,6 +14,7 @@ class PsidConfig extends Model
     protected $primaryKey = 'config_id';
 
     protected $fillable = [
+        'scheme_id',
         'one_link_prefix',
         'department_code',
         'district_code',
@@ -26,9 +28,15 @@ class PsidConfig extends Model
     protected function casts(): array
     {
         return [
+            'scheme_id' => 'integer',
             'is_active' => 'boolean',
             'last_voucher_serial' => 'integer',
         ];
+    }
+
+    public function scheme(): BelongsTo
+    {
+        return $this->belongsTo(Scheme::class, 'scheme_id');
     }
 
     public const DISTRICT_CODES = [
@@ -47,31 +55,67 @@ class PsidConfig extends Model
     /**
      * Alias for getActive().
      */
-    public static function active(): self
+    public static function active(?int $schemeId = null): self
     {
-        return self::getActive();
+        return self::getActive($schemeId);
     }
 
     /**
-     * Get the active PSID configuration (or fallback default instance).
+     * Resolve effective PSID configuration for a Scheme (with fallback to global default).
      */
-    public static function getActive(): self
+    public static function forScheme(Scheme|int|null $scheme = null): self
     {
-        $config = static::where('is_active', true)->first() ?? static::first();
+        $schemeId = $scheme instanceof Scheme ? $scheme->id : $scheme;
+
+        return self::getActive($schemeId ? (int) $schemeId : null);
+    }
+
+    /**
+     * Get the active PSID configuration for a given scheme (or global default fallback).
+     */
+    public static function getActive(?int $schemeId = null): self
+    {
+        if ($schemeId !== null) {
+            $schemeConfig = static::where('scheme_id', $schemeId)
+                ->where('is_active', true)
+                ->first();
+
+            if ($schemeConfig) {
+                return $schemeConfig;
+            }
+        }
+
+        $config = static::whereNull('scheme_id')->where('is_active', true)->first()
+            ?? static::whereNull('scheme_id')->first()
+            ?? static::where('is_active', true)->first()
+            ?? static::first();
 
         if ($config) {
             return $config;
         }
 
         return new static([
+            'scheme_id' => null,
             'one_link_prefix' => '101530',
             'department_code' => '09',
             'district_code' => '01',
             'department_service_no' => '01',
-            'rco' => 'GL1618',
+            'rco' => 'GL-1618',
             'head' => 'C03870',
             'is_active' => true,
         ]);
+    }
+
+    /**
+     * Return the 10-digit formatted prefix: 1Link Prefix (6) + Dept Code (2) + Service Code (2).
+     */
+    public function formattedPrefix(): string
+    {
+        $prefix = str_pad(substr((string) ($this->one_link_prefix ?: '101530'), 0, 6), 6, '0', STR_PAD_LEFT);
+        $deptCode = str_pad(substr((string) ($this->department_code ?: '09'), 0, 2), 2, '0', STR_PAD_LEFT);
+        $serviceNo = str_pad(substr((string) ($this->department_service_no ?: '01'), 0, 2), 2, '0', STR_PAD_LEFT);
+
+        return $prefix . $deptCode . $serviceNo;
     }
 
     /**

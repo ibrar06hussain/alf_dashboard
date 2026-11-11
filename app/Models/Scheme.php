@@ -104,6 +104,16 @@ class Scheme extends Model
         return $this->challanTemplate ?? ChallanTemplate::getDefault();
     }
 
+    public function psidConfig(): HasOne
+    {
+        return $this->hasOne(PsidConfig::class, 'scheme_id');
+    }
+
+    public function getEffectivePsidConfig(): PsidConfig
+    {
+        return PsidConfig::getActive($this->id);
+    }
+
     public function isOpenForApplications(): bool
     {
         if ($this->type !== 'running' || $this->status !== 'active') {

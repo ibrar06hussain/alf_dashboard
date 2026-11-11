@@ -172,15 +172,19 @@ class GbpayApiController extends Controller
             $applicant = $application?->applicant;
             $district = $application?->district;
             $template = $application?->scheme?->getChallanTemplate();
-            $psidConfig = PsidConfig::getActive();
+            $psidConfig = PsidConfig::getActive($application?->scheme_id);
 
             $districtCode = PsidConfig::getDistrictAbbreviation($psidConfig->district_code ?? '01', $district);
             $generatedAt = $bill->generated_at ?? $application?->challan_issued_at ?? now();
             $dueDate = $bill->due_date ?? $application?->challan_due_date ?? $generatedAt->copy()->addDays(10);
 
+            $fallbackRco = ($psidConfig->scheme_id && $psidConfig->rco)
+                ? $psidConfig->rco
+                : ($template?->rco_code ?: ($psidConfig->rco ?? 'GL-1618'));
             $rcoCode = $bill->challan_data['rco']
-                ?? PsidConfig::resolveDistrictRco($district, $template?->rco_code ?: ($psidConfig->rco ?? 'GL-1618'));
-            $headCode = $template?->head_code ?: ($psidConfig->head ?? 'C03870');
+                ?? PsidConfig::resolveDistrictRco($district, $fallbackRco);
+            $headCode = $bill->challan_data['head']
+                ?? (($psidConfig->scheme_id && $psidConfig->head) ? $psidConfig->head : ($template?->head_code ?: ($psidConfig->head ?? 'C03870')));
             $payableAmount = (int) ceil((float) $bill->bill_amount);
 
             $responsePayload = [

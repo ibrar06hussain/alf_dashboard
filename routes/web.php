@@ -287,6 +287,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware('role:Super Admin')->prefix('gbpay')->name('gbpay.')->group(function () {
             Route::get('/', [GbpayController::class, 'index'])->name('index');
             Route::match(['post', 'put'], 'psid-config', [GbpayController::class, 'updatePsidConfig'])->name('psid-config.update');
+            Route::delete('psid-config/{id}', [GbpayController::class, 'destroySchemePsidConfig'])->name('psid-config.destroy');
             Route::post('credentials', [GbpayController::class, 'storeCredential'])->name('credentials.store');
             Route::put('credentials/{id}', [GbpayController::class, 'updateCredential'])->name('credentials.update');
             Route::delete('credentials/{id}', [GbpayController::class, 'destroyCredential'])->name('credentials.destroy');

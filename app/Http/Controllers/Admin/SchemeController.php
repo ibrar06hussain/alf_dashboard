@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\District;
 use App\Models\Form;
 use App\Models\FormField;
+use App\Models\PsidConfig;
 use App\Models\Scheme;
 use App\Services\QuotaService;
 use App\Support\CoreFormFields;
@@ -115,28 +116,35 @@ class SchemeController extends Controller
         $departments = Department::where('is_active', true)->orderBy('display_order')->get();
         $districts = District::where('is_active', true)->orderBy('name')->get();
         $challanTemplates = \App\Models\ChallanTemplate::where('is_active', true)->orderBy('name')->get();
+        $globalPsidConfig = PsidConfig::getActive();
         $defaultType = in_array($request->string('type')->toString(), ['running', 'proposed'], true)
             ? $request->string('type')->toString()
             : 'running';
 
-        return view('admin.schemes.create', compact('departments', 'districts', 'challanTemplates', 'defaultType'));
+        return view('admin.schemes.create', compact('departments', 'districts', 'challanTemplates', 'globalPsidConfig', 'defaultType'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
-        $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
+        $data['slug'] = ! empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['requires_challan'] = $request->boolean('requires_challan');
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
+        $schemePayload = collect($data)->except([
+            'use_custom_psid', 'psid_one_link_prefix', 'psid_department_code',
+            'psid_department_service_no', 'psid_district_code', 'psid_rco', 'psid_head',
+        ])->all();
+
         if ($request->hasFile('featured_image')) {
-            $data['featured_image'] = $request->file('featured_image')->store('schemes', 'public');
+            $schemePayload['featured_image'] = $request->file('featured_image')->store('schemes', 'public');
         }
 
-        $scheme = DB::transaction(function () use ($data, $request) {
-            $scheme = Scheme::create($data);
+        $scheme = DB::transaction(function () use ($schemePayload, $request) {
+            $scheme = Scheme::create($schemePayload);
             $this->syncDistrictQuotas($scheme, $request);
+            $this->syncPsidConfig($scheme, $request);
 
             // Application forms are only needed for on-going schemes.
             if ($scheme->type === 'running') {
@@ -180,34 +188,41 @@ class SchemeController extends Controller
 
     public function edit(Scheme $scheme): View
     {
-        $scheme->load(['schemeDistricts', 'challanTemplate']);
+        $scheme->load(['schemeDistricts', 'challanTemplate', 'psidConfig']);
         $departments = Department::orderBy('display_order')->get();
         $districts = District::where('is_active', true)->orderBy('name')->get();
         $challanTemplates = \App\Models\ChallanTemplate::where('is_active', true)->orderBy('name')->get();
+        $globalPsidConfig = PsidConfig::getActive();
         $quotas = $scheme->schemeDistricts->pluck('quota', 'district_id');
         $defaultType = $scheme->type;
 
-        return view('admin.schemes.edit', compact('scheme', 'departments', 'districts', 'challanTemplates', 'quotas', 'defaultType'));
+        return view('admin.schemes.edit', compact('scheme', 'departments', 'districts', 'challanTemplates', 'globalPsidConfig', 'quotas', 'defaultType'));
     }
 
     public function update(Request $request, Scheme $scheme): RedirectResponse
     {
         $data = $this->validated($request, $scheme->id);
-        $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
+        $data['slug'] = ! empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['requires_challan'] = $request->boolean('requires_challan');
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
+
+        $schemePayload = collect($data)->except([
+            'use_custom_psid', 'psid_one_link_prefix', 'psid_department_code',
+            'psid_department_service_no', 'psid_district_code', 'psid_rco', 'psid_head',
+        ])->all();
 
         if ($request->hasFile('featured_image')) {
             if ($scheme->featured_image) {
                 Storage::disk('public')->delete($scheme->featured_image);
             }
-            $data['featured_image'] = $request->file('featured_image')->store('schemes', 'public');
+            $schemePayload['featured_image'] = $request->file('featured_image')->store('schemes', 'public');
         }
 
-        DB::transaction(function () use ($scheme, $data, $request) {
-            $scheme->update($data);
+        DB::transaction(function () use ($scheme, $schemePayload, $request) {
+            $scheme->update($schemePayload);
             $this->syncDistrictQuotas($scheme, $request);
+            $this->syncPsidConfig($scheme, $request);
         });
 
         $redirect = $scheme->type === 'proposed'
@@ -234,6 +249,18 @@ class SchemeController extends Controller
 
     private function validated(Request $request, ?int $ignoreId = null): array
     {
+        if ($request->filled('psid_department_code')) {
+            $request->merge([
+                'psid_department_code' => str_pad(trim((string) $request->input('psid_department_code')), 2, '0', STR_PAD_LEFT),
+            ]);
+        }
+
+        if ($request->filled('psid_department_service_no')) {
+            $request->merge([
+                'psid_department_service_no' => str_pad(trim((string) $request->input('psid_department_service_no')), 2, '0', STR_PAD_LEFT),
+            ]);
+        }
+
         return $request->validate([
             'department_id' => ['required', 'exists:departments,id'],
             'title' => ['required', 'string', 'max:255'],
@@ -259,7 +286,40 @@ class SchemeController extends Controller
             'featured_image' => ['nullable', 'image', 'max:5120'],
             'district_quotas' => ['nullable', 'array'],
             'district_quotas.*' => ['nullable', 'integer', 'min:0'],
+            'use_custom_psid' => ['nullable'],
+            'psid_one_link_prefix' => ['required_if:use_custom_psid,1', 'nullable', 'string', 'size:6', 'regex:/^\d{6}$/'],
+            'psid_department_code' => ['required_if:use_custom_psid,1', 'nullable', 'string', 'size:2', 'regex:/^\d{2}$/'],
+            'psid_department_service_no' => ['required_if:use_custom_psid,1', 'nullable', 'string', 'size:2', 'regex:/^\d{2}$/'],
+            'psid_district_code' => ['nullable', 'string', 'size:2', 'regex:/^\d{2}$/'],
+            'psid_rco' => ['required_if:use_custom_psid,1', 'nullable', 'string', 'max:20'],
+            'psid_head' => ['required_if:use_custom_psid,1', 'nullable', 'string', 'max:20'],
         ]);
+    }
+
+    private function syncPsidConfig(Scheme $scheme, Request $request): void
+    {
+        if (! $request->boolean('use_custom_psid')) {
+            if ($request->has('psid_settings_present')) {
+                PsidConfig::where('scheme_id', $scheme->id)->delete();
+            }
+
+            return;
+        }
+
+        $global = PsidConfig::getActive();
+
+        PsidConfig::updateOrCreate(
+            ['scheme_id' => $scheme->id],
+            [
+                'one_link_prefix' => $request->input('psid_one_link_prefix') ?: ($global->one_link_prefix ?? '101530'),
+                'department_code' => str_pad((string) ($request->input('psid_department_code') ?: ($global->department_code ?? '09')), 2, '0', STR_PAD_LEFT),
+                'department_service_no' => str_pad((string) ($request->input('psid_department_service_no') ?: ($global->department_service_no ?? '01')), 2, '0', STR_PAD_LEFT),
+                'district_code' => $request->input('psid_district_code') ?: ($global->district_code ?? '01'),
+                'rco' => $request->input('psid_rco') ?: ($global->rco ?? 'GL-1618'),
+                'head' => $request->input('psid_head') ?: ($global->head ?? 'C03870'),
+                'is_active' => true,
+            ]
+        );
     }
 
     private function syncDistrictQuotas(Scheme $scheme, Request $request): void

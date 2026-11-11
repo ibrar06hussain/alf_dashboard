@@ -511,7 +511,7 @@ class ApplicationController extends Controller
 
         // Ensure GBPay Bill & 20-digit PSID exist for this application challan
         $bill = app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application);
-        $psidConfig = \App\Models\PsidConfig::getActive();
+        $psidConfig = \App\Models\PsidConfig::getActive($application->scheme_id);
         $qrCodeBase64 = \App\Support\QrCodeGenerator::toBase64Png($bill->psid, 3, 2);
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('public.applications.challan-pdf', [

@@ -74,9 +74,9 @@
         <div class="card alf-panel shadow-sm h-100">
             <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                 <h6 class="mb-0 fw-bold text-dark">
-                    <i class="fa-solid fa-sliders text-primary me-2"></i> 20-Digit PSID Prefix & Treasury Configuration
+                    <i class="fa-solid fa-sliders text-primary me-2"></i> Global Default PSID Prefix &amp; Treasury Config
                 </h6>
-                <span class="badge bg-success">Active Prefix: {{ ($psidConfig->one_link_prefix ?? '101530') . str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT) . str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT) }}</span>
+                <span class="badge bg-success">Default Prefix: {{ ($psidConfig->one_link_prefix ?? '101530') . str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT) . str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT) }}</span>
             </div>
             <div class="card-body">
                 <form action="{{ route('admin.gbpay.psid-config.update') }}" method="POST">
@@ -253,6 +253,109 @@
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+{{-- Per-Scheme PSID Configurations --}}
+<div class="card alf-panel shadow-sm mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h6 class="mb-0 fw-bold text-dark">
+                <i class="fa-solid fa-layer-group text-primary me-2"></i> Scheme-Specific PSID Configurations
+            </h6>
+            <div class="small text-muted">Configure custom 1Link Prefix, Department Code, Service Code, RCO, and Head of Account for each individual scheme. Schemes without an override use the Global Default above.</div>
+        </div>
+        <span class="badge bg-primary">{{ isset($schemePsidConfigs) ? $schemePsidConfigs->count() : 0 }} Scheme Override(s)</span>
+    </div>
+    <div class="card-body">
+        {{-- Add / Update Scheme PSID Form --}}
+        <form action="{{ route('admin.gbpay.psid-config.update') }}" method="POST" id="schemePsidConfigForm" class="p-3 bg-light border rounded mb-3">
+            @csrf
+            @method('PUT')
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Scheme <span class="text-danger">*</span></label>
+                    <select name="scheme_id" id="scheme_psid_scheme_id" class="form-select form-select-sm" required>
+                        <option value="">Select Scheme...</option>
+                        @foreach($schemes ?? [] as $s)
+                            <option value="{{ $s->id }}">{{ $s->title }} ({{ $s->department->name ?? 'ALF' }})</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">1Link Prefix (6d) <span class="text-danger">*</span></label>
+                    <input type="text" name="one_link_prefix" id="scheme_psid_prefix" maxlength="6" class="form-control form-control-sm" value="{{ $psidConfig->one_link_prefix ?? '101530' }}" required>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small fw-bold">Dept (2d) <span class="text-danger">*</span></label>
+                    <input type="text" name="department_code" id="scheme_psid_dept" maxlength="2" class="form-control form-control-sm" value="{{ $psidConfig->department_code ?? '09' }}" required>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small fw-bold">Svc (2d) <span class="text-danger">*</span></label>
+                    <input type="text" name="department_service_no" id="scheme_psid_svc" maxlength="2" class="form-control form-control-sm" value="{{ $psidConfig->department_service_no ?? '01' }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Default RCO <span class="text-danger">*</span></label>
+                    <input type="text" name="rco" id="scheme_psid_rco" maxlength="20" class="form-control form-control-sm" value="{{ $psidConfig->rco ?? 'GL-1618' }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Account Head <span class="text-danger">*</span></label>
+                    <div class="d-flex gap-1">
+                        <input type="text" name="head" id="scheme_psid_head" maxlength="20" class="form-control form-control-sm" value="{{ $psidConfig->head ?? 'C03870' }}" required>
+                        <button type="submit" class="btn btn-sm btn-primary text-nowrap fw-bold">Save</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        {{-- Existing Scheme Overrides Table --}}
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0 small">
+                <thead class="table-light">
+                    <tr>
+                        <th>Scheme</th>
+                        <th>1Link Prefix</th>
+                        <th>Dept Code</th>
+                        <th>Service Code</th>
+                        <th>20-Digit Structure Sample</th>
+                        <th>Default RCO / Head</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($schemePsidConfigs ?? [] as $sc)
+                        <tr>
+                            <td>
+                                <strong class="text-dark">{{ $sc->scheme->title ?? 'Scheme #' . $sc->scheme_id }}</strong>
+                                <div class="text-muted" style="font-size: 11px;">{{ $sc->scheme?->department?->name ?? '' }}</div>
+                            </td>
+                            <td><code>{{ $sc->one_link_prefix }}</code></td>
+                            <td><code>{{ str_pad((string) $sc->department_code, 2, '0', STR_PAD_LEFT) }}</code></td>
+                            <td><code>{{ str_pad((string) $sc->department_service_no, 2, '0', STR_PAD_LEFT) }}</code></td>
+                            <td><code class="fw-bold text-primary">{{ $sc->formattedPrefix() }}0000000001</code></td>
+                            <td><code>{{ $sc->rco }}</code> / <code>{{ $sc->head }}</code></td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
+                                        onclick="document.getElementById('scheme_psid_scheme_id').value='{{ $sc->scheme_id }}';document.getElementById('scheme_psid_prefix').value='{{ $sc->one_link_prefix }}';document.getElementById('scheme_psid_dept').value='{{ $sc->department_code }}';document.getElementById('scheme_psid_svc').value='{{ $sc->department_service_no }}';document.getElementById('scheme_psid_rco').value='{{ $sc->rco }}';document.getElementById('scheme_psid_head').value='{{ $sc->head }}';">
+                                    Edit
+                                </button>
+                                <form action="{{ route('admin.gbpay.psid-config.destroy', $sc->config_id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remove custom PSID config for this scheme?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-2">Reset to Default</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-3">
+                                No per-scheme PSID overrides configured yet. All schemes currently inherit the Global Default prefix (<code>{{ ($psidConfig->one_link_prefix ?? '101530') . str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT) . str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT) }}</code>).
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

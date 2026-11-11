@@ -53,8 +53,10 @@ class VoucherSerial extends Model
     public static function allocateNext(?Application $application = null, ?string $challanNo = null): self
     {
         return DB::transaction(function () use ($application, $challanNo) {
-            // Lock the active PsidConfig singleton row as a concurrency mutex so even serial #1 cannot race
-            $lockedConfig = PsidConfig::where('is_active', true)->lockForUpdate()->first()
+            // Lock the Global Default PsidConfig row as a consistent concurrency mutex across all schemes
+            $lockedConfig = PsidConfig::whereNull('scheme_id')->where('is_active', true)->lockForUpdate()->first()
+                ?? PsidConfig::whereNull('scheme_id')->lockForUpdate()->first()
+                ?? PsidConfig::where('is_active', true)->lockForUpdate()->first()
                 ?? PsidConfig::lockForUpdate()->first();
 
             if (! $lockedConfig) {

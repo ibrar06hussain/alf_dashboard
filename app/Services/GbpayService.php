@@ -33,7 +33,7 @@ class GbpayService
     public function generatePsid(?Application $application = null, ?VoucherSerial &$allocatedSerial = null): string
     {
         return DB::transaction(function () use ($application, &$allocatedSerial) {
-            $config = PsidConfig::getActive();
+            $config = PsidConfig::getActive($application?->scheme_id);
             $districtDigits = $application?->district
                 ? PsidConfig::resolveDistrictDigits($application->district)
                 : null;
@@ -68,7 +68,7 @@ class GbpayService
 
         $breakdown = $application->getChallanBreakdown();
         $template = $breakdown['template'];
-        $psidConfig = PsidConfig::getActive();
+        $psidConfig = PsidConfig::getActive($application->scheme_id);
 
         $rawBillAmount = $amount !== null && $amount > 0
             ? (float) $amount
@@ -85,8 +85,13 @@ class GbpayService
             ?? ($application->district_id ? District::find($application->district_id) : null);
         $districtCode = $district?->code ?? PsidConfig::getDistrictAbbreviation(district: $district) ?? 'GL';
 
-        $rcoCode = PsidConfig::resolveDistrictRco($district, $template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
-        $headCode = $template->head_code ?: ($psidConfig->head ?: 'C03870');
+        $fallbackRco = ($psidConfig->scheme_id && $psidConfig->rco)
+            ? $psidConfig->rco
+            : ($template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
+        $rcoCode = PsidConfig::resolveDistrictRco($district, $fallbackRco);
+        $headCode = ($psidConfig->scheme_id && $psidConfig->head)
+            ? $psidConfig->head
+            : ($template->head_code ?: ($psidConfig->head ?: 'C03870'));
 
         $challanData = [
             'applicant_name' => $application->applicant?->full_name ?? 'Applicant',
@@ -203,12 +208,16 @@ class GbpayService
     {
         try {
             $bill->loadMissing(['application.applicant', 'application.scheme.challanTemplate']);
-            $psidConfig = PsidConfig::getActive();
+            $psidConfig = PsidConfig::getActive($bill->application?->scheme_id);
             $template = $bill->application?->scheme?->getChallanTemplate();
 
             $district = $bill->application?->district ?? $bill->application?->applicant?->district ?? null;
-            $rco = $bill->challan_data['rco'] ?? PsidConfig::resolveDistrictRco($district, $template?->rco_code ?: ($psidConfig->rco ?? 'GL-1618'));
-            $head = $template?->head_code ?: ($psidConfig->head ?? 'C03870');
+            $fallbackRco = ($psidConfig->scheme_id && $psidConfig->rco)
+                ? $psidConfig->rco
+                : ($template?->rco_code ?: ($psidConfig->rco ?? 'GL-1618'));
+            $rco = $bill->challan_data['rco'] ?? PsidConfig::resolveDistrictRco($district, $fallbackRco);
+            $head = $bill->challan_data['head']
+                ?? (($psidConfig->scheme_id && $psidConfig->head) ? $psidConfig->head : ($template?->head_code ?: ($psidConfig->head ?? 'C03870')));
 
             $requestData = [
                 'psid' => $bill->psid,

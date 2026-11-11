@@ -150,10 +150,54 @@
                     </small>
                 </div>
 
-                <div class="mb-0">
+                <div class="mb-3">
                     <label class="form-label">Fallback Unit Fee (PKR)</label>
                     <input type="number" step="0.01" min="0" name="challan_fee_per_unit" class="form-control" value="{{ old('challan_fee_per_unit', $scheme->challan_fee_per_unit ?? 3000) }}">
                     <small class="text-muted">Used only if district seed configuration rate is not applicable.</small>
+                </div>
+
+                @php
+                    $schemePsid = isset($scheme) ? $scheme->psidConfig : null;
+                    $globalPsid = $globalPsidConfig ?? \App\Models\PsidConfig::getActive();
+                    $useCustomPsid = (bool) old('use_custom_psid', $schemePsid !== null);
+                @endphp
+                <hr class="my-3">
+                <input type="hidden" name="psid_settings_present" value="1">
+                <div class="form-check form-switch mb-2">
+                    <input type="checkbox" class="form-check-input" name="use_custom_psid" value="1" id="use_custom_psid"
+                        {{ $useCustomPsid ? 'checked' : '' }}>
+                    <label class="form-check-label fw-bold" for="use_custom_psid">Custom GBPay PSID Configuration for This Scheme</label>
+                    <div class="form-text small text-muted">Enable to override the global 20-digit PSID prefix, service code, RCO, or Treasury Head specifically for this scheme.</div>
+                </div>
+
+                <div id="custom-psid-fields" class="p-2 border rounded bg-light" style="{{ $useCustomPsid ? '' : 'display:none' }}">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">1Link Prefix (6d)</label>
+                            <input type="text" name="psid_one_link_prefix" maxlength="6" class="form-control form-control-sm"
+                                value="{{ old('psid_one_link_prefix', $schemePsid?->one_link_prefix ?? $globalPsid->one_link_prefix ?? '101530') }}">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small fw-bold mb-1">Dept (2d)</label>
+                            <input type="text" name="psid_department_code" maxlength="2" class="form-control form-control-sm"
+                                value="{{ old('psid_department_code', $schemePsid?->department_code ?? $globalPsid->department_code ?? '09') }}">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small fw-bold mb-1">Service (2d)</label>
+                            <input type="text" name="psid_department_service_no" maxlength="2" class="form-control form-control-sm"
+                                value="{{ old('psid_department_service_no', $schemePsid?->department_service_no ?? $globalPsid->department_service_no ?? '01') }}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Default RCO Code</label>
+                            <input type="text" name="psid_rco" maxlength="20" class="form-control form-control-sm"
+                                value="{{ old('psid_rco', $schemePsid?->rco ?? $globalPsid->rco ?? 'GL-1618') }}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Head of Account</label>
+                            <input type="text" name="psid_head" maxlength="20" class="form-control form-control-sm"
+                                value="{{ old('psid_head', $schemePsid?->head ?? $globalPsid->head ?? 'C03870') }}">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -204,6 +248,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (typeSelect) {
         typeSelect.addEventListener('change', syncTypeUi);
         syncTypeUi();
+    }
+
+    const customPsidToggle = document.getElementById('use_custom_psid');
+    const customPsidBox = document.getElementById('custom-psid-fields');
+    if (customPsidToggle && customPsidBox) {
+        const togglePsid = () => { customPsidBox.style.display = customPsidToggle.checked ? '' : 'none'; };
+        customPsidToggle.addEventListener('change', togglePsid);
+        togglePsid();
     }
 });
 </script>

@@ -10,6 +10,7 @@ use App\Models\Bill;
 use App\Models\GbpayApiCredential;
 use App\Models\GbpayResponse;
 use App\Models\PsidConfig;
+use App\Models\Scheme;
 use App\Services\GbpayService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -66,8 +67,17 @@ class GbpayController extends Controller
             ->limit(25)
             ->get();
 
+        $schemePsidConfigs = PsidConfig::with('scheme.department')
+            ->whereNotNull('scheme_id')
+            ->orderBy('config_id')
+            ->get();
+
+        $schemes = Scheme::with('department')->orderBy('title')->get();
+
         return view('admin.gbpay.index', compact(
             'psidConfig',
+            'schemePsidConfigs',
+            'schemes',
             'credentials',
             'bills',
             'stats',
@@ -76,7 +86,7 @@ class GbpayController extends Controller
     }
 
     /**
-     * Update active PSID configuration.
+     * Update global or scheme-specific PSID configuration.
      */
     public function updatePsidConfig(Request $request): RedirectResponse
     {
@@ -93,6 +103,7 @@ class GbpayController extends Controller
         }
 
         $data = $request->validate([
+            'scheme_id' => ['nullable', 'exists:schemes,id'],
             'one_link_prefix' => ['required', 'string', 'size:6', 'regex:/^\d{6}$/'],
             'department_code' => ['required', 'string', 'size:2', 'regex:/^\d{2}$/'],
             'district_code' => ['nullable', 'string', 'size:2', 'regex:/^\d{2}$/'],
@@ -102,17 +113,45 @@ class GbpayController extends Controller
         ]);
 
         $data['district_code'] = $data['district_code'] ?? '01';
+        $schemeId = ! empty($data['scheme_id']) ? (int) $data['scheme_id'] : null;
 
-        $config = PsidConfig::where('is_active', true)->first() ?? PsidConfig::first();
-        if ($config) {
-            $config->update(array_merge($data, ['is_active' => true]));
+        if ($schemeId) {
+            $config = PsidConfig::updateOrCreate(
+                ['scheme_id' => $schemeId],
+                array_merge($data, ['scheme_id' => $schemeId, 'is_active' => $request->boolean('is_active', true)])
+            );
+            $schemeTitle = Scheme::where('id', $schemeId)->value('title') ?? "Scheme #{$schemeId}";
+            $msg = "PSID configuration saved for scheme: {$schemeTitle} (Prefix: {$config->formattedPrefix()}).";
         } else {
-            $config = PsidConfig::create(array_merge($data, ['is_active' => true]));
+            $config = PsidConfig::whereNull('scheme_id')->where('is_active', true)->first()
+                ?? PsidConfig::whereNull('scheme_id')->first();
+            if ($config) {
+                $config->update(array_merge($data, ['scheme_id' => null, 'is_active' => true]));
+            } else {
+                $config = PsidConfig::create(array_merge($data, ['scheme_id' => null, 'is_active' => true]));
+            }
+            $msg = 'Global default GBPay PSID configuration updated successfully.';
         }
 
         AccessAuditLog::log('gbpay_psid_config_updated', PsidConfig::class, (string) $config->config_id, $data);
 
-        return back()->with('success', 'GBPay PSID configuration updated successfully.');
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Remove a scheme-specific PSID override so it inherits the global default configuration.
+     */
+    public function destroySchemePsidConfig(int $id): RedirectResponse
+    {
+        $config = PsidConfig::whereNotNull('scheme_id')->findOrFail($id);
+        $schemeTitle = $config->scheme?->title ?? "Scheme #{$config->scheme_id}";
+        $config->delete();
+
+        AccessAuditLog::log('gbpay_scheme_psid_config_deleted', PsidConfig::class, (string) $id, [
+            'scheme' => $schemeTitle,
+        ]);
+
+        return back()->with('success', "Custom PSID configuration removed for {$schemeTitle}. It will now use the global default.");
     }
 
     /**
