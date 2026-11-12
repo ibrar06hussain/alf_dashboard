@@ -202,6 +202,9 @@
                                 </td>
                                 <td class="small fw-semibold text-dark">
                                     {{ $item['normalized_phone'] }}
+                                    @if(!empty($item['operator']))
+                                        <span class="badge bg-info-subtle text-info-emphasis border ms-1">{{ $item['operator'] }}</span>
+                                    @endif
                                     @if(($item['raw_phone'] ?? '') !== $item['normalized_phone'])
                                         <div class="text-muted" style="font-size: 11px;">({{ $item['raw_phone'] }})</div>
                                     @endif
@@ -319,17 +322,49 @@
                     </div>
 
                     <div class="row g-2 mb-2">
-                        <div class="col-sm-7">
-                            <input type="text" id="applicant-search-input" class="form-control form-control-sm"
-                                placeholder="Search applicant name, mobile, CNIC, scheme...">
-                        </div>
-                        <div class="col-sm-5">
-                            <select id="applicant-district-filter" class="form-select form-select-sm">
+                        <div class="col-sm-3">
+                            <select name="filter_district_id" id="applicant-district-filter" class="form-select form-select-sm">
                                 <option value="">All Districts</option>
                                 @foreach($districts as $dist)
-                                    <option value="{{ strtolower($dist->name) }}">{{ $dist->name }}</option>
+                                    <option value="{{ $dist->id }}" data-name="{{ strtolower($dist->name) }}" @selected(old('filter_district_id') == $dist->id)>
+                                        {{ $dist->name }}
+                                    </option>
                                 @endforeach
                             </select>
+                        </div>
+                        <div class="col-sm-3">
+                            <select name="filter_tehsil" id="applicant-tehsil-filter" class="form-select form-select-sm">
+                                <option value="">All Tehsils</option>
+                                @foreach($tehsils ?? [] as $teh)
+                                    <option value="{{ $teh }}" @selected(strtolower((string) old('filter_tehsil')) === strtolower($teh))>
+                                        {{ $teh }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-sm-3">
+                            <select name="filter_scheme_id" id="applicant-scheme-filter" class="form-select form-select-sm">
+                                <option value="">All Schemes</option>
+                                @foreach($schemes ?? [] as $sch)
+                                    <option value="{{ $sch->id }}" @selected(old('filter_scheme_id') == $sch->id)>
+                                        {{ \Illuminate\Support\Str::limit($sch->title, 26) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-sm-3">
+                            <select name="filter_operator" id="applicant-operator-filter" class="form-select form-select-sm">
+                                <option value="">All Operators</option>
+                                @foreach($operators ?? [] as $opKey => $opLabel)
+                                    <option value="{{ $opKey }}" @selected(strtolower((string) old('filter_operator')) === strtolower($opKey))>
+                                        {{ $opLabel }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <input type="text" id="applicant-search-input" class="form-control form-control-sm"
+                                placeholder="Search applicant name, mobile, CNIC, tehsil, scheme...">
                         </div>
                     </div>
 
@@ -347,9 +382,9 @@
                                 <tr>
                                     <th class="ps-2" style="width: 36px;"></th>
                                     <th>Applicant</th>
-                                    <th>Mobile No</th>
-                                    <th>District</th>
-                                    <th>Latest Scheme</th>
+                                    <th>Mobile &amp; Operator</th>
+                                    <th>District / Tehsil</th>
+                                    <th>Scheme</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -357,18 +392,27 @@
                                     @php
                                         $latestApp = $applicant->applications->first();
                                         $schemeTitle = $latestApp?->scheme?->title ?? 'Registered';
+                                        $schemeIds = $applicant->applications->pluck('scheme_id')->filter()->unique()->implode(',');
                                         $distName = $applicant->district?->name ?? '—';
+                                        $tehsilName = $applicant->tehsil ?: '—';
+                                        $operatorName = \App\Services\ZongSmsService::detectOperator($applicant->phone);
                                         $searchBlob = strtolower(implode(' ', [
                                             $applicant->full_name,
                                             $applicant->phone,
                                             $applicant->cnic,
                                             $distName,
+                                            $tehsilName,
+                                            $operatorName,
                                             $schemeTitle,
                                         ]));
                                     @endphp
                                     <tr class="applicant-row"
                                         data-search="{{ $searchBlob }}"
-                                        data-district="{{ strtolower($distName) }}">
+                                        data-district-id="{{ (string) $applicant->district_id }}"
+                                        data-district="{{ strtolower($distName) }}"
+                                        data-tehsil="{{ strtolower(trim((string) $applicant->tehsil)) }}"
+                                        data-scheme-ids=",{{ $schemeIds }},"
+                                        data-operator="{{ strtolower($operatorName) }}">
                                         <td class="ps-2">
                                             <input class="form-check-input applicant-checkbox"
                                                 type="checkbox"
@@ -380,9 +424,15 @@
                                             <div class="fw-semibold small text-dark">{{ $applicant->full_name }}</div>
                                             <div class="text-muted" style="font-size: 11px;">{{ $applicant->cnic }}</div>
                                         </td>
-                                        <td class="small text-dark text-nowrap">{{ $applicant->phone }}</td>
-                                        <td class="small text-muted">{{ $distName }}</td>
-                                        <td class="small text-muted">{{ \Illuminate\Support\Str::limit($schemeTitle, 28) }}</td>
+                                        <td class="small text-dark text-nowrap">
+                                            <div>{{ $applicant->phone }}</div>
+                                            <span class="badge bg-info-subtle text-info-emphasis border" style="font-size: 10px;">{{ $operatorName }}</span>
+                                        </td>
+                                        <td class="small text-muted">
+                                            <div>{{ $distName }}</div>
+                                            <div style="font-size: 11px;">{{ $tehsilName }}</div>
+                                        </td>
+                                        <td class="small text-muted">{{ \Illuminate\Support\Str::limit($schemeTitle, 26) }}</td>
                                     </tr>
                                 @empty
                                     <tr>
@@ -626,6 +676,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const applicantRows = Array.from(document.querySelectorAll('.applicant-row'));
     const searchInput = document.getElementById('applicant-search-input');
     const districtFilter = document.getElementById('applicant-district-filter');
+    const tehsilFilter = document.getElementById('applicant-tehsil-filter');
+    const schemeFilter = document.getElementById('applicant-scheme-filter');
+    const operatorFilter = document.getElementById('applicant-operator-filter');
     const btnSelectAll = document.getElementById('btn-select-all-applicants');
     const btnSelectVisible = document.getElementById('btn-select-visible-applicants');
     const btnClear = document.getElementById('btn-clear-applicants');
@@ -662,19 +715,39 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function filterRows() {
         const q = (searchInput ? searchInput.value : '').trim().toLowerCase();
-        const dist = (districtFilter ? districtFilter.value : '').trim().toLowerCase();
+        const distId = (districtFilter ? districtFilter.value : '').trim();
+        const tehsil = (tehsilFilter ? tehsilFilter.value : '').trim().toLowerCase();
+        const schemeId = (schemeFilter ? schemeFilter.value : '').trim();
+        const operator = (operatorFilter ? operatorFilter.value : '').trim().toLowerCase();
+
         applicantRows.forEach(row => {
             const hay = row.dataset.search || '';
-            const rowDist = row.dataset.district || '';
+            const rowDistId = row.dataset.districtId || '';
+            const rowTehsil = row.dataset.tehsil || '';
+            const rowSchemeIds = row.dataset.schemeIds || '';
+            const rowOp = row.dataset.operator || '';
+
             const matchesQ = !q || hay.includes(q);
-            const matchesDist = !dist || rowDist === dist;
-            row.style.display = (matchesQ && matchesDist) ? '' : 'none';
+            const matchesDist = !distId || rowDistId === distId;
+            const matchesTehsil = !tehsil || rowTehsil === tehsil;
+            const matchesScheme = !schemeId || rowSchemeIds.includes(',' + schemeId + ',');
+            const matchesOp = !operator || rowOp === operator;
+
+            row.style.display = (matchesQ && matchesDist && matchesTehsil && matchesScheme && matchesOp) ? '' : 'none';
         });
     }
 
     if (masterCheckbox) {
         masterCheckbox.addEventListener('change', function () {
-            rowCheckboxes.forEach(cb => { cb.checked = masterCheckbox.checked; });
+            applicantRows.forEach(row => {
+                const cb = row.querySelector('.applicant-checkbox');
+                if (!cb) return;
+                if (row.style.display !== 'none') {
+                    cb.checked = masterCheckbox.checked;
+                } else if (!masterCheckbox.checked) {
+                    cb.checked = false;
+                }
+            });
             updateCounts();
         });
     }
@@ -682,7 +755,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (btnSelectAll) {
         btnSelectAll.addEventListener('click', function () {
             if (masterCheckbox) masterCheckbox.checked = true;
-            rowCheckboxes.forEach(cb => { cb.checked = true; });
+            applicantRows.forEach(row => {
+                const cb = row.querySelector('.applicant-checkbox');
+                if (cb && row.style.display !== 'none') {
+                    cb.checked = true;
+                }
+            });
             updateCounts();
         });
     }
@@ -710,10 +788,14 @@ document.addEventListener('DOMContentLoaded', function () {
     rowCheckboxes.forEach(cb => cb.addEventListener('change', updateCounts));
     if (searchInput) searchInput.addEventListener('input', filterRows);
     if (districtFilter) districtFilter.addEventListener('change', filterRows);
+    if (tehsilFilter) tehsilFilter.addEventListener('change', filterRows);
+    if (schemeFilter) schemeFilter.addEventListener('change', filterRows);
+    if (operatorFilter) operatorFilter.addEventListener('change', filterRows);
     if (manualInput) manualInput.addEventListener('input', updateCounts);
     if (msgInput) msgInput.addEventListener('input', updateCharCounter);
     if (langSelect) langSelect.addEventListener('change', updateCharCounter);
 
+    filterRows();
     updateCounts();
     updateCharCounter();
 });

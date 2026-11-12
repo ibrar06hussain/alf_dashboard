@@ -121,7 +121,7 @@
                         $isSchemesActive = request()->routeIs('admin.schemes.*', 'admin.challan-templates.*', 'admin.form-builder.*');
                         $isStockActive = request()->routeIs('admin.stock.*');
                         $isDirectoriesActive = request()->routeIs('admin.organizations.*', 'admin.departments.*', 'admin.districts.*');
-                        $isCmsActive = request()->routeIs('admin.carousel.*', 'admin.media.*', 'admin.site-info.*', 'admin.sms-templates.*');
+                        $isCmsActive = request()->routeIs('admin.carousel.*', 'admin.media.*', 'admin.site-info.*', 'admin.sms-templates.*', 'admin.whatsapp-templates.*');
                         $isSecurityActive = request()->routeIs('admin.users.*', 'admin.roles.*', 'admin.audit-logs.*');
                         $isAccountActive = request()->routeIs('admin.profile.password.*');
                         $isFieldOfficer = $user?->hasRole('Field Officer') && ! $user?->hasRole('Super Admin');
@@ -365,6 +365,11 @@
                                             <li class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
                                                 <a href="{{ route('admin.sms-templates.index') }}" class="{{ request()->routeIs('admin.sms-templates.*') ? 'mm-active' : '' }}">
                                                     <i class="sub-nav-icon fa-solid fa-comment-sms"></i> SMS Gateway
+                                                </a>
+                                            </li>
+                                            <li class="{{ request()->routeIs('admin.whatsapp-templates.*') ? 'mm-active' : '' }}">
+                                                <a href="{{ route('admin.whatsapp-templates.index') }}" class="{{ request()->routeIs('admin.whatsapp-templates.*') ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-brands fa-whatsapp"></i> WhatsApp Gateway
                                                 </a>
                                             </li>
                                         @endif

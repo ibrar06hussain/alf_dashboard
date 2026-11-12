@@ -66,6 +66,14 @@ class SmsTemplateController extends Controller
             ->get();
 
         $districts = District::orderBy('name')->get();
+        $schemes = Scheme::orderBy('title')->get();
+        $tehsils = $applicants->pluck('tehsil')
+            ->filter(fn ($t) => ! empty(trim((string) $t)))
+            ->map(fn ($t) => trim((string) $t))
+            ->unique(fn ($t) => strtolower($t))
+            ->sort()
+            ->values();
+        $operators = ZongSmsService::supportedOperators();
 
         return view('admin.sms-templates.index', compact(
             'templates',
@@ -74,7 +82,10 @@ class SmsTemplateController extends Controller
             'eventLabels',
             'stats',
             'applicants',
-            'districts'
+            'districts',
+            'schemes',
+            'tehsils',
+            'operators'
         ));
     }
 
@@ -255,6 +266,10 @@ class SmsTemplateController extends Controller
             'select_all_applicants' => ['nullable', 'boolean'],
             'applicant_ids' => ['nullable', 'array'],
             'applicant_ids.*' => ['integer', 'exists:applicants,id'],
+            'filter_district_id' => ['nullable', 'integer'],
+            'filter_scheme_id' => ['nullable', 'integer'],
+            'filter_tehsil' => ['nullable', 'string', 'max:120'],
+            'filter_operator' => ['nullable', 'string', 'max:40'],
             'manual_numbers' => ['nullable', 'string', 'max:10000'],
         ]);
 
@@ -262,11 +277,22 @@ class SmsTemplateController extends Controller
         $langSetting = $data['language'] ?? 'auto';
         $recipients = [];
 
-        // 1. Collect selected registered applicants (or all registered applicants when select_all_applicants is checked)
-        $applicantsQuery = Applicant::with(['applications' => fn ($q) => $q->latest('id')])
+        // 1. Collect selected registered applicants (with optional District, Scheme, Tehsil & Mobile Operator filters)
+        $applicantsQuery = Applicant::with(['district', 'applications' => fn ($q) => $q->with('scheme')->latest('id')])
             ->whereNotNull('phone')
             ->where('phone', '!=', '')
             ->orderBy('full_name');
+
+        if (! empty($data['filter_district_id'])) {
+            $applicantsQuery->where('district_id', (int) $data['filter_district_id']);
+        }
+        if (! empty(trim((string) ($data['filter_tehsil'] ?? '')))) {
+            $applicantsQuery->whereRaw('LOWER(TRIM(tehsil)) = ?', [strtolower(trim((string) $data['filter_tehsil']))]);
+        }
+        if (! empty($data['filter_scheme_id'])) {
+            $schemeId = (int) $data['filter_scheme_id'];
+            $applicantsQuery->whereHas('applications', fn ($q) => $q->where('scheme_id', $schemeId));
+        }
 
         if ($request->boolean('select_all_applicants')) {
             $selectedApplicants = $applicantsQuery->get();
@@ -276,9 +302,15 @@ class SmsTemplateController extends Controller
             $selectedApplicants = collect();
         }
 
+        $filterOperator = strtolower(trim((string) ($data['filter_operator'] ?? '')));
+
         foreach ($selectedApplicants as $applicant) {
             $normalized = ZongSmsService::normalizePhone($applicant->phone);
             if ($normalized === '' || strlen($normalized) < 10) {
+                continue;
+            }
+            $operator = ZongSmsService::detectOperator($normalized);
+            if ($filterOperator !== '' && strtolower($operator) !== $filterOperator) {
                 continue;
             }
             if (! isset($recipients[$normalized])) {
@@ -286,6 +318,7 @@ class SmsTemplateController extends Controller
                     'name' => $applicant->full_name ?: 'Registered Applicant',
                     'cnic' => $applicant->cnic,
                     'source' => 'Registered Applicant',
+                    'operator' => $operator,
                     'raw_phone' => $applicant->phone,
                     'normalized_phone' => $normalized,
                     'application_id' => $applicant->applications->first()?->id,
@@ -309,6 +342,7 @@ class SmsTemplateController extends Controller
                         'name' => 'Manual Number',
                         'cnic' => null,
                         'source' => 'Manual Entry',
+                        'operator' => ZongSmsService::detectOperator($normalized),
                         'raw_phone' => $token,
                         'normalized_phone' => $normalized,
                         'application_id' => null,
@@ -365,6 +399,7 @@ class SmsTemplateController extends Controller
                 'name' => $recipient['name'],
                 'cnic' => $recipient['cnic'],
                 'source' => $recipient['source'],
+                'operator' => $recipient['operator'] ?? ZongSmsService::detectOperator($log->recipient_phone),
                 'raw_phone' => $recipient['raw_phone'],
                 'normalized_phone' => $log->recipient_phone,
                 'status' => $log->status,
@@ -436,7 +471,7 @@ class SmsTemplateController extends Controller
         }
 
         $eventKey = $data['event_key'] ?: ($application->current_stage ?: 'submitted');
-        $logs = $this->smsService->sendForApplicationEvent($application, $eventKey, [], auth()->id());
+        $logs = $this->smsService->sendForApplicationEvent($application, $eventKey, [], auth()->id(), false);
 
         if (empty($logs)) {
             return back()->with('error', "No active SMS template found for event '{$eventKey}'. Enable or create a template in SMS Templates.");

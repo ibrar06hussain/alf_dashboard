@@ -62,6 +62,52 @@ class ZongSmsService
     }
 
     /**
+     * Supported Pakistani / Gilgit-Baltistan mobile operators for filtering.
+     */
+    public static function supportedOperators(): array
+    {
+        return [
+            'Zong' => 'Zong (0310–0319 / 0370)',
+            'Jazz' => 'Jazz / Warid (0300–0309 / 0320–0329)',
+            'Telenor' => 'Telenor (0340–0349)',
+            'Ufone' => 'Ufone (0330–0339)',
+            'SCOM' => 'SCOM GB (0355)',
+            'Other' => 'Other Operator',
+        ];
+    }
+
+    /**
+     * Detect mobile network operator from Pakistani phone number prefix.
+     */
+    public static function detectOperator(?string $phone): string
+    {
+        $normalized = self::normalizePhone($phone);
+        if (! str_starts_with($normalized, '923') || strlen($normalized) < 5) {
+            return 'Other';
+        }
+
+        $code = (int) substr($normalized, 2, 3); // e.g. 310..355
+
+        if (($code >= 310 && $code <= 319) || $code === 370) {
+            return 'Zong';
+        }
+        if (($code >= 300 && $code <= 309) || ($code >= 320 && $code <= 329)) {
+            return 'Jazz';
+        }
+        if ($code >= 340 && $code <= 349) {
+            return 'Telenor';
+        }
+        if ($code >= 330 && $code <= 339) {
+            return 'Ufone';
+        }
+        if ($code === 355) {
+            return 'SCOM';
+        }
+
+        return 'Other';
+    }
+
+    /**
      * Detect if a message requires UniCode=1 (Urdu / non-ASCII / extended GSM_7 characters).
      */
     public static function requiresUnicode(string $message, string $language = 'en'): bool
@@ -84,8 +130,21 @@ class ZongSmsService
         Application $application,
         string $eventKey,
         array $extraVars = [],
-        ?int $sentBy = null
+        ?int $sentBy = null,
+        bool $alsoTriggerWhatsapp = true
     ): array {
+        if ($alsoTriggerWhatsapp) {
+            try {
+                app(WhatsappService::class)->sendForApplicationEvent($application, $eventKey, $extraVars, $sentBy);
+            } catch (\Throwable $e) {
+                Log::warning('WhatsApp lifecycle event dispatch failed', [
+                    'application_id' => $application->id,
+                    'event_key' => $eventKey,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $config = $this->getConfig();
         if (! $config['enabled']) {
             return [];

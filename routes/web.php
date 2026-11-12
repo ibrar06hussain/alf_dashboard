@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\SchemeInterestController;
 use App\Http\Controllers\Admin\SiteMediaController;
 use App\Http\Controllers\Admin\SiteInfoController;
 use App\Http\Controllers\Admin\SmsTemplateController;
+use App\Http\Controllers\Admin\WhatsappTemplateController;
 use App\Http\Controllers\Admin\StockManagementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WheatSeedMisController;
@@ -225,6 +226,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('sms-templates/send-bulk', [SmsTemplateController::class, 'sendBulk'])->name('sms-templates.send-bulk');
                 Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
                 Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
+
+                // WhatsApp Business API Gateway, Templates & Bulk Messaging (Super Admin only)
+                Route::post('applications/{application}/send-whatsapp', [WhatsappTemplateController::class, 'sendForApplication'])->name('applications.send-whatsapp');
+                Route::post('whatsapp-templates/gateway', [WhatsappTemplateController::class, 'updateGateway'])->name('whatsapp-templates.gateway.update');
+                Route::post('whatsapp-templates/check-connection', [WhatsappTemplateController::class, 'checkConnection'])->name('whatsapp-templates.check-connection');
+                Route::post('whatsapp-templates/send-test', [WhatsappTemplateController::class, 'sendTest'])->name('whatsapp-templates.send-test');
+                Route::post('whatsapp-templates/send-bulk', [WhatsappTemplateController::class, 'sendBulk'])->name('whatsapp-templates.send-bulk');
+                Route::post('whatsapp-templates/{whatsapp_template}/toggle', [WhatsappTemplateController::class, 'toggle'])->name('whatsapp-templates.toggle');
+                Route::resource('whatsapp-templates', WhatsappTemplateController::class)->except(['show'])->names('whatsapp-templates');
             });
 
             Route::middleware('role_or_permission:Super Admin|pages.departments')->group(function () {
