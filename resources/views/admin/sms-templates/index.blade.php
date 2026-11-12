@@ -141,6 +141,265 @@
     </div>
 </div>
 
+{{-- Bulk SMS Delivery Report (Shown Immediately After Bulk Dispatch) --}}
+@if(session('bulk_sms_report'))
+    @php
+        $bulkReport = session('bulk_sms_report');
+        $bulkSummary = $bulkReport['summary'] ?? ['total' => 0, 'sent' => 0, 'simulated' => 0, 'failed' => 0];
+        $bulkResults = $bulkReport['results'] ?? [];
+    @endphp
+    <div id="bulk-sms-report" class="card alf-panel mb-4 shadow-sm border-success">
+        <div class="card-header bg-success-subtle py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+            <div>
+                <h5 class="mb-0 fw-bold text-dark">
+                    <i class="fa-solid fa-clipboard-check text-success me-2"></i> Bulk SMS Delivery Report — Messages Delivered to Each User
+                </h5>
+                <small class="text-muted">Per-recipient gateway status for your latest bulk SMS dispatch</small>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-dark">Total: {{ $bulkSummary['total'] }}</span>
+                <span class="badge bg-success">Delivered / Sent: {{ $bulkSummary['sent'] }}</span>
+                @if(($bulkSummary['simulated'] ?? 0) > 0)
+                    <span class="badge bg-info text-dark">Simulated: {{ $bulkSummary['simulated'] }}</span>
+                @endif
+                @if(($bulkSummary['failed'] ?? 0) > 0)
+                    <span class="badge bg-danger">Failed: {{ $bulkSummary['failed'] }}</span>
+                @endif
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="px-3 py-2 bg-light border-bottom small">
+                <strong class="text-dark">Message Sent:</strong>
+                <span class="text-dark" @if(($bulkReport['language'] ?? 'en') === 'ur') dir="rtl" lang="ur" @endif>{{ $bulkReport['message'] ?? '' }}</span>
+            </div>
+            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light text-uppercase small text-muted sticky-top">
+                        <tr>
+                            <th class="ps-3">#</th>
+                            <th>Recipient User</th>
+                            <th>Mobile Number</th>
+                            <th>Delivery Status</th>
+                            <th>Zong SMS ID &amp; Response</th>
+                            <th>Message Delivered</th>
+                            <th class="pe-3">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($bulkResults as $idx => $item)
+                            <tr>
+                                <td class="ps-3 small text-muted">{{ $idx + 1 }}</td>
+                                <td>
+                                    <div class="fw-bold small text-dark">{{ $item['name'] }}</div>
+                                    <div class="small text-muted" style="font-size: 11px;">
+                                        <span class="badge {{ $item['source'] === 'Manual Entry' ? 'bg-warning-subtle text-warning-emphasis border' : 'bg-primary-subtle text-primary border' }}">
+                                            {{ $item['source'] }}
+                                        </span>
+                                        @if(!empty($item['cnic']))
+                                            <span class="ms-1">{{ $item['cnic'] }}</span>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="small fw-semibold text-dark">
+                                    {{ $item['normalized_phone'] }}
+                                    @if(($item['raw_phone'] ?? '') !== $item['normalized_phone'])
+                                        <div class="text-muted" style="font-size: 11px;">({{ $item['raw_phone'] }})</div>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($item['status'] === 'sent')
+                                        <span class="badge bg-success"><i class="fa-solid fa-check-double me-1"></i>Delivered / Sent</span>
+                                    @elseif($item['status'] === 'simulated')
+                                        <span class="badge bg-info text-dark"><i class="fa-solid fa-flask me-1"></i>Simulated</span>
+                                    @else
+                                        <span class="badge bg-danger"><i class="fa-solid fa-xmark me-1"></i>Failed</span>
+                                    @endif
+                                </td>
+                                <td class="small">
+                                    @if(!empty($item['zong_sms_id']))
+                                        <div><code>{{ $item['zong_sms_id'] }}</code></div>
+                                    @endif
+                                    <div class="text-muted" style="font-size: 11px;" title="{{ $item['zong_response'] ?? '' }}">
+                                        {{ $item['zong_description'] ?? '' }}
+                                    </div>
+                                </td>
+                                <td class="small text-dark" style="max-width: 300px;">
+                                    <div @if(($bulkReport['language'] ?? 'en') === 'ur') dir="rtl" lang="ur" @endif>
+                                        {{ $item['message'] }}
+                                    </div>
+                                </td>
+                                <td class="pe-3 small text-muted text-nowrap">{{ $item['sent_at'] ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+@endif
+
+{{-- Bulk SMS Composer for Registered Applicants & Manual Numbers --}}
+<div class="card alf-panel mb-4 shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom flex-wrap gap-2">
+        <div>
+            <h5 class="mb-0 fw-bold text-dark">
+                <i class="fa-solid fa-users-rays text-success me-2"></i> Send Bulk SMS to Registered Applicants &amp; Manual Numbers
+            </h5>
+            <small class="text-muted">Compose a custom SMS, select applicants from the registered list (or Select All), and optionally add manual mobile numbers.</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="bulk-selected-badge">
+                0 applicant(s) selected
+            </span>
+            <span class="badge bg-secondary-subtle text-secondary border" id="bulk-manual-badge">
+                0 manual number(s)
+            </span>
+        </div>
+    </div>
+    <div class="card-body">
+        <form action="{{ route('admin.sms-templates.send-bulk') }}" method="POST" id="bulk-sms-form">
+            @csrf
+            <div class="row g-4">
+                {{-- Left Column: Message Composer & Manual Numbers --}}
+                <div class="col-lg-5">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold small mb-0">SMS Message Text <span class="text-danger">*</span></label>
+                            <small class="text-muted" id="bulk-char-counter">0 chars (0 SMS)</small>
+                        </div>
+                        <textarea name="message" id="bulk-sms-message" rows="5" class="form-control form-control-sm"
+                            placeholder="Write your announcement or notice for applicants (English or Urdu)..." required>{{ old('message') }}</textarea>
+                        <div class="form-text small">
+                            Supports both English (<code>UniCode=0</code>) and Urdu (<code>UniCode=1</code>).
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Character Encoding / Language</label>
+                        <select name="language" id="bulk-sms-language" class="form-select form-select-sm">
+                            <option value="auto" @selected(old('language', 'auto') === 'auto')>Auto-detect (English / Urdu Unicode)</option>
+                            <option value="en" @selected(old('language') === 'en')>English (UniCode=0)</option>
+                            <option value="ur" @selected(old('language') === 'ur')>Urdu اردو (UniCode=1)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Additional Manual Phone Numbers (Optional)</label>
+                        <textarea name="manual_numbers" id="bulk-manual-numbers" rows="3" class="form-control form-control-sm"
+                            placeholder="Enter extra mobile numbers separated by comma or new line&#10;e.g. 0345-8161135, 923001234567">{{ old('manual_numbers') }}</textarea>
+                        <div class="form-text small">
+                            Numbers are automatically normalized to <code>923XXXXXXXXX</code> and deduplicated.
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success fw-bold" id="bulk-sms-submit-btn">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Send Bulk SMS Now
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Right Column: Registered Applicants Selection List --}}
+                <div class="col-lg-7">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <label class="form-label fw-bold small mb-0">
+                            Registered Applicants ({{ $applicants->count() }} with mobile numbers)
+                        </label>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button type="button" class="btn btn-xs btn-outline-primary btn-sm py-0 px-2" id="btn-select-all-applicants">
+                                <i class="fa-solid fa-check-double me-1"></i> Select All
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary btn-sm py-0 px-2" id="btn-select-visible-applicants">
+                                Select Filtered
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-danger btn-sm py-0 px-2" id="btn-clear-applicants">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-sm-7">
+                            <input type="text" id="applicant-search-input" class="form-control form-control-sm"
+                                placeholder="Search applicant name, mobile, CNIC, scheme...">
+                        </div>
+                        <div class="col-sm-5">
+                            <select id="applicant-district-filter" class="form-select form-select-sm">
+                                <option value="">All Districts</option>
+                                @foreach($districts as $dist)
+                                    <option value="{{ strtolower($dist->name) }}">{{ $dist->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="select_all_applicants" value="1" id="select_all_applicants"
+                            @checked(old('select_all_applicants'))>
+                        <label class="form-check-label small fw-semibold text-primary" for="select_all_applicants">
+                            Select All Registered Applicants ({{ $applicants->count() }})
+                        </label>
+                    </div>
+
+                    <div class="border rounded" style="max-height: 310px; overflow-y: auto;">
+                        <table class="table table-sm table-hover align-middle mb-0" id="bulk-applicants-table">
+                            <thead class="table-light small text-muted sticky-top">
+                                <tr>
+                                    <th class="ps-2" style="width: 36px;"></th>
+                                    <th>Applicant</th>
+                                    <th>Mobile No</th>
+                                    <th>District</th>
+                                    <th>Latest Scheme</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($applicants as $applicant)
+                                    @php
+                                        $latestApp = $applicant->applications->first();
+                                        $schemeTitle = $latestApp?->scheme?->title ?? 'Registered';
+                                        $distName = $applicant->district?->name ?? '—';
+                                        $searchBlob = strtolower(implode(' ', [
+                                            $applicant->full_name,
+                                            $applicant->phone,
+                                            $applicant->cnic,
+                                            $distName,
+                                            $schemeTitle,
+                                        ]));
+                                    @endphp
+                                    <tr class="applicant-row"
+                                        data-search="{{ $searchBlob }}"
+                                        data-district="{{ strtolower($distName) }}">
+                                        <td class="ps-2">
+                                            <input class="form-check-input applicant-checkbox"
+                                                type="checkbox"
+                                                name="applicant_ids[]"
+                                                value="{{ $applicant->id }}"
+                                                @checked(in_array($applicant->id, old('applicant_ids', [])))>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold small text-dark">{{ $applicant->full_name }}</div>
+                                            <div class="text-muted" style="font-size: 11px;">{{ $applicant->cnic }}</div>
+                                        </td>
+                                        <td class="small text-dark text-nowrap">{{ $applicant->phone }}</td>
+                                        <td class="small text-muted">{{ $distName }}</td>
+                                        <td class="small text-muted">{{ \Illuminate\Support\Str::limit($schemeTitle, 28) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted small">
+                                            No registered applicants with phone numbers found.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 {{-- Bilingual SMS Templates Table --}}
 <div class="card alf-panel mb-4 shadow-sm border-0">
     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom flex-wrap gap-2">
@@ -359,5 +618,105 @@
         </div>
     @endif
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const masterCheckbox = document.getElementById('select_all_applicants');
+    const rowCheckboxes = Array.from(document.querySelectorAll('.applicant-checkbox'));
+    const applicantRows = Array.from(document.querySelectorAll('.applicant-row'));
+    const searchInput = document.getElementById('applicant-search-input');
+    const districtFilter = document.getElementById('applicant-district-filter');
+    const btnSelectAll = document.getElementById('btn-select-all-applicants');
+    const btnSelectVisible = document.getElementById('btn-select-visible-applicants');
+    const btnClear = document.getElementById('btn-clear-applicants');
+    const selectedBadge = document.getElementById('bulk-selected-badge');
+    const manualBadge = document.getElementById('bulk-manual-badge');
+    const manualInput = document.getElementById('bulk-manual-numbers');
+    const msgInput = document.getElementById('bulk-sms-message');
+    const langSelect = document.getElementById('bulk-sms-language');
+    const charCounter = document.getElementById('bulk-char-counter');
+
+    function updateCounts() {
+        const checkedCount = rowCheckboxes.filter(cb => cb.checked).length;
+        if (selectedBadge) {
+            selectedBadge.textContent = checkedCount + ' applicant(s) selected';
+        }
+        if (masterCheckbox && rowCheckboxes.length > 0) {
+            masterCheckbox.checked = checkedCount === rowCheckboxes.length;
+        }
+        if (manualBadge && manualInput) {
+            const tokens = manualInput.value.trim().split(/[\s,;]+/).filter(Boolean);
+            manualBadge.textContent = tokens.length + ' manual number(s)';
+        }
+    }
+
+    function updateCharCounter() {
+        if (!msgInput || !charCounter) return;
+        const text = msgInput.value;
+        const len = text.length;
+        const isUnicode = (langSelect && langSelect.value === 'ur') || /[^\x20-\x7E\r\n]/.test(text);
+        const perPart = isUnicode ? 70 : 160;
+        const parts = len === 0 ? 0 : Math.ceil(len / perPart);
+        charCounter.textContent = len + ' chars (' + parts + ' SMS, ' + (isUnicode ? 'Unicode' : 'GSM-7') + ')';
+    }
+
+    function filterRows() {
+        const q = (searchInput ? searchInput.value : '').trim().toLowerCase();
+        const dist = (districtFilter ? districtFilter.value : '').trim().toLowerCase();
+        applicantRows.forEach(row => {
+            const hay = row.dataset.search || '';
+            const rowDist = row.dataset.district || '';
+            const matchesQ = !q || hay.includes(q);
+            const matchesDist = !dist || rowDist === dist;
+            row.style.display = (matchesQ && matchesDist) ? '' : 'none';
+        });
+    }
+
+    if (masterCheckbox) {
+        masterCheckbox.addEventListener('change', function () {
+            rowCheckboxes.forEach(cb => { cb.checked = masterCheckbox.checked; });
+            updateCounts();
+        });
+    }
+
+    if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', function () {
+            if (masterCheckbox) masterCheckbox.checked = true;
+            rowCheckboxes.forEach(cb => { cb.checked = true; });
+            updateCounts();
+        });
+    }
+
+    if (btnSelectVisible) {
+        btnSelectVisible.addEventListener('click', function () {
+            applicantRows.forEach(row => {
+                if (row.style.display !== 'none') {
+                    const cb = row.querySelector('.applicant-checkbox');
+                    if (cb) cb.checked = true;
+                }
+            });
+            updateCounts();
+        });
+    }
+
+    if (btnClear) {
+        btnClear.addEventListener('click', function () {
+            if (masterCheckbox) masterCheckbox.checked = false;
+            rowCheckboxes.forEach(cb => { cb.checked = false; });
+            updateCounts();
+        });
+    }
+
+    rowCheckboxes.forEach(cb => cb.addEventListener('change', updateCounts));
+    if (searchInput) searchInput.addEventListener('input', filterRows);
+    if (districtFilter) districtFilter.addEventListener('change', filterRows);
+    if (manualInput) manualInput.addEventListener('input', updateCounts);
+    if (msgInput) msgInput.addEventListener('input', updateCharCounter);
+    if (langSelect) langSelect.addEventListener('change', updateCharCounter);
+
+    updateCounts();
+    updateCharCounter();
+});
+</script>
 @endsection
 

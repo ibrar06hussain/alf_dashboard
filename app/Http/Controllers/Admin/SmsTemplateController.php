@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Applicant;
 use App\Models\Application;
+use App\Models\District;
 use App\Models\Scheme;
 use App\Models\SiteSetting;
 use App\Models\SmsLog;
@@ -54,12 +56,25 @@ class SmsTemplateController extends Controller
             'total_failed' => SmsLog::where('status', 'failed')->count(),
         ];
 
+        $applicants = Applicant::with([
+            'district',
+            'applications' => fn ($q) => $q->with('scheme')->latest('id'),
+        ])
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->orderBy('full_name')
+            ->get();
+
+        $districts = District::orderBy('name')->get();
+
         return view('admin.sms-templates.index', compact(
             'templates',
             'logs',
             'gatewayConfig',
             'eventLabels',
-            'stats'
+            'stats',
+            'applicants',
+            'districts'
         ));
     }
 
@@ -226,6 +241,164 @@ class SmsTemplateController extends Controller
         }
 
         return back()->with('error', "Test SMS failed ({$log->zong_status_code}): " . SmsLog::zongCodeDescription($log->zong_status_code) . " — {$log->zong_response}");
+    }
+
+    public function sendBulk(Request $request): RedirectResponse
+    {
+        if (! auth()->user()?->hasRole('Super Admin')) {
+            abort(403, 'Unauthorized. Only Super Admin is permitted to send bulk SMS.');
+        }
+
+        $data = $request->validate([
+            'message' => ['required', 'string', 'max:1500'],
+            'language' => ['nullable', 'in:auto,en,ur'],
+            'select_all_applicants' => ['nullable', 'boolean'],
+            'applicant_ids' => ['nullable', 'array'],
+            'applicant_ids.*' => ['integer', 'exists:applicants,id'],
+            'manual_numbers' => ['nullable', 'string', 'max:10000'],
+        ]);
+
+        $message = trim($data['message']);
+        $langSetting = $data['language'] ?? 'auto';
+        $recipients = [];
+
+        // 1. Collect selected registered applicants (or all registered applicants when select_all_applicants is checked)
+        $applicantsQuery = Applicant::with(['applications' => fn ($q) => $q->latest('id')])
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->orderBy('full_name');
+
+        if ($request->boolean('select_all_applicants')) {
+            $selectedApplicants = $applicantsQuery->get();
+        } elseif (! empty($data['applicant_ids'])) {
+            $selectedApplicants = $applicantsQuery->whereIn('id', $data['applicant_ids'])->get();
+        } else {
+            $selectedApplicants = collect();
+        }
+
+        foreach ($selectedApplicants as $applicant) {
+            $normalized = ZongSmsService::normalizePhone($applicant->phone);
+            if ($normalized === '' || strlen($normalized) < 10) {
+                continue;
+            }
+            if (! isset($recipients[$normalized])) {
+                $recipients[$normalized] = [
+                    'name' => $applicant->full_name ?: 'Registered Applicant',
+                    'cnic' => $applicant->cnic,
+                    'source' => 'Registered Applicant',
+                    'raw_phone' => $applicant->phone,
+                    'normalized_phone' => $normalized,
+                    'application_id' => $applicant->applications->first()?->id,
+                ];
+            }
+        }
+
+        // 2. Collect manually entered phone numbers (comma, semicolon, space, or newline separated)
+        $manualRaw = trim((string) ($data['manual_numbers'] ?? ''));
+        $invalidManual = [];
+        if ($manualRaw !== '') {
+            $tokens = preg_split('/[\s,;]+/', $manualRaw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach ($tokens as $token) {
+                $normalized = ZongSmsService::normalizePhone($token);
+                if ($normalized === '' || strlen($normalized) < 10) {
+                    $invalidManual[] = $token;
+                    continue;
+                }
+                if (! isset($recipients[$normalized])) {
+                    $recipients[$normalized] = [
+                        'name' => 'Manual Number',
+                        'cnic' => null,
+                        'source' => 'Manual Entry',
+                        'raw_phone' => $token,
+                        'normalized_phone' => $normalized,
+                        'application_id' => null,
+                    ];
+                }
+            }
+        }
+
+        if (empty($recipients)) {
+            return back()
+                ->withInput()
+                ->with('error', 'Please select at least one registered applicant or enter at least one valid mobile number.');
+        }
+
+        $forceUnicode = match ($langSetting) {
+            'ur' => true,
+            'en' => false,
+            default => null,
+        };
+        $resolvedLang = match ($langSetting) {
+            'ur' => 'ur',
+            'en' => 'en',
+            default => ZongSmsService::requiresUnicode($message) ? 'ur' : 'en',
+        };
+
+        $results = [];
+        $counts = [
+            'total' => 0,
+            'sent' => 0,
+            'simulated' => 0,
+            'failed' => 0,
+        ];
+
+        foreach ($recipients as $recipient) {
+            $log = $this->smsService->sendQuickSms(
+                $recipient['normalized_phone'],
+                $message,
+                $forceUnicode,
+                [
+                    'application_id' => $recipient['application_id'],
+                    'event_key' => 'bulk_admin',
+                    'recipient_name' => $recipient['name'],
+                    'language' => $resolvedLang,
+                    'sent_by' => auth()->id(),
+                ]
+            );
+
+            $counts['total']++;
+            if (isset($counts[$log->status])) {
+                $counts[$log->status]++;
+            }
+
+            $results[] = [
+                'name' => $recipient['name'],
+                'cnic' => $recipient['cnic'],
+                'source' => $recipient['source'],
+                'raw_phone' => $recipient['raw_phone'],
+                'normalized_phone' => $log->recipient_phone,
+                'status' => $log->status,
+                'status_label' => match ($log->status) {
+                    'sent' => 'Delivered / Sent',
+                    'simulated' => 'Simulated',
+                    default => 'Failed',
+                },
+                'zong_sms_id' => $log->zong_sms_id,
+                'zong_status_code' => $log->zong_status_code,
+                'zong_description' => SmsLog::zongCodeDescription($log->zong_status_code),
+                'zong_response' => $log->zong_response,
+                'message' => $log->message,
+                'sent_at' => optional($log->sent_at ?? $log->created_at)->format('d M Y, h:i:s A'),
+            ];
+        }
+
+        $summaryNote = "Bulk SMS processed for {$counts['total']} recipient(s): {$counts['sent']} delivered/sent, {$counts['simulated']} simulated, {$counts['failed']} failed.";
+        if (! empty($invalidManual)) {
+            $summaryNote .= ' Skipped invalid manual number(s): ' . implode(', ', $invalidManual) . '.';
+        }
+
+        $flashType = ($counts['sent'] > 0 || $counts['simulated'] > 0) ? 'success' : 'error';
+
+        return redirect()
+            ->route('admin.sms-templates.index')
+            ->with($flashType, $summaryNote)
+            ->with('bulk_sms_report', [
+                'summary' => $counts,
+                'message' => $message,
+                'language' => $resolvedLang,
+                'invalid_manual' => $invalidManual,
+                'results' => $results,
+            ]);
     }
 
     public function sendForApplication(Request $request, Application $application): RedirectResponse

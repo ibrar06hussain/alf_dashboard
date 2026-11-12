@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 150
+Total Prompts Logged: 151
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-11T16:05:12+05:00 (UTC: 2026-11-11T11:05:12Z)
-File Last Updated  : 2026-11-11 16:05:15 (PKT)
+Latest Prompt Date : 2026-11-12T16:39:08+05:00 (UTC: 2026-11-12T11:39:08Z)
+File Last Updated  : 2026-11-12 16:39:08 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1822,6 +1822,15 @@ Date & Time (UTC)   : 2026-11-11T11:05:12Z
 Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
 --------------------------------------------------------------------------------
 fOR EACH SCHEME THE CONFIGURATIONS OF psid WILL CHANGE, MAKE THIS PSID GENERATION FLEXIBLE ACCORDINGLY
+
+================================================================================
+PROMPT #151
+Date & Time (Local) : 2026-11-12T16:39:08+05:00
+Date & Time (UTC)   : 2026-11-12T11:39:08Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+In the sms API I want to give admin an option to send sms to all the registered applicants . The text will be written by admin and should select the list of user which system will display, a select all option , Also allow admin to add any numbers manually other than the list if needed.
+After sending sms show messages delivered to each user
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             

@@ -222,6 +222,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('sms-templates/gateway', [SmsTemplateController::class, 'updateGateway'])->name('sms-templates.gateway.update');
                 Route::post('sms-templates/check-balance', [SmsTemplateController::class, 'checkBalance'])->name('sms-templates.check-balance');
                 Route::post('sms-templates/send-test', [SmsTemplateController::class, 'sendTest'])->name('sms-templates.send-test');
+                Route::post('sms-templates/send-bulk', [SmsTemplateController::class, 'sendBulk'])->name('sms-templates.send-bulk');
                 Route::post('sms-templates/{sms_template}/toggle', [SmsTemplateController::class, 'toggle'])->name('sms-templates.toggle');
                 Route::resource('sms-templates', SmsTemplateController::class)->except(['show'])->names('sms-templates');
             });
