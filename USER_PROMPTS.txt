@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 152
+Total Prompts Logged: 154
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-12T18:24:45+05:00 (UTC: 2026-11-12T13:24:45Z)
-File Last Updated  : 2026-11-12 18:24:45 (PKT)
+Latest Prompt Date : 2026-11-15T14:26:26+05:00 (UTC: 2026-11-15T09:26:26Z)
+File Last Updated  : 2026-11-15 10:26:26 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1839,6 +1839,22 @@ Date & Time (UTC)   : 2026-11-12T13:24:45Z
 Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
 --------------------------------------------------------------------------------
 I want to connect my whatsapp api to send messages to applicants like sms, make similar screens from whatsapp api configurations and message sending options and templates, also the admin should be able to filter applicants based on their district, scheme, tehsil or mobile opertor e.g send only to zong users etc
+
+================================================================================
+PROMPT #153
+Date & Time (Local) : 2026-11-12T20:12:48+05:00
+Date & Time (UTC)   : 2026-11-12T15:12:48Z
+Session ID          : 89bcb3b8-ba53-4030-ae95-1721c2f75e32
+--------------------------------------------------------------------------------
+In the scheme forms some of the forms require multiple members to be added e.g a scheme contains a group that apply for that scheme, One of the member becomes the group leader and others would be members, I want to give option to admin users to make such forms, The mobile no of each member should be different , their cnic will be different, their details would be differed, How to achieve this without breaking the existing dynamic form options we have built. Forms would be both in urdu and English language
+
+--------------------------------------------------------------------------------
+PROMPT #154
+Date & Time (Local) : 2026-11-15T14:26:26+05:00
+Date & Time (UTC)   : 2026-11-15T09:26:26Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+explain the counts and stats in the MIS dashboard page, verify each no is calculated from the applications received, how the counts , totals, are calculated for each no
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             

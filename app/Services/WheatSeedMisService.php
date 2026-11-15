@@ -545,18 +545,21 @@ class WheatSeedMisService
             $distTransport = $this->getTransportCostForDistrict($app->district_id);
 
             if (in_array($app->status, ['directorate_approved', 'disbursed'], true)) {
-                $totalApprovedBags += $reqBags;
-                if ($distRate !== null && $reqBags > 0) {
-                    $totalApprovedCost += ($reqBags * $distRate);
-                    $totalApprovedTransport += ($reqBags * $distTransport);
+                $apprBags = (int) ($app->getApprovedQuantity() ?? $reqBags);
+                $totalApprovedBags += $apprBags;
+                if ($distRate !== null && $apprBags > 0) {
+                    $totalApprovedCost += ($apprBags * $distRate);
+                    $totalApprovedTransport += ($apprBags * $distTransport);
                     $districtRatesUsed[$app->district_id ?? 0] = $distRate;
                 }
             }
 
             if ($app->status === 'disbursed') {
-                $totalDisbursedBags += $reqBags;
-                if ($distRate !== null && $reqBags > 0) {
-                    $totalDisbursedCost += ($reqBags * $distRate);
+                $apprBags = (int) ($app->getApprovedQuantity() ?? $reqBags);
+                $disbBags = (int) ($app->distributed_quantity ?: $apprBags);
+                $totalDisbursedBags += $disbBags;
+                if ($distRate !== null && $disbBags > 0) {
+                    $totalDisbursedCost += ($disbBags * $distRate);
                 }
             }
 

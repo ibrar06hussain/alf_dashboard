@@ -7,6 +7,7 @@ use App\Models\Applicant;
 use App\Models\Application;
 use App\Models\ApplicationDocument;
 use App\Models\ApplicationFieldValue;
+use App\Models\ApplicationMember;
 use App\Models\ApplicationStatusLog;
 use App\Models\District;
 use App\Models\FormField;
@@ -14,6 +15,7 @@ use App\Models\Scheme;
 use App\Models\Tehsil;
 use App\Models\UnionCouncil;
 use App\Services\Otp\OtpService;
+use App\Services\ZongSmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -223,6 +225,109 @@ class ApplicationController extends Controller
 
         $request->validate($rules, $customMessages);
 
+        // Group / Multi-Member Form Validation (Group Leader + Additional Group Members)
+        $normalizedMembers = [];
+        if ($form->is_group_application) {
+            $rawMembers = $request->input('members', []);
+            if (! is_array($rawMembers)) {
+                $rawMembers = [];
+            }
+
+            foreach ($rawMembers as $idx => $m) {
+                if (! is_array($m)) {
+                    continue;
+                }
+                $m['cnic'] = preg_replace('/\D+/', '', (string) ($m['cnic'] ?? ''));
+                $m['phone'] = preg_replace('/\D+/', '', (string) ($m['phone'] ?? ''));
+                $normalizedMembers[] = $m;
+            }
+            $request->merge(['members' => $normalizedMembers]);
+
+            $minMembers = max(1, (int) ($form->min_group_members ?: 1));
+            $maxMembers = max($minMembers, (int) ($form->max_group_members ?: 10));
+
+            $memberRules = [
+                'members' => ['required', 'array', "min:{$minMembers}", "max:{$maxMembers}"],
+                'members.*.full_name' => ['required', 'string', 'max:150'],
+                'members.*.father_name' => ['required', 'string', 'max:150'],
+                'members.*.cnic' => ['required', 'regex:/^\d{13}$/'],
+                'members.*.phone' => ['required', 'string', 'min:10', 'max:15'],
+                'members.*.village' => ['nullable', 'string', 'max:150'],
+                'members.*.land_kanals' => ['nullable', 'numeric', 'min:0'],
+            ];
+
+            $memberMessages = [
+                'members.required' => "This is a group scheme. Please add at least {$minMembers} group member(s) in addition to the Group Leader.",
+                'members.min' => "Please add at least {$minMembers} group member(s) in addition to the Group Leader.",
+                'members.max' => "A maximum of {$maxMembers} additional group members are allowed.",
+                'members.*.full_name.required' => 'Each group member must have a Full Name.',
+                'members.*.father_name.required' => 'Each group member must have a Father/Husband Name.',
+                'members.*.cnic.required' => 'Each group member must have a 13-digit CNIC.',
+                'members.*.cnic.regex' => 'Each group member CNIC must be exactly 13 digits.',
+                'members.*.phone.required' => 'Each group member must have a mobile number.',
+                'members.*.phone.min' => 'Each group member mobile number must be at least 10 digits.',
+            ];
+
+            foreach ($form->member_custom_fields_json ?? [] as $mField) {
+                $mKey = $mField['key'] ?? '';
+                if ($mKey === '') {
+                    continue;
+                }
+                $mLabel = $mField['label'] ?? $mKey;
+                $mFieldRules = [! empty($mField['required']) ? 'required' : 'nullable'];
+                if (($mField['type'] ?? 'text') === 'number') {
+                    $mFieldRules[] = 'numeric';
+                } else {
+                    $mFieldRules[] = 'string';
+                    $mFieldRules[] = 'max:500';
+                }
+                $memberRules["members.*.extra.{$mKey}"] = $mFieldRules;
+                $memberMessages["members.*.extra.{$mKey}.required"] = "Please provide {$mLabel} for each group member.";
+            }
+
+            $request->validate($memberRules, $memberMessages);
+
+            // Enforce unique CNIC and unique Mobile Number across Group Leader and all Group Members
+            $leaderNormPhone = ZongSmsService::normalizePhone($phone);
+            $seenCnics = [$cnic => 'Group Leader'];
+            $seenPhones = [$leaderNormPhone => 'Group Leader'];
+            $uniquenessErrors = [];
+
+            foreach ($normalizedMembers as $idx => $m) {
+                $memberNum = $idx + 1;
+                $mCnic = (string) ($m['cnic'] ?? '');
+                $mNormPhone = ZongSmsService::normalizePhone((string) ($m['phone'] ?? ''));
+
+                if (isset($seenCnics[$mCnic])) {
+                    $uniquenessErrors["members.{$idx}.cnic"] = "Group Member #{$memberNum} CNIC ({$mCnic}) duplicates {$seenCnics[$mCnic]}. Every member must have a different CNIC. / ہر ممبر کا شناختی کارڈ نمبر مختلف ہونا لازمی ہے۔";
+                } else {
+                    $seenCnics[$mCnic] = "Group Member #{$memberNum}";
+                }
+
+                if ($mNormPhone !== '' && isset($seenPhones[$mNormPhone])) {
+                    $uniquenessErrors["members.{$idx}.phone"] = "Group Member #{$memberNum} mobile number ({$m['phone']}) duplicates {$seenPhones[$mNormPhone]}. Every member must have a different mobile number. / ہر ممبر کا موبائل نمبر مختلف ہونا لازمی ہے۔";
+                } elseif ($mNormPhone !== '') {
+                    $seenPhones[$mNormPhone] = "Group Member #{$memberNum}";
+                }
+
+                // Also verify member CNIC has not already applied for this scheme
+                $alreadyInScheme = Application::where('scheme_id', $scheme->id)
+                    ->where(function ($q) use ($mCnic) {
+                        $q->whereHas('applicant', fn ($aq) => $aq->where('cnic', $mCnic))
+                            ->orWhereHas('members', fn ($mq) => $mq->where('cnic', $mCnic));
+                    })
+                    ->exists();
+
+                if ($alreadyInScheme) {
+                    $uniquenessErrors["members.{$idx}.cnic"] = "Group Member #{$memberNum} (CNIC: {$mCnic}) is already registered in an application for this scheme.";
+                }
+            }
+
+            if (! empty($uniquenessErrors)) {
+                throw ValidationException::withMessages($uniquenessErrors);
+            }
+        }
+
         // Enforce CNIC verification via external API
         $verifiedCnic = (string) session('verified_cnic');
         if ($verifiedCnic !== $cnic) {
@@ -241,15 +346,23 @@ class ApplicationController extends Controller
         }
 
         $existingApplicant = Applicant::where('cnic', $cnic)->first();
-        if ($existingApplicant && Application::where('scheme_id', $scheme->id)
-            ->where('applicant_id', $existingApplicant->id)
-            ->exists()) {
+        $leaderAlreadyInSchemeAsMember = \Illuminate\Support\Facades\Schema::hasTable('application_members')
+            && ApplicationMember::where('cnic', $cnic)
+                ->whereHas('application', fn ($q) => $q->where('scheme_id', $scheme->id))
+                ->exists();
+
+        if (
+            $leaderAlreadyInSchemeAsMember
+            || ($existingApplicant && Application::where('scheme_id', $scheme->id)
+                ->where('applicant_id', $existingApplicant->id)
+                ->exists())
+        ) {
             throw ValidationException::withMessages([
                 'cnic' => 'An application with this CNIC already exists for this scheme.',
             ]);
         }
 
-        $application = DB::transaction(function () use ($request, $scheme, $form, $cnic, $phone, $tehsilName, $unionCouncilName) {
+        $application = DB::transaction(function () use ($request, $scheme, $form, $cnic, $phone, $tehsilName, $unionCouncilName, $normalizedMembers) {
             $applicantData = [
                 'cnic' => $cnic,
                 'full_name' => $request->input('full_name'),
@@ -287,6 +400,34 @@ class ApplicationController extends Controller
                 'to_status' => 'pending',
                 'note' => 'Application submitted by citizen.',
             ]);
+
+            if ($form->is_group_application && ! empty($normalizedMembers)) {
+                $customDefs = collect($form->member_custom_fields_json ?? [])->keyBy('key');
+                foreach ($normalizedMembers as $idx => $m) {
+                    $extraStored = [];
+                    foreach ($m['extra'] ?? [] as $eKey => $eVal) {
+                        $def = $customDefs->get($eKey);
+                        $extraStored[$eKey] = [
+                            'label' => $def['label'] ?? $eKey,
+                            'label_ur' => $def['label_ur'] ?? null,
+                            'value' => $eVal,
+                        ];
+                    }
+
+                    ApplicationMember::create([
+                        'application_id' => $application->id,
+                        'member_order' => $idx + 1,
+                        'role' => 'member',
+                        'full_name' => trim((string) $m['full_name']),
+                        'father_name' => trim((string) ($m['father_name'] ?? '')),
+                        'cnic' => (string) $m['cnic'],
+                        'phone' => (string) $m['phone'],
+                        'village' => ! empty($m['village']) ? trim((string) $m['village']) : null,
+                        'land_kanals' => isset($m['land_kanals']) && $m['land_kanals'] !== '' ? (float) $m['land_kanals'] : null,
+                        'extra_data' => ! empty($extraStored) ? $extraStored : null,
+                    ]);
+                }
+            }
 
             foreach ($form->fields as $field) {
                 if ($field->is_core && in_array($field->field_key, self::APPLICANT_KEYS, true)) {

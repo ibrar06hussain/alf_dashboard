@@ -117,13 +117,59 @@ class FormBuilderController extends Controller
             'documents.*.allowed_extensions' => ['nullable', 'string', 'max:255'],
             'documents.*.max_size_mb' => ['nullable', 'integer', 'min:1', 'max:50'],
             'documents.*.display_order' => ['nullable', 'integer', 'min:0'],
+            'is_group_application' => ['nullable'],
+            'min_group_members' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'max_group_members' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'group_section_title' => ['nullable', 'string', 'max:255'],
+            'group_section_title_ur' => ['nullable', 'string', 'max:255'],
+            'member_custom_fields' => ['nullable', 'array'],
+            'member_custom_fields.*.key' => ['nullable', 'string', 'max:80'],
+            'member_custom_fields.*.label' => ['nullable', 'string', 'max:255'],
+            'member_custom_fields.*.label_ur' => ['nullable', 'string', 'max:255'],
+            'member_custom_fields.*.type' => ['nullable', 'in:text,number,select,textarea'],
+            'member_custom_fields.*.options' => ['nullable', 'string', 'max:1000'],
+            'member_custom_fields.*.required' => ['nullable'],
             'publish' => ['nullable'],
         ]);
 
         DB::transaction(function () use ($form, $data, $request) {
+            $isGroup = $request->boolean('is_group_application');
+            $minMembers = max(1, (int) ($data['min_group_members'] ?? 1));
+            $maxMembers = max($minMembers, (int) ($data['max_group_members'] ?? 10));
+
+            $memberCustomFields = [];
+            foreach ($data['member_custom_fields'] ?? [] as $mField) {
+                $mKey = preg_replace('/[^a-zA-Z0-9_]/', '_', strtolower(trim((string) ($mField['key'] ?? ''))));
+                $mLabel = trim((string) ($mField['label'] ?? ''));
+                if ($mKey === '' && $mLabel !== '') {
+                    $mKey = preg_replace('/[^a-z0-9_]/', '_', strtolower($mLabel));
+                }
+                if ($mKey === '' || $mLabel === '') {
+                    continue;
+                }
+                $mOptions = [];
+                if (! empty($mField['options'])) {
+                    $mOptions = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n|,/', (string) $mField['options']))));
+                }
+                $memberCustomFields[] = [
+                    'key' => $mKey,
+                    'label' => $mLabel,
+                    'label_ur' => trim((string) ($mField['label_ur'] ?? '')) ?: null,
+                    'type' => $mField['type'] ?? 'text',
+                    'options' => $mOptions,
+                    'required' => ! empty($mField['required']),
+                ];
+            }
+
             $form->update([
                 'title' => $data['title'],
                 'is_published' => $request->boolean('publish') ? true : $form->is_published,
+                'is_group_application' => $isGroup,
+                'min_group_members' => $minMembers,
+                'max_group_members' => $maxMembers,
+                'group_section_title' => trim((string) ($data['group_section_title'] ?? '')) ?: null,
+                'group_section_title_ur' => trim((string) ($data['group_section_title_ur'] ?? '')) ?: null,
+                'member_custom_fields_json' => $memberCustomFields,
             ]);
 
             if ($request->boolean('publish')) {

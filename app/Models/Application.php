@@ -183,6 +183,11 @@ class Application extends Model
         return $this->hasMany(ApplicationDocument::class);
     }
 
+    public function members(): HasMany
+    {
+        return $this->hasMany(ApplicationMember::class)->orderBy('member_order');
+    }
+
     public function statusLogs(): HasMany
     {
         return $this->hasMany(ApplicationStatusLog::class)->latest();

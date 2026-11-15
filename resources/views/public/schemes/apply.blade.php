@@ -53,10 +53,21 @@
 
                     <div class="border rounded-3 p-4 mb-4 bg-white shadow-sm">
                         <div class="d-flex justify-content-between align-items-baseline mb-3 pb-2 border-bottom flex-wrap gap-2">
-                            <h5 class="mb-0 text-dark fw-bold">{{ __('portal.applicant_details') }}</h5>
-                            <span class="text-success fw-bold alf-urdu-heading" dir="rtl">
-                                درخواست گزار کی تفصیلات
-                            </span>
+                            @if($form->is_group_application)
+                                <h5 class="mb-0 text-dark fw-bold">
+                                    <i class="fa-solid fa-user-tie text-success me-1"></i>
+                                    Group Leader / Primary Applicant Details
+                                    <span class="badge bg-success ms-1">Group Leader</span>
+                                </h5>
+                                <span class="text-success fw-bold alf-urdu-heading" dir="rtl">
+                                    گروپ لیڈر (سرکردہ درخواست گزار) کی تفصیلات
+                                </span>
+                            @else
+                                <h5 class="mb-0 text-dark fw-bold">{{ __('portal.applicant_details') }}</h5>
+                                <span class="text-success fw-bold alf-urdu-heading" dir="rtl">
+                                    درخواست گزار کی تفصیلات
+                                </span>
+                            @endif
                         </div>
                         <div class="row g-3">
                             @foreach($form->fields as $field)
@@ -343,6 +354,391 @@
                             @endforeach
                         </div>
                     </div>
+
+                    @if($form->is_group_application)
+                        @php
+                            $minMembers = max(1, (int) ($form->min_group_members ?: 1));
+                            $maxMembers = max($minMembers, (int) ($form->max_group_members ?: 10));
+                            $groupTitleEn = $form->group_section_title ?: 'Group Members Details (Other than Group Leader)';
+                            $groupTitleUr = $form->group_section_title_ur ?: 'گروپ کے دیگر ممبران کی تفصیلات (گروپ لیڈر کے علاوہ)';
+                            $memberCustomFields = $form->member_custom_fields_json ?? [];
+                            $oldMembers = old('members');
+                            if (!is_array($oldMembers) || count($oldMembers) === 0) {
+                                $oldMembers = array_fill(0, $minMembers, [
+                                    'full_name' => '',
+                                    'father_name' => '',
+                                    'cnic' => '',
+                                    'phone' => '',
+                                    'village' => '',
+                                    'land_kanals' => '',
+                                    'extra' => [],
+                                ]);
+                            }
+                        @endphp
+                        <div class="border rounded-3 p-4 mb-4 bg-white shadow-sm border-success-subtle" id="group-members-section"
+                             data-min-members="{{ $minMembers }}"
+                             data-max-members="{{ $maxMembers }}">
+                            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+                                <div>
+                                    <h5 class="mb-0 text-dark fw-bold">
+                                        <i class="fa-solid fa-users text-success me-1"></i>
+                                        {{ $groupTitleEn }}
+                                        <span class="badge bg-primary-subtle text-primary border ms-1" id="group-members-count-badge">
+                                            {{ count($oldMembers) }} / {{ $maxMembers }} Members
+                                        </span>
+                                    </h5>
+                                </div>
+                                <span class="text-success fw-bold alf-urdu-heading" dir="rtl">
+                                    {{ $groupTitleUr }}
+                                </span>
+                            </div>
+
+                            <div class="alert alert-info py-2 px-3 mb-3 small">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div>
+                                        <i class="fa-solid fa-circle-info me-1"></i>
+                                        <strong>Group Requirement:</strong> The primary applicant above is the <strong>Group Leader</strong>. Please add between <strong>{{ $minMembers }}</strong> and <strong>{{ $maxMembers }}</strong> additional group member(s) below. Each member must have a <strong>different CNIC</strong> and a <strong>different Mobile Number</strong>.
+                                    </div>
+                                    <div dir="rtl" class="text-dark fw-semibold" style="font-family: 'Noto Nastaliq Urdu', Tahoma, sans-serif;">
+                                        اوپر درج درخواست گزار گروپ لیڈر ہے۔ نیچے کم از کم {{ $minMembers }} اور زیادہ سے زیادہ {{ $maxMembers }} ممبران شامل کریں۔ ہر ممبر کا شناختی کارڈ اور موبائل نمبر مختلف ہونا لازمی ہے۔
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="group-members-duplicate-warning" class="alert alert-danger py-2 px-3 mb-3 small d-none"></div>
+
+                            <div id="group-members-container">
+                                @foreach($oldMembers as $mIdx => $memberData)
+                                    <div class="group-member-card border rounded-3 p-3 mb-3 bg-light" data-member-index="{{ $mIdx }}">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-success js-member-badge">Group Member #{{ $mIdx + 1 }}</span>
+                                                <span class="text-success fw-bold small js-member-badge-ur" dir="rtl" style="font-family: 'Noto Nastaliq Urdu', Tahoma, sans-serif;">
+                                                    گروپ ممبر نمبر {{ $mIdx + 1 }}
+                                                </span>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 js-remove-member-btn {{ count($oldMembers) <= $minMembers ? 'd-none' : '' }}">
+                                                <i class="fa-solid fa-trash-can me-1"></i> Remove / حذف کریں
+                                            </button>
+                                        </div>
+
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-6">
+                                                <div class="field-label-wrapper">
+                                                    <label class="field-label-en">Member Full Name <span class="text-danger">*</span></label>
+                                                    <span class="field-label-ur" dir="rtl">ممبر کا پورا نام <span class="req-star">*</span></span>
+                                                </div>
+                                                <input type="text"
+                                                       name="members[{{ $mIdx }}][full_name]"
+                                                       data-member-field="full_name"
+                                                       class="form-control @error('members.'.$mIdx.'.full_name') is-invalid @enderror"
+                                                       value="{{ $memberData['full_name'] ?? '' }}"
+                                                       placeholder="Enter member full name / ممبر کا پورا نام"
+                                                       required>
+                                                @error('members.'.$mIdx.'.full_name')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <div class="field-label-wrapper">
+                                                    <label class="field-label-en">Father / Husband Name <span class="text-danger">*</span></label>
+                                                    <span class="field-label-ur" dir="rtl">والد / شوہر کا نام <span class="req-star">*</span></span>
+                                                </div>
+                                                <input type="text"
+                                                       name="members[{{ $mIdx }}][father_name]"
+                                                       data-member-field="father_name"
+                                                       class="form-control @error('members.'.$mIdx.'.father_name') is-invalid @enderror"
+                                                       value="{{ $memberData['father_name'] ?? '' }}"
+                                                       placeholder="Enter father or husband name / والد یا شوہر کا نام"
+                                                       required>
+                                                @error('members.'.$mIdx.'.father_name')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <div class="field-label-wrapper">
+                                                    <label class="field-label-en">Member CNIC (13 Digits — Unique) <span class="text-danger">*</span></label>
+                                                    <span class="field-label-ur" dir="rtl">شناختی کارڈ نمبر (منفرد ہونا لازمی ہے) <span class="req-star">*</span></span>
+                                                </div>
+                                                <input type="text"
+                                                       name="members[{{ $mIdx }}][cnic]"
+                                                       data-member-field="cnic"
+                                                       maxlength="15"
+                                                       inputmode="numeric"
+                                                       class="form-control js-member-cnic @error('members.'.$mIdx.'.cnic') is-invalid @enderror"
+                                                       value="{{ $memberData['cnic'] ?? '' }}"
+                                                       placeholder="71101-1234567-1"
+                                                       required>
+                                                @error('members.'.$mIdx.'.cnic')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <div class="field-label-wrapper">
+                                                    <label class="field-label-en">Member Mobile No (Unique) <span class="text-danger">*</span></label>
+                                                    <span class="field-label-ur" dir="rtl">موبائل نمبر (منفرد ہونا لازمی ہے) <span class="req-star">*</span></span>
+                                                </div>
+                                                <input type="text"
+                                                       name="members[{{ $mIdx }}][phone]"
+                                                       data-member-field="phone"
+                                                       maxlength="15"
+                                                       inputmode="tel"
+                                                       class="form-control js-member-phone @error('members.'.$mIdx.'.phone') is-invalid @enderror"
+                                                       value="{{ $memberData['phone'] ?? '' }}"
+                                                       placeholder="0345-1234567"
+                                                       required>
+                                                @error('members.'.$mIdx.'.phone')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <div class="field-label-wrapper">
+                                                    <label class="field-label-en">Village / Address</label>
+                                                    <span class="field-label-ur" dir="rtl">گاؤں / پتہ</span>
+                                                </div>
+                                                <input type="text"
+                                                       name="members[{{ $mIdx }}][village]"
+                                                       data-member-field="village"
+                                                       class="form-control @error('members.'.$mIdx.'.village') is-invalid @enderror"
+                                                       value="{{ $memberData['village'] ?? '' }}"
+                                                       placeholder="Village or Mohallah / گاؤں یا محلہ">
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <div class="field-label-wrapper">
+                                                    <label class="field-label-en">Cultivable Land (Kanals)</label>
+                                                    <span class="field-label-ur" dir="rtl">قابل کاشت رقبہ (کنال)</span>
+                                                </div>
+                                                <input type="number"
+                                                       step="any"
+                                                       min="0"
+                                                       name="members[{{ $mIdx }}][land_kanals]"
+                                                       data-member-field="land_kanals"
+                                                       class="form-control @error('members.'.$mIdx.'.land_kanals') is-invalid @enderror"
+                                                       value="{{ $memberData['land_kanals'] ?? '' }}"
+                                                       placeholder="e.g. 4">
+                                            </div>
+
+                                            @foreach($memberCustomFields as $cField)
+                                                @php
+                                                    $cKey = $cField['key'] ?? '';
+                                                    $cLabel = $cField['label'] ?? $cKey;
+                                                    $cLabelUr = $cField['label_ur'] ?? null;
+                                                    $cType = $cField['type'] ?? 'text';
+                                                    $cReq = !empty($cField['required']);
+                                                    $cOpts = $cField['options'] ?? [];
+                                                    $cVal = $memberData['extra'][$cKey] ?? '';
+                                                @endphp
+                                                @if($cKey !== '')
+                                                    <div class="col-12 col-md-6">
+                                                        <div class="field-label-wrapper">
+                                                            <label class="field-label-en">
+                                                                {{ $cLabel }}
+                                                                @if($cReq)<span class="text-danger">*</span>@endif
+                                                            </label>
+                                                            @if($cLabelUr)
+                                                                <span class="field-label-ur" dir="rtl">
+                                                                    {{ $cLabelUr }}
+                                                                    @if($cReq)<span class="req-star">*</span>@endif
+                                                                </span>
+                                                            @endif
+                                                        </div>
+                                                        @if($cType === 'select')
+                                                            <select name="members[{{ $mIdx }}][extra][{{ $cKey }}]"
+                                                                    data-member-extra="{{ $cKey }}"
+                                                                    class="form-select @error('members.'.$mIdx.'.extra.'.$cKey) is-invalid @enderror"
+                                                                    @if($cReq) required @endif>
+                                                                <option value="">— Select —</option>
+                                                                @foreach($cOpts as $opt)
+                                                                    <option value="{{ $opt }}" @selected((string)$cVal === (string)$opt)>{{ $opt }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        @elseif($cType === 'textarea')
+                                                            <textarea name="members[{{ $mIdx }}][extra][{{ $cKey }}]"
+                                                                      data-member-extra="{{ $cKey }}"
+                                                                      rows="2"
+                                                                      class="form-control @error('members.'.$mIdx.'.extra.'.$cKey) is-invalid @enderror"
+                                                                      @if($cReq) required @endif>{{ $cVal }}</textarea>
+                                                        @else
+                                                            <input type="{{ $cType === 'number' ? 'number' : 'text' }}"
+                                                                   @if($cType === 'number') step="any" @endif
+                                                                   name="members[{{ $mIdx }}][extra][{{ $cKey }}]"
+                                                                   data-member-extra="{{ $cKey }}"
+                                                                   class="form-control @error('members.'.$mIdx.'.extra.'.$cKey) is-invalid @enderror"
+                                                                   value="{{ $cVal }}"
+                                                                   @if($cReq) required @endif>
+                                                        @endif
+                                                        @error('members.'.$mIdx.'.extra.'.$cKey)
+                                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                        @enderror
+                                                    </div>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <button type="button" class="btn btn-outline-success fw-bold" id="btn-add-group-member">
+                                    <i class="fa-solid fa-user-plus me-1"></i>
+                                    Add Another Group Member / نیا ممبر شامل کریں
+                                </button>
+                                <span class="small text-muted">
+                                    Min: {{ $minMembers }} · Max: {{ $maxMembers }} additional member(s)
+                                </span>
+                            </div>
+                        </div>
+
+                        <script>
+                        document.addEventListener('DOMContentLoaded', function () {
+                            const section = document.getElementById('group-members-section');
+                            if (!section) return;
+                            const container = document.getElementById('group-members-container');
+                            const addBtn = document.getElementById('btn-add-group-member');
+                            const countBadge = document.getElementById('group-members-count-badge');
+                            const dupWarn = document.getElementById('group-members-duplicate-warning');
+                            const minMembers = parseInt(section.dataset.minMembers || '1', 10);
+                            const maxMembers = parseInt(section.dataset.maxMembers || '10', 10);
+
+                            function reindexMembers() {
+                                const cards = Array.from(container.querySelectorAll('.group-member-card'));
+                                cards.forEach((card, idx) => {
+                                    card.dataset.memberIndex = idx;
+                                    const badgeEn = card.querySelector('.js-member-badge');
+                                    const badgeUr = card.querySelector('.js-member-badge-ur');
+                                    if (badgeEn) badgeEn.textContent = 'Group Member #' + (idx + 1);
+                                    if (badgeUr) badgeUr.textContent = 'گروپ ممبر نمبر ' + (idx + 1);
+
+                                    card.querySelectorAll('[data-member-field]').forEach(input => {
+                                        input.name = 'members[' + idx + '][' + input.dataset.memberField + ']';
+                                    });
+                                    card.querySelectorAll('[data-member-extra]').forEach(input => {
+                                        input.name = 'members[' + idx + '][extra][' + input.dataset.memberExtra + ']';
+                                    });
+
+                                    const rmBtn = card.querySelector('.js-remove-member-btn');
+                                    if (rmBtn) {
+                                        rmBtn.classList.toggle('d-none', cards.length <= minMembers);
+                                    }
+                                });
+
+                                if (countBadge) {
+                                    countBadge.textContent = cards.length + ' / ' + maxMembers + ' Members';
+                                }
+                                if (addBtn) {
+                                    addBtn.disabled = cards.length >= maxMembers;
+                                }
+                                checkDuplicates();
+                            }
+
+                            function normalizeDigits(val) {
+                                return (val || '').replace(/\D+/g, '');
+                            }
+
+                            function normalizePhone(val) {
+                                let d = normalizeDigits(val);
+                                if (d.startsWith('0092')) d = d.substring(2);
+                                else if (d.startsWith('0') && d.length === 11) d = '92' + d.substring(1);
+                                else if (d.startsWith('3') && d.length === 10) d = '92' + d;
+                                return d;
+                            }
+
+                            function checkDuplicates() {
+                                const leaderCnicInput = document.getElementById('field_cnic');
+                                const leaderPhoneInput = document.getElementById('field_phone');
+                                const seenCnics = new Map();
+                                const seenPhones = new Map();
+                                const issues = [];
+
+                                if (leaderCnicInput && normalizeDigits(leaderCnicInput.value).length === 13) {
+                                    seenCnics.set(normalizeDigits(leaderCnicInput.value), 'Group Leader');
+                                }
+                                if (leaderPhoneInput && normalizePhone(leaderPhoneInput.value).length >= 10) {
+                                    seenPhones.set(normalizePhone(leaderPhoneInput.value), 'Group Leader');
+                                }
+
+                                const cards = Array.from(container.querySelectorAll('.group-member-card'));
+                                cards.forEach((card, idx) => {
+                                    const cnicEl = card.querySelector('.js-member-cnic');
+                                    const phoneEl = card.querySelector('.js-member-phone');
+                                    const label = 'Group Member #' + (idx + 1);
+
+                                    if (cnicEl) {
+                                        const c = normalizeDigits(cnicEl.value);
+                                        if (c.length === 13) {
+                                            if (seenCnics.has(c)) {
+                                                cnicEl.classList.add('is-invalid');
+                                                issues.push(label + ' CNIC duplicates ' + seenCnics.get(c) + ' / شناختی کارڈ نمبر مکرر ہے');
+                                            } else {
+                                                cnicEl.classList.remove('is-invalid');
+                                                seenCnics.set(c, label);
+                                            }
+                                        }
+                                    }
+
+                                    if (phoneEl) {
+                                        const p = normalizePhone(phoneEl.value);
+                                        if (p.length >= 10) {
+                                            if (seenPhones.has(p)) {
+                                                phoneEl.classList.add('is-invalid');
+                                                issues.push(label + ' Mobile No duplicates ' + seenPhones.get(p) + ' / موبائل نمبر مکرر ہے');
+                                            } else {
+                                                phoneEl.classList.remove('is-invalid');
+                                                seenPhones.set(p, label);
+                                            }
+                                        }
+                                    }
+                                });
+
+                                if (dupWarn) {
+                                    if (issues.length > 0) {
+                                        dupWarn.innerHTML = '<strong><i class="fa-solid fa-triangle-exclamation me-1"></i> Duplicate Member Details Detected:</strong><br>' + issues.join('<br>');
+                                        dupWarn.classList.remove('d-none');
+                                    } else {
+                                        dupWarn.classList.add('d-none');
+                                        dupWarn.innerHTML = '';
+                                    }
+                                }
+                            }
+
+                            if (addBtn) {
+                                addBtn.addEventListener('click', function () {
+                                    const cards = container.querySelectorAll('.group-member-card');
+                                    if (cards.length >= maxMembers || cards.length === 0) return;
+                                    const clone = cards[0].cloneNode(true);
+                                    clone.querySelectorAll('input, textarea, select').forEach(el => {
+                                        if (el.tagName === 'SELECT') el.selectedIndex = 0;
+                                        else el.value = '';
+                                        el.classList.remove('is-invalid');
+                                    });
+                                    clone.querySelectorAll('.invalid-feedback').forEach(fb => fb.remove());
+                                    container.appendChild(clone);
+                                    reindexMembers();
+                                });
+                            }
+
+                            container.addEventListener('click', function (e) {
+                                const rmBtn = e.target.closest('.js-remove-member-btn');
+                                if (!rmBtn) return;
+                                const cards = container.querySelectorAll('.group-member-card');
+                                if (cards.length <= minMembers) return;
+                                rmBtn.closest('.group-member-card')?.remove();
+                                reindexMembers();
+                            });
+
+                            container.addEventListener('input', checkDuplicates);
+                            document.getElementById('field_cnic')?.addEventListener('input', checkDuplicates);
+                            document.getElementById('field_phone')?.addEventListener('input', checkDuplicates);
+
+                            reindexMembers();
+                        });
+                        </script>
+                    @endif
 
                     @if($form->documents->isNotEmpty())
                         <div class="border rounded-3 p-4 mb-4 bg-white shadow-sm">

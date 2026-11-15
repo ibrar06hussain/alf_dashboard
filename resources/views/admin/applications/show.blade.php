@@ -29,9 +29,20 @@
 
 <div class="row g-3">
     <div class="col-lg-8">
+        @php
+            $groupMembers = \Illuminate\Support\Facades\Schema::hasTable('application_members')
+                ? $application->members
+                : collect();
+            $isGroupApp = $groupMembers->isNotEmpty() || (bool) ($application->form?->is_group_application ?? false);
+        @endphp
         <div class="card alf-panel mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Applicant</span>
+                <span>
+                    {{ $isGroupApp ? 'Group Leader / Primary Applicant' : 'Applicant' }}
+                    @if($isGroupApp)
+                        <span class="badge bg-success ms-1">Group Leader</span>
+                    @endif
+                </span>
                 @if($canEditApplication)
                     <a href="{{ route('admin.applications.edit', $application) }}" class="btn btn-xs btn-outline-danger py-0 px-2 fw-semibold" style="font-size: 11px;">
                         <i class="fa-solid fa-pen-to-square me-1"></i> Edit Data
@@ -79,6 +90,76 @@
                 </div>
             </div>
         </div>
+
+        @if($groupMembers->isNotEmpty())
+            <div class="card alf-panel mb-3 border-success-subtle">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <i class="fa-solid fa-users text-success me-1"></i>
+                        <strong>{{ $application->form?->group_section_title ?: 'Group Members Details' }}</strong>
+                        @if($application->form?->group_section_title_ur)
+                            <span class="text-success ms-2" dir="rtl" style="font-family: 'Noto Nastaliq Urdu', Tahoma, sans-serif;">
+                                ({{ $application->form->group_section_title_ur }})
+                            </span>
+                        @endif
+                    </div>
+                    <span class="badge bg-success">
+                        1 Leader + {{ $groupMembers->count() }} Member(s) = {{ $groupMembers->count() + 1 }} Total
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light small text-muted">
+                                <tr>
+                                    <th class="ps-3">#</th>
+                                    <th>Member Name &amp; Father Name</th>
+                                    <th>CNIC</th>
+                                    <th>Mobile No</th>
+                                    <th>Village &amp; Land</th>
+                                    <th class="pe-3">Additional Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($groupMembers as $member)
+                                    <tr>
+                                        <td class="ps-3">
+                                            <span class="badge bg-primary-subtle text-primary border">
+                                                Member #{{ $member->member_order }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold small text-dark">{{ $member->full_name }}</div>
+                                            <div class="small text-muted">S/D/W of: {{ $member->father_name ?: '—' }}</div>
+                                        </td>
+                                        <td class="small font-monospace text-dark">{{ $member->cnic }}</td>
+                                        <td class="small text-dark">{{ $member->phone }}</td>
+                                        <td class="small text-muted">
+                                            <div>{{ $member->village ?: '—' }}</div>
+                                            @if($member->land_kanals !== null)
+                                                <div class="text-primary fw-semibold">{{ (float) $member->land_kanals }} Kanals</div>
+                                            @endif
+                                        </td>
+                                        <td class="pe-3 small">
+                                            @if(!empty($member->extra_data) && is_array($member->extra_data))
+                                                @foreach($member->extra_data as $eKey => $eItem)
+                                                    <div>
+                                                        <strong>{{ is_array($eItem) ? ($eItem['label'] ?? $eKey) : $eKey }}:</strong>
+                                                        <span>{{ is_array($eItem) ? ($eItem['value'] ?? '—') : $eItem }}</span>
+                                                    </div>
+                                                @endforeach
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        @endif
 
         {{-- Field Survey & Land Verification Section --}}
         @php
