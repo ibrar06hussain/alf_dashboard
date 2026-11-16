@@ -95,13 +95,19 @@ Route::get('/api/districts/{district}/tehsils', [LocationController::class, 'teh
 Route::get('/api/tehsils/{tehsil}/union-councils', [LocationController::class, 'unionCouncils']);
 
 Route::prefix('admin')->name('admin.')->group(function () {
+    Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('logout', function () {
+        return auth()->check()
+            ? redirect()->route('admin.dashboard')
+            : redirect()->route('admin.login');
+    })->name('logout.redirect');
+
     Route::middleware('guest')->group(function () {
         Route::get('login', [AuthController::class, 'showLogin'])->name('login');
         Route::post('login', [AuthController::class, 'login']);
     });
 
     Route::middleware(['auth', 'admin.active'])->group(function () {
-        Route::post('logout', [AuthController::class, 'logout'])->name('logout');
         Route::get('profile/change-password', [ProfileController::class, 'showChangePassword'])->name('profile.password.show');
         Route::put('profile/change-password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');

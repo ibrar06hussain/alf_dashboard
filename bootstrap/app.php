@@ -32,5 +32,33 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, \Illuminate\Http\Request $request) {
+            if ($e->getStatusCode() !== 419 || $request->expectsJson()) {
+                return null;
+            }
+
+            if ($request->is('admin/logout')) {
+                \Illuminate\Support\Facades\Auth::logout();
+                if ($request->hasSession()) {
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                }
+
+                return redirect()->route('admin.login')
+                    ->with('info', 'You have been logged out.');
+            }
+
+            if ($request->hasSession()) {
+                $request->session()->regenerateToken();
+            }
+
+            if ($request->is('admin/login') || ($request->is('admin/*') && ! \Illuminate\Support\Facades\Auth::check())) {
+                return redirect()->route('admin.login')
+                    ->with('error', 'Your session expired due to inactivity. Please sign in again.');
+            }
+
+            return redirect()->back()
+                ->withInput($request->except(['password', 'password_confirmation', '_token']))
+                ->with('error', 'Your session expired. Please refresh and try again.');
+        });
     })->create();

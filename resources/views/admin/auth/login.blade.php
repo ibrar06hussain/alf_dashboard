@@ -13,6 +13,14 @@
             <p class="text-muted fs-6 mb-0">Sign in to manage schemes &amp; applications</p>
         </div>
 
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+
+        @if(session('info') || session('status'))
+            <div class="alert alert-info">{{ session('info') ?? session('status') }}</div>
+        @endif
+
         @if($errors->any())
             <div class="alert alert-danger">
                 @foreach($errors->all() as $error)
