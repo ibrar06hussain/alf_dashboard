@@ -90,11 +90,11 @@ class GbpayController extends Controller
      */
     public function updatePsidConfig(Request $request): RedirectResponse
     {
-        if ($request->filled('department_code')) {
-            $request->merge([
-                'department_code' => str_pad(trim((string) $request->input('department_code')), 2, '0', STR_PAD_LEFT),
-            ]);
-        }
+        // 1Link Prefix (101530) and Department Code (09) are permanently fixed
+        $request->merge([
+            'one_link_prefix' => '101530',
+            'department_code' => '09',
+        ]);
 
         if ($request->filled('department_service_no')) {
             $request->merge([

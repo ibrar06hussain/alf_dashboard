@@ -173,14 +173,14 @@
                 <div id="custom-psid-fields" class="p-2 border rounded bg-light" style="{{ $useCustomPsid ? '' : 'display:none' }}">
                     <div class="row g-2">
                         <div class="col-6">
-                            <label class="form-label small fw-bold mb-1">1Link Prefix (6d)</label>
-                            <input type="text" name="psid_one_link_prefix" maxlength="6" class="form-control form-control-sm"
-                                value="{{ old('psid_one_link_prefix', $schemePsid?->one_link_prefix ?? $globalPsid->one_link_prefix ?? '101530') }}">
+                            <label class="form-label small fw-bold mb-1">1Link Prefix (6d) <i class="fa-solid fa-lock text-muted ms-1" title="Fixed"></i></label>
+                            <input type="text" name="psid_one_link_prefix" maxlength="6" class="form-control form-control-sm bg-light font-monospace"
+                                value="101530" readonly>
                         </div>
                         <div class="col-3">
-                            <label class="form-label small fw-bold mb-1">Dept (2d)</label>
-                            <input type="text" name="psid_department_code" maxlength="2" class="form-control form-control-sm"
-                                value="{{ old('psid_department_code', $schemePsid?->department_code ?? $globalPsid->department_code ?? '09') }}">
+                            <label class="form-label small fw-bold mb-1">Dept (2d) <i class="fa-solid fa-lock text-muted ms-1" title="Fixed"></i></label>
+                            <input type="text" name="psid_department_code" maxlength="2" class="form-control form-control-sm bg-light font-monospace"
+                                value="09" readonly>
                         </div>
                         <div class="col-3">
                             <label class="form-label small fw-bold mb-1">Service (2d)</label>

@@ -249,9 +249,10 @@ class SchemeController extends Controller
 
     private function validated(Request $request, ?int $ignoreId = null): array
     {
-        if ($request->filled('psid_department_code')) {
+        if ($request->boolean('use_custom_psid')) {
             $request->merge([
-                'psid_department_code' => str_pad(trim((string) $request->input('psid_department_code')), 2, '0', STR_PAD_LEFT),
+                'psid_one_link_prefix' => '101530',
+                'psid_department_code' => '09',
             ]);
         }
 
@@ -311,8 +312,8 @@ class SchemeController extends Controller
         PsidConfig::updateOrCreate(
             ['scheme_id' => $scheme->id],
             [
-                'one_link_prefix' => $request->input('psid_one_link_prefix') ?: ($global->one_link_prefix ?? '101530'),
-                'department_code' => str_pad((string) ($request->input('psid_department_code') ?: ($global->department_code ?? '09')), 2, '0', STR_PAD_LEFT),
+                'one_link_prefix' => '101530',
+                'department_code' => '09',
                 'department_service_no' => str_pad((string) ($request->input('psid_department_service_no') ?: ($global->department_service_no ?? '01')), 2, '0', STR_PAD_LEFT),
                 'district_code' => $request->input('psid_district_code') ?: ($global->district_code ?? '01'),
                 'rco' => $request->input('psid_rco') ?: ($global->rco ?? 'GL-1618'),

@@ -139,13 +139,13 @@ class PerSchemePsidConfigurationTest extends TestCase
         $billB = $gbpay->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeB, 2), 16000);
         $billDefault = $gbpay->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeDefault, 3), 6000);
 
-        // Scheme A bill uses Scheme A prefix (202010 12 05) + serial #1
-        $this->assertSame('20201012050000000001', $billA->psid);
+        // Scheme A bill keeps fixed 1Link Prefix (101530) + Dept (09) + Scheme A Service (05) + serial #1
+        $this->assertSame('10153009050000000001', $billA->psid);
         $this->assertSame(1, $billA->voucher_serial);
         $this->assertSame('C09911', $billA->challan_data['head']);
 
-        // Scheme B bill uses Scheme B prefix (303020 15 08) + serial #2
-        $this->assertSame('30302015080000000002', $billB->psid);
+        // Scheme B bill keeps fixed 1Link Prefix (101530) + Dept (09) + Scheme B Service (08) + serial #2
+        $this->assertSame('10153009080000000002', $billB->psid);
         $this->assertSame(2, $billB->voucher_serial);
         $this->assertSame('C07722', $billB->challan_data['head']);
 
@@ -181,11 +181,22 @@ class PerSchemePsidConfigurationTest extends TestCase
 
         $effective = PsidConfig::forScheme($this->schemeA);
         $this->assertSame($this->schemeA->id, $effective->scheme_id);
-        $this->assertSame('5556660409', $effective->formattedPrefix());
+        $this->assertSame('1015300909', $effective->formattedPrefix());
         $this->assertSame('C04455', $effective->head);
 
         $bill = app(GbpayService::class)->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeA, 10), 4000);
-        $this->assertSame('55566604090000000001', $bill->psid);
+        $this->assertSame('10153009090000000001', $bill->psid);
+
+        // Verify GBPay console shows fixed readonly inputs and treasury reference guidance table
+        $indexRes = $this->actingAs($this->superAdmin)->get(route('admin.gbpay.index'));
+        $indexRes->assertOk();
+        $indexRes->assertSee('Reference Guide: Treasury Account Heads', false);
+        $indexRes->assertSee('C03116-AGRI RECIPTS (SALE OF FRUIT PLNTS, WHT)');
+        $indexRes->assertSee('909552999910559');
+        $indexRes->assertSee('909552999910659');
+        $indexRes->assertSee('IN101530');
+        $indexRes->assertSee('id="scheme_psid_prefix" maxlength="6" class="form-control form-control-sm bg-light font-monospace" value="101530" readonly', false);
+        $indexRes->assertSee('id="scheme_psid_dept" maxlength="2" class="form-control form-control-sm bg-light font-monospace" value="09" readonly', false);
 
         // Unchecking use_custom_psid reverts to global default
         $resReset = $this->actingAs($this->superAdmin)->put(route('admin.schemes.update', $this->schemeA), [

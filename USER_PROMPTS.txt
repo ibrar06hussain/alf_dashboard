@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 161
+Total Prompts Logged: 164
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-16T17:58:49+05:00 (UTC: 2026-11-16T12:58:49Z)
-File Last Updated  : 2026-11-16 13:58:49 (PKT)
+Latest Prompt Date : 2026-11-16T19:21:03+05:00 (UTC: 2026-11-16T14:21:03Z)
+File Last Updated  : 2026-11-16 15:21:03 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1915,6 +1915,35 @@ Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
 /admin/logout
 419
 Page Expired ERROR ON THIS PAGE
+
+--------------------------------------------------------------------------------
+PROMPT #162
+Date & Time (Local) : 2026-11-16T19:19:12+05:00
+Date & Time (UTC)   : 2026-11-16T14:19:12Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+In this portoion add the above table un editable for guidance
+
+--------------------------------------------------------------------------------
+PROMPT #163
+Date & Time (Local) : 2026-11-16T19:19:33+05:00
+Date & Time (UTC)   : 2026-11-16T14:19:33Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Scheme-Specific PSID Configurations
+Configure custom 1Link Prefix, Department Code, Service Code, RCO, and Head of Account for each individual scheme. Schemes without an override use the Global Default above.
+
+--------------------------------------------------------------------------------
+PROMPT #164
+Date & Time (Local) : 2026-11-16T19:21:03+05:00
+Date & Time (UTC)   : 2026-11-16T14:21:03Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+also in confiurations the Scheme *
+
+1Link Prefix (6d) *
+101530
+Dept (2d) * 09 are fixed always keep them uneditable
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             

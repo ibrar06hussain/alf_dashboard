@@ -84,17 +84,23 @@
                     @method('PUT')
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold">1Link Biller Prefix (6 Digits) <span class="text-danger">*</span></label>
-                            <input type="text" name="one_link_prefix" maxlength="6" class="form-control form-control-sm"
-                                value="{{ old('one_link_prefix', $psidConfig->one_link_prefix ?? '101530') }}" required>
-                            <div class="form-text" style="font-size: 11px;">GBPay 1Link prefix: <code>101530</code></div>
+                            <label class="form-label small fw-bold">
+                                1Link Biller Prefix (6 Digits) <span class="text-danger">*</span>
+                                <span class="badge bg-secondary ms-1"><i class="fa-solid fa-lock me-1"></i>Fixed</span>
+                            </label>
+                            <input type="text" name="one_link_prefix" maxlength="6" class="form-control form-control-sm bg-light font-monospace"
+                                value="101530" readonly required>
+                            <div class="form-text" style="font-size: 11px;">Fixed GBPay 1Link prefix: <code>101530</code></div>
                         </div>
 
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold">Department Code (2 Digits) <span class="text-danger">*</span></label>
-                            <input type="text" name="department_code" maxlength="2" class="form-control form-control-sm"
-                                value="{{ old('department_code', str_pad((string) ($psidConfig->department_code ?? '09'), 2, '0', STR_PAD_LEFT)) }}" required>
-                            <div class="form-text" style="font-size: 11px;">2-digit department code: <code>09</code></div>
+                            <label class="form-label small fw-bold">
+                                Department Code (2 Digits) <span class="text-danger">*</span>
+                                <span class="badge bg-secondary ms-1"><i class="fa-solid fa-lock me-1"></i>Fixed</span>
+                            </label>
+                            <input type="text" name="department_code" maxlength="2" class="form-control form-control-sm bg-light font-monospace"
+                                value="09" readonly required>
+                            <div class="form-text" style="font-size: 11px;">Fixed 2-digit department code: <code>09</code></div>
                         </div>
 
                         <div class="col-md-4">
@@ -284,12 +290,18 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label small fw-bold">1Link Prefix (6d) <span class="text-danger">*</span></label>
-                    <input type="text" name="one_link_prefix" id="scheme_psid_prefix" maxlength="6" class="form-control form-control-sm" value="{{ $psidConfig->one_link_prefix ?? '101530' }}" required>
+                    <label class="form-label small fw-bold">
+                        1Link Prefix (6d) <span class="text-danger">*</span>
+                        <i class="fa-solid fa-lock text-muted ms-1" title="Fixed"></i>
+                    </label>
+                    <input type="text" name="one_link_prefix" id="scheme_psid_prefix" maxlength="6" class="form-control form-control-sm bg-light font-monospace" value="101530" readonly required>
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label small fw-bold">Dept (2d) <span class="text-danger">*</span></label>
-                    <input type="text" name="department_code" id="scheme_psid_dept" maxlength="2" class="form-control form-control-sm" value="{{ $psidConfig->department_code ?? '09' }}" required>
+                    <label class="form-label small fw-bold">
+                        Dept (2d) <span class="text-danger">*</span>
+                        <i class="fa-solid fa-lock text-muted ms-1" title="Fixed"></i>
+                    </label>
+                    <input type="text" name="department_code" id="scheme_psid_dept" maxlength="2" class="form-control form-control-sm bg-light font-monospace" value="09" readonly required>
                 </div>
                 <div class="col-md-1">
                     <label class="form-label small fw-bold">Svc (2d) <span class="text-danger">*</span></label>
@@ -337,7 +349,7 @@
                             <td><code>{{ $sc->rco }}</code> / <code>{{ $sc->head }}</code></td>
                             <td class="text-end text-nowrap">
                                 <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
-                                        onclick="document.getElementById('scheme_psid_scheme_id').value='{{ $sc->scheme_id }}';document.getElementById('scheme_psid_prefix').value='{{ $sc->one_link_prefix }}';document.getElementById('scheme_psid_dept').value='{{ $sc->department_code }}';document.getElementById('scheme_psid_svc').value='{{ $sc->department_service_no }}';document.getElementById('scheme_psid_rco').value='{{ $sc->rco }}';document.getElementById('scheme_psid_head').value='{{ $sc->head }}';">
+                                        onclick="document.getElementById('scheme_psid_scheme_id').value='{{ $sc->scheme_id }}';document.getElementById('scheme_psid_prefix').value='101530';document.getElementById('scheme_psid_dept').value='09';document.getElementById('scheme_psid_svc').value='{{ $sc->department_service_no }}';document.getElementById('scheme_psid_rco').value='{{ $sc->rco }}';document.getElementById('scheme_psid_head').value='{{ $sc->head }}';">
                                     Edit
                                 </button>
                                 <form action="{{ route('admin.gbpay.psid-config.destroy', $sc->config_id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remove custom PSID config for this scheme?');">
@@ -356,6 +368,56 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        {{-- Uneditable Reference Table for Guidance --}}
+        <div class="mt-4 pt-3 border-top">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="small fw-bold text-dark">
+                    <i class="fa-solid fa-circle-info text-info me-1"></i> Reference Guide: Treasury Account Heads &amp; 1Link Mapping (Read-Only)
+                </div>
+                <span class="badge bg-light text-secondary border">Read-Only Guidance</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-striped align-middle mb-0 small bg-light">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th style="width: 45px;">#</th>
+                            <th style="width: 70px;">TAG</th>
+                            <th>TAX_TYPE</th>
+                            <th>ACCOUNTNUMBER</th>
+                            <th>UCID</th>
+                            <th class="text-center" style="width: 120px;">IS_COMMERCIAL</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-monospace" style="font-size: 12px;">
+                        @php
+                            $treasuryReferenceRows = [
+                                ['1', 'AK', 'C03116-AGRI RECIPTS (SALE OF FRUIT PLNTS, WHT)', '909552999910559', 'IN101530', '0'],
+                                ['2', 'AL', 'C03117-RCPTS FRM EXP FRMS (SALE OF PTATS PC)', '909552999910569', 'IN101530', '0'],
+                                ['3', 'AM', 'C03118-REC FRM AGR FRMS (SALE OF CER SEED)', '909552999910579', 'IN101530', '0'],
+                                ['4', 'AN', 'C03136-AGRICULTURE OTHERS (AUCTION OF STORES)', '909552999910589', 'IN101530', '0'],
+                                ['5', 'AO', 'C03138-REGISTRATION FEE SEED (REGSTRATN)', '909552999910599', 'IN101530', '0'],
+                                ['6', 'AP', 'C03223-REC FRM LVSTCK FRMS', '909552999910609', 'IN101530', '0'],
+                                ['7', 'AQ', 'C03227-ARTIFICIAL INSEMINATION FEE-ADC GOGB', '909552999910629', 'IN101530', '0'],
+                                ['8', 'AR', 'C03231-OTHRS (SHARE OF ANIMALS AND BIRDS)', '909552999910639', 'IN101530', '0'],
+                                ['9', 'AS', 'C03201-SALE OF TABLE FISH, FISH SEED SALE', '909552999910649', 'IN101530', '0'],
+                                ['10', 'AV', 'C03130-AGRI REC FRM GVRNMNT GRDNS', '909552999910659', 'IN101530', '0'],
+                            ];
+                        @endphp
+                        @foreach($treasuryReferenceRows as [$rowNo, $tag, $taxType, $accountNo, $ucid, $isCommercial])
+                            <tr>
+                                <td class="text-muted">{{ $rowNo }}</td>
+                                <td class="fw-bold">{{ $tag }}</td>
+                                <td class="font-sans-serif">{{ $taxType }}</td>
+                                <td>{{ $accountNo }}</td>
+                                <td>{{ $ucid }}</td>
+                                <td class="text-center">{{ $isCommercial }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
