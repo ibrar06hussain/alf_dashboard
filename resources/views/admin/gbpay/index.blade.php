@@ -104,10 +104,13 @@
                         </div>
 
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold">Service Code (2 Digits) <span class="text-danger">*</span></label>
-                            <input type="text" name="department_service_no" maxlength="2" class="form-control form-control-sm"
-                                value="{{ old('department_service_no', str_pad((string) ($psidConfig->department_service_no ?? '01'), 2, '0', STR_PAD_LEFT)) }}" required>
-                            <div class="form-text" style="font-size: 11px;">2-digit service code: <code>01</code></div>
+                            <label class="form-label small fw-bold">
+                                Service Code (2 Digits) <span class="text-danger">*</span>
+                                <span class="badge bg-secondary ms-1"><i class="fa-solid fa-lock me-1"></i>Fixed</span>
+                            </label>
+                            <input type="text" name="department_service_no" maxlength="2" class="form-control form-control-sm bg-light font-monospace"
+                                value="01" readonly required>
+                            <div class="form-text" style="font-size: 11px;">Dept Service Codes: <code>01</code> Agri · <code>02</code> Livestock · <code>03</code> Fisheries</div>
                         </div>
 
                         <div class="col-md-4">
@@ -283,9 +286,9 @@
                 <div class="col-md-4">
                     <label class="form-label small fw-bold">Scheme <span class="text-danger">*</span></label>
                     <select name="scheme_id" id="scheme_psid_scheme_id" class="form-select form-select-sm" required>
-                        <option value="">Select Scheme...</option>
+                        <option value="" data-service-code="01">Select Scheme...</option>
                         @foreach($schemes ?? [] as $s)
-                            <option value="{{ $s->id }}">{{ $s->title }} ({{ $s->department->name ?? 'ALF' }})</option>
+                            <option value="{{ $s->id }}" data-service-code="{{ \App\Models\PsidConfig::serviceCodeForDepartment($s->department) }}">{{ $s->title }} ({{ $s->department->name ?? 'ALF' }})</option>
                         @endforeach
                     </select>
                 </div>
@@ -304,8 +307,11 @@
                     <input type="text" name="department_code" id="scheme_psid_dept" maxlength="2" class="form-control form-control-sm bg-light font-monospace" value="09" readonly required>
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label small fw-bold">Svc (2d) <span class="text-danger">*</span></label>
-                    <input type="text" name="department_service_no" id="scheme_psid_svc" maxlength="2" class="form-control form-control-sm" value="{{ $psidConfig->department_service_no ?? '01' }}" required>
+                    <label class="form-label small fw-bold">
+                        Svc (2d) <span class="text-danger">*</span>
+                        <i class="fa-solid fa-lock text-muted ms-1" title="Fixed by Department"></i>
+                    </label>
+                    <input type="text" name="department_service_no" id="scheme_psid_svc" maxlength="2" class="form-control form-control-sm bg-light font-monospace" value="01" readonly required>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small fw-bold">Default RCO <span class="text-danger">*</span></label>
@@ -348,8 +354,11 @@
                             <td><code class="fw-bold text-primary">{{ $sc->formattedPrefix() }}0000000001</code></td>
                             <td><code>{{ $sc->rco }}</code> / <code>{{ $sc->head }}</code></td>
                             <td class="text-end text-nowrap">
+                                @php
+                                    $fixedSvc = \App\Models\PsidConfig::serviceCodeForDepartment($sc->scheme?->department);
+                                @endphp
                                 <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
-                                        onclick="document.getElementById('scheme_psid_scheme_id').value='{{ $sc->scheme_id }}';document.getElementById('scheme_psid_prefix').value='101530';document.getElementById('scheme_psid_dept').value='09';document.getElementById('scheme_psid_svc').value='{{ $sc->department_service_no }}';document.getElementById('scheme_psid_rco').value='{{ $sc->rco }}';document.getElementById('scheme_psid_head').value='{{ $sc->head }}';">
+                                        onclick="document.getElementById('scheme_psid_scheme_id').value='{{ $sc->scheme_id }}';document.getElementById('scheme_psid_prefix').value='101530';document.getElementById('scheme_psid_dept').value='09';document.getElementById('scheme_psid_svc').value='{{ $fixedSvc }}';document.getElementById('scheme_psid_rco').value='{{ $sc->rco }}';document.getElementById('scheme_psid_head').value='{{ $sc->head }}';">
                                     Edit
                                 </button>
                                 <form action="{{ route('admin.gbpay.psid-config.destroy', $sc->config_id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remove custom PSID config for this scheme?');">
@@ -583,3 +592,20 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const schemeSelect = document.getElementById('scheme_psid_scheme_id');
+    const svcInput = document.getElementById('scheme_psid_svc');
+    if (schemeSelect && svcInput) {
+        const syncServiceCode = () => {
+            const selectedOption = schemeSelect.options[schemeSelect.selectedIndex];
+            svcInput.value = selectedOption?.getAttribute('data-service-code') || '01';
+        };
+        schemeSelect.addEventListener('change', syncServiceCode);
+        syncServiceCode();
+    }
+});
+</script>
+@endpush

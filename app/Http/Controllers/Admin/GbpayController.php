@@ -90,17 +90,17 @@ class GbpayController extends Controller
      */
     public function updatePsidConfig(Request $request): RedirectResponse
     {
-        // 1Link Prefix (101530) and Department Code (09) are permanently fixed
+        $scheme = $request->filled('scheme_id')
+            ? Scheme::with('department')->find((int) $request->input('scheme_id'))
+            : null;
+        $fixedServiceCode = PsidConfig::serviceCodeForDepartment($scheme?->department);
+
+        // 1Link Prefix (101530), Department Code (09), and Department Service Code (01/02/03) are permanently fixed
         $request->merge([
             'one_link_prefix' => '101530',
             'department_code' => '09',
+            'department_service_no' => $fixedServiceCode,
         ]);
-
-        if ($request->filled('department_service_no')) {
-            $request->merge([
-                'department_service_no' => str_pad(trim((string) $request->input('department_service_no')), 2, '0', STR_PAD_LEFT),
-            ]);
-        }
 
         $data = $request->validate([
             'scheme_id' => ['nullable', 'exists:schemes,id'],

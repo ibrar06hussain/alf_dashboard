@@ -250,9 +250,14 @@ class SchemeController extends Controller
     private function validated(Request $request, ?int $ignoreId = null): array
     {
         if ($request->boolean('use_custom_psid')) {
+            $department = $request->filled('department_id')
+                ? Department::find((int) $request->input('department_id'))
+                : null;
+
             $request->merge([
                 'psid_one_link_prefix' => '101530',
                 'psid_department_code' => '09',
+                'psid_department_service_no' => PsidConfig::serviceCodeForDepartment($department),
             ]);
         }
 
@@ -308,13 +313,14 @@ class SchemeController extends Controller
         }
 
         $global = PsidConfig::getActive();
+        $department = $scheme->department ?? ($scheme->department_id ? Department::find($scheme->department_id) : null);
 
         PsidConfig::updateOrCreate(
             ['scheme_id' => $scheme->id],
             [
                 'one_link_prefix' => '101530',
                 'department_code' => '09',
-                'department_service_no' => str_pad((string) ($request->input('psid_department_service_no') ?: ($global->department_service_no ?? '01')), 2, '0', STR_PAD_LEFT),
+                'department_service_no' => PsidConfig::serviceCodeForDepartment($department),
                 'district_code' => $request->input('psid_district_code') ?: ($global->district_code ?? '01'),
                 'rco' => $request->input('psid_rco') ?: ($global->rco ?? 'GL-1618'),
                 'head' => $request->input('psid_head') ?: ($global->head ?? 'C03870'),

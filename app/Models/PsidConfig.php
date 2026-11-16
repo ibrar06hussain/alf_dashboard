@@ -39,6 +39,38 @@ class PsidConfig extends Model
         return $this->belongsTo(Scheme::class, 'scheme_id');
     }
 
+    /**
+     * Resolve the fixed 2-digit service code based on department:
+     * 01 = Agriculture, 02 = Livestock, 03 = Fisheries.
+     */
+    public static function serviceCodeForDepartment(?Department $department = null): string
+    {
+        if (! $department) {
+            return '01';
+        }
+
+        $slug = strtolower(trim((string) $department->slug));
+        $name = strtolower(trim((string) $department->name));
+
+        if (str_contains($slug, 'livestock') || str_contains($name, 'livestock')) {
+            return '02';
+        }
+
+        if (str_contains($slug, 'fisher') || str_contains($name, 'fisher') || str_contains($name, 'fishr')) {
+            return '03';
+        }
+
+        if (str_contains($slug, 'agri') || str_contains($name, 'agri')) {
+            return '01';
+        }
+
+        return match ((int) $department->id) {
+            2 => '02',
+            3 => '03',
+            default => '01',
+        };
+    }
+
     public const DISTRICT_CODES = [
         '01' => ['name' => 'Gilgit', 'alpha' => 'GL'],
         '02' => ['name' => 'Nagar', 'alpha' => 'NG'],
@@ -91,7 +123,22 @@ class PsidConfig extends Model
             ?? static::first();
 
         if ($config) {
+            if ($schemeId !== null) {
+                $scheme = Scheme::with('department')->find($schemeId);
+                if ($scheme?->department) {
+                    $resolved = clone $config;
+                    $resolved->department_service_no = self::serviceCodeForDepartment($scheme->department);
+                    return $resolved;
+                }
+            }
+
             return $config;
+        }
+
+        $serviceNo = '01';
+        if ($schemeId !== null) {
+            $scheme = Scheme::with('department')->find($schemeId);
+            $serviceNo = self::serviceCodeForDepartment($scheme?->department);
         }
 
         return new static([
@@ -99,7 +146,7 @@ class PsidConfig extends Model
             'one_link_prefix' => '101530',
             'department_code' => '09',
             'district_code' => '01',
-            'department_service_no' => '01',
+            'department_service_no' => $serviceNo,
             'rco' => 'GL-1618',
             'head' => 'C03870',
             'is_active' => true,

@@ -22,9 +22,12 @@ class PerSchemePsidConfigurationTest extends TestCase
 
     private User $superAdmin;
     private Department $agriDept;
+    private Department $livestockDept;
+    private Department $fisheriesDept;
     private District $gilgit;
     private Scheme $schemeA;
     private Scheme $schemeB;
+    private Scheme $schemeLivestock;
     private Scheme $schemeDefault;
 
     protected function setUp(): void
@@ -34,6 +37,8 @@ class PerSchemePsidConfigurationTest extends TestCase
 
         $this->superAdmin = User::where('email', 'admin@alf.gb.gov.pk')->firstOrFail();
         $this->agriDept = Department::firstOrCreate(['slug' => 'agriculture'], ['name' => 'Agriculture', 'display_order' => 1]);
+        $this->livestockDept = Department::firstOrCreate(['slug' => 'livestock'], ['name' => 'Livestock & Dairy Development', 'display_order' => 2]);
+        $this->fisheriesDept = Department::firstOrCreate(['slug' => 'fisheries'], ['name' => 'Fisheries', 'display_order' => 3]);
         $this->gilgit = District::firstOrCreate(['code' => 'GLT'], ['name' => 'Gilgit', 'is_active' => true]);
 
         // Ensure known Global Default PSID Config
@@ -63,7 +68,7 @@ class PerSchemePsidConfigurationTest extends TestCase
         ]);
 
         $this->schemeB = Scheme::create([
-            'department_id' => $this->agriDept->id,
+            'department_id' => $this->fisheriesDept->id,
             'title' => 'Trout Fish Hatchery Support',
             'slug' => 'trout-hatchery-scheme-psid',
             'type' => 'running',
@@ -71,6 +76,17 @@ class PerSchemePsidConfigurationTest extends TestCase
             'status' => 'active',
             'requires_challan' => true,
             'challan_fee_per_unit' => 8000,
+        ]);
+
+        $this->schemeLivestock = Scheme::create([
+            'department_id' => $this->livestockDept->id,
+            'title' => 'Dairy Farm Support Scheme',
+            'slug' => 'dairy-farm-support-psid',
+            'type' => 'running',
+            'scope' => 'gb',
+            'status' => 'active',
+            'requires_challan' => true,
+            'challan_fee_per_unit' => 4000,
         ]);
 
         $this->schemeDefault = Scheme::create([
@@ -138,21 +154,26 @@ class PerSchemePsidConfigurationTest extends TestCase
         $billA = $gbpay->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeA, 1), 10000);
         $billB = $gbpay->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeB, 2), 16000);
         $billDefault = $gbpay->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeDefault, 3), 6000);
+        $billLivestock = $gbpay->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeLivestock, 4), 8000);
 
-        // Scheme A bill keeps fixed 1Link Prefix (101530) + Dept (09) + Scheme A Service (05) + serial #1
-        $this->assertSame('10153009050000000001', $billA->psid);
+        // Agriculture scheme keeps fixed 1Link (101530) + Dept (09) + fixed Agri Service (01) + serial #1
+        $this->assertSame('10153009010000000001', $billA->psid);
         $this->assertSame(1, $billA->voucher_serial);
         $this->assertSame('C09911', $billA->challan_data['head']);
 
-        // Scheme B bill keeps fixed 1Link Prefix (101530) + Dept (09) + Scheme B Service (08) + serial #2
-        $this->assertSame('10153009080000000002', $billB->psid);
+        // Fisheries scheme keeps fixed 1Link (101530) + Dept (09) + fixed Fisheries Service (03) + serial #2
+        $this->assertSame('10153009030000000002', $billB->psid);
         $this->assertSame(2, $billB->voucher_serial);
         $this->assertSame('C07722', $billB->challan_data['head']);
 
-        // Scheme Default falls back cleanly to global default (101530 09 01) + serial #3
+        // Agriculture Default falls back to 101530 09 01 + serial #3
         $this->assertSame('10153009010000000003', $billDefault->psid);
         $this->assertSame(3, $billDefault->voucher_serial);
         $this->assertSame('C03870', $billDefault->challan_data['head']);
+
+        // Livestock scheme (without custom override) automatically resolves Service Code 02 (101530 09 02) + serial #4
+        $this->assertSame('10153009020000000004', $billLivestock->psid);
+        $this->assertSame(4, $billLivestock->voucher_serial);
 
         // Global default remains intact
         $global = PsidConfig::getActive();
@@ -161,7 +182,7 @@ class PerSchemePsidConfigurationTest extends TestCase
 
     public function test_admin_can_configure_and_reset_scheme_psid_directly_in_scheme_edit_form(): void
     {
-        // Enable custom PSID directly on Scheme Edit
+        // Enable custom PSID directly on Scheme Edit for Agriculture -> forced 101530 / 09 / 01
         $res = $this->actingAs($this->superAdmin)->put(route('admin.schemes.update', $this->schemeA), [
             'department_id' => $this->agriDept->id,
             'title' => $this->schemeA->title,
@@ -181,11 +202,30 @@ class PerSchemePsidConfigurationTest extends TestCase
 
         $effective = PsidConfig::forScheme($this->schemeA);
         $this->assertSame($this->schemeA->id, $effective->scheme_id);
-        $this->assertSame('1015300909', $effective->formattedPrefix());
+        $this->assertSame('1015300901', $effective->formattedPrefix());
         $this->assertSame('C04455', $effective->head);
 
         $bill = app(GbpayService::class)->createOrUpdateBillForApplication($this->makeAppForScheme($this->schemeA, 10), 4000);
-        $this->assertSame('10153009090000000001', $bill->psid);
+        $this->assertSame('10153009010000000001', $bill->psid);
+
+        // Creating/updating Livestock scheme custom PSID forces Service Code 02
+        $resLivestock = $this->actingAs($this->superAdmin)->put(route('admin.schemes.update', $this->schemeLivestock), [
+            'department_id' => $this->livestockDept->id,
+            'title' => $this->schemeLivestock->title,
+            'type' => 'running',
+            'scope' => 'gb',
+            'status' => 'active',
+            'requires_challan' => '1',
+            'psid_settings_present' => '1',
+            'use_custom_psid' => '1',
+            'psid_one_link_prefix' => '999999',
+            'psid_department_code' => '88',
+            'psid_department_service_no' => '77',
+            'psid_rco' => 'GL-1618',
+            'psid_head' => 'C03223',
+        ]);
+        $resLivestock->assertRedirect(route('admin.schemes.index'));
+        $this->assertSame('1015300902', PsidConfig::forScheme($this->schemeLivestock)->formattedPrefix());
 
         // Verify GBPay console shows fixed readonly inputs and treasury reference guidance table
         $indexRes = $this->actingAs($this->superAdmin)->get(route('admin.gbpay.index'));
@@ -197,6 +237,7 @@ class PerSchemePsidConfigurationTest extends TestCase
         $indexRes->assertSee('IN101530');
         $indexRes->assertSee('id="scheme_psid_prefix" maxlength="6" class="form-control form-control-sm bg-light font-monospace" value="101530" readonly', false);
         $indexRes->assertSee('id="scheme_psid_dept" maxlength="2" class="form-control form-control-sm bg-light font-monospace" value="09" readonly', false);
+        $indexRes->assertSee('id="scheme_psid_svc" maxlength="2" class="form-control form-control-sm bg-light font-monospace" value="01" readonly', false);
 
         // Unchecking use_custom_psid reverts to global default
         $resReset = $this->actingAs($this->superAdmin)->put(route('admin.schemes.update', $this->schemeA), [

@@ -52,10 +52,12 @@
     <div class="col-md-4">
         <div class="mb-3">
             <label class="form-label">Department</label>
-            <select name="department_id" class="form-control" required>
-                <option value="">Select</option>
+            <select name="department_id" id="scheme-department-id" class="form-control" required>
+                <option value="" data-service-code="01">Select</option>
                 @foreach($departments as $department)
-                    <option value="{{ $department->id }}" @selected(old('department_id', $scheme->department_id ?? '') == $department->id)>
+                    <option value="{{ $department->id }}"
+                        data-service-code="{{ \App\Models\PsidConfig::serviceCodeForDepartment($department) }}"
+                        @selected(old('department_id', $scheme->department_id ?? '') == $department->id)>
                         {{ $department->name }}
                     </option>
                 @endforeach
@@ -183,9 +185,13 @@
                                 value="09" readonly>
                         </div>
                         <div class="col-3">
-                            <label class="form-label small fw-bold mb-1">Service (2d)</label>
-                            <input type="text" name="psid_department_service_no" maxlength="2" class="form-control form-control-sm"
-                                value="{{ old('psid_department_service_no', $schemePsid?->department_service_no ?? $globalPsid->department_service_no ?? '01') }}">
+                            <label class="form-label small fw-bold mb-1">Service (2d) <i class="fa-solid fa-lock text-muted ms-1" title="Fixed by Department"></i></label>
+                            @php
+                                $resolvedDeptForPsid = isset($scheme) ? $scheme->department : null;
+                                $resolvedSvcCode = \App\Models\PsidConfig::serviceCodeForDepartment($resolvedDeptForPsid);
+                            @endphp
+                            <input type="text" name="psid_department_service_no" id="psid_department_service_no" maxlength="2" class="form-control form-control-sm bg-light font-monospace"
+                                value="{{ $resolvedSvcCode }}" readonly>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-bold mb-1">Default RCO Code</label>
@@ -256,6 +262,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const togglePsid = () => { customPsidBox.style.display = customPsidToggle.checked ? '' : 'none'; };
         customPsidToggle.addEventListener('change', togglePsid);
         togglePsid();
+    }
+
+    const deptSelect = document.getElementById('scheme-department-id');
+    const schemeSvcInput = document.getElementById('psid_department_service_no');
+    if (deptSelect && schemeSvcInput) {
+        const syncDeptService = () => {
+            const opt = deptSelect.options[deptSelect.selectedIndex];
+            schemeSvcInput.value = opt?.getAttribute('data-service-code') || '01';
+        };
+        deptSelect.addEventListener('change', syncDeptService);
+        syncDeptService();
     }
 });
 </script>
