@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 165
+Total Prompts Logged: 169
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-16T19:37:00+05:00 (UTC: 2026-11-16T14:37:00Z)
-File Last Updated  : 2026-11-16 15:37:00 (PKT)
+Latest Prompt Date : 2026-11-16T20:19:49+05:00 (UTC: 2026-11-16T15:19:49Z)
+File Last Updated  : 2026-11-16 16:19:49 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1955,6 +1955,52 @@ Service code 01 is for agriculture department
 Service code 02 is for Livestock department
 Service code 03 is for Fishries department
 If a scheme is created for any department fix these values as well for service codes
+
+--------------------------------------------------------------------------------
+PROMPT #166
+Date & Time (Local) : 2026-11-16T19:55:55+05:00
+Date & Time (UTC)   : 2026-11-16T14:55:55Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+C03116  Agriculture Department  -AGRI RECIPTS (SALE OF FRUIT PLANTS, WHT)
+C03117  Agriculture Department -RCPTS FRM EXP FRMS (SALE OF PLATS PC)
+C03118  Agriculture Department -REC FRM AGR FRMS (SALE OF CER SEED)
+C03136  Agriculture Department -AGRICULTURE OTHERS (AUCTION OF STORES)
+C03138  Agriculture Department -REGISTRATION FEE SEED (REGISTRATN)
+C03223  Livestock Department-REC FRM LVSTCK FRMS
+C03227  Livestock Department -ARTIFICIAL INSEMINATION FEE-ADC GOGB
+C03231  Livestock Department -OTHRS (SHARE OF ANIMALS AND BIRDS)
+C03201  Fisheries Department -SALE OF TABLE FISH, FISH SEED SALE
+C03130  Agriculture Department -AGRI REC FRM GVRNMNT GRDNS
+
+these are different account heads for the departments of Agriculture Livestock and Fisheries , I have to test these accounts by generating PSIDs against each account head, 
+Plan this testing , we have to test it in live environment with real PSIDs
+
+--------------------------------------------------------------------------------
+PROMPT #167
+Date & Time (Local) : 2026-11-16T20:05:55+05:00
+Date & Time (UTC)   : 2026-11-16T15:05:55Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Yes for All department schemes the RCO should resolve to its districtrco code
+
+--------------------------------------------------------------------------------
+PROMPT #168
+Date & Time (Local) : 2026-11-16T20:12:30+05:00
+Date & Time (UTC)   : 2026-11-16T15:12:30Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Except for code C03116 generate 1 scheme each , add 5 members from database , approve their application and generate PSID real  and don't assign those PSID to anyone else in future for testing it in real environment 
+Plan
+
+--------------------------------------------------------------------------------
+PROMPT #169
+Date & Time (Local) : 2026-11-16T20:19:49+05:00
+Date & Time (UTC)   : 2026-11-16T15:19:49Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+select the first 5 records of applicants from db, keep the test fee from 5 rupees to 50 ruppees randomly
+yes implement the artisan command
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             
