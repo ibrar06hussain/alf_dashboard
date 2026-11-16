@@ -238,6 +238,10 @@ class GbpayController extends Controller
     ): RedirectResponse {
         $forceNew = $request->boolean('force_new', false);
 
+        if ($application->isRejected()) {
+            return back()->with('error', 'Cannot generate or sync a GBPay bill/PSID for a rejected application.');
+        }
+
         $paidBill = $application->bills()->where('status', 'paid')->first();
         if ($paidBill) {
             return back()->with('error', "This application already has a PAID GBPay bill (PSID: {$paidBill->psid}).");

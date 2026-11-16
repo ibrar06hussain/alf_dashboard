@@ -94,14 +94,22 @@
 
                             <dt class="col-sm-4">{{ __('portal.current_status') }}</dt>
                             <dd class="col-sm-8">
-                                <span class="badge bg-primary">
+                                @php
+                                    $statusBadgeClass = match (true) {
+                                        $application->isRejected() => 'bg-danger',
+                                        $application->current_stage === \App\Models\Application::STAGE_DORMANT => 'bg-secondary',
+                                        $application->isChallanPaid() => 'bg-success',
+                                        default => 'bg-primary',
+                                    };
+                                @endphp
+                                <span class="badge {{ $statusBadgeClass }}">
                                     {{ $application->statusLabel() }}
                                 </span>
                             </dd>
 
-                            @if($application->status === 'rejected' && $application->rejection_reason)
-                                <dt class="col-sm-4">{{ __('portal.rejection_reason') }}</dt>
-                                <dd class="col-sm-8 text-danger fw-bold">{{ $application->rejection_reason }}</dd>
+                            @if($application->isRejected())
+                                <dt class="col-sm-4 text-danger">{{ __('portal.rejection_reason') }}</dt>
+                                <dd class="col-sm-8 text-danger fw-bold">{{ $application->rejection_reason ?: 'Rejected by Deputy Director.' }}</dd>
                             @endif
 
                             @if($application->current_stage === \App\Models\Application::STAGE_CORRECTION_REQUIRED)
@@ -110,8 +118,25 @@
                             @endif
                         </dl>
 
+                        @if($application->isRejected())
+                            <div class="alert alert-danger mt-4 p-3 border-danger">
+                                <h6 class="fw-bold text-danger mb-1">
+                                    <i class="fa-solid fa-circle-xmark me-1"></i> Application Rejected
+                                </h6>
+                                <div class="small mb-1">
+                                    <strong>{{ __('portal.rejection_reason') }}:</strong>
+                                    {{ $application->rejection_reason ?: 'Rejected by Deputy Director.' }}
+                                </div>
+                                @if($application->challan_no)
+                                    <div class="small text-muted mb-0">
+                                        Any previously generated challan (#{{ $application->challan_no }}) or PSID has been cancelled and can no longer be downloaded or paid.
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
                         {{-- Citizen Actions: Challan Download & Payment Proof Upload --}}
-                        @if($application->current_stage === \App\Models\Application::STAGE_CHALLAN_ISSUED && $application->challan_no)
+                        @if($application->current_stage === \App\Models\Application::STAGE_CHALLAN_ISSUED && $application->challan_no && ! $application->isRejected() && ! $application->isChallanExpired())
                             @php
                                 $challanBreakdown = $application->getChallanBreakdown();
                                 $challanTpl = $challanBreakdown['template'];

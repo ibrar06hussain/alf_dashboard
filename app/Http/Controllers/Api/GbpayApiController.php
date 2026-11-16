@@ -99,7 +99,7 @@ class GbpayApiController extends Controller
             })
             ->first();
 
-        if ($application) {
+        if ($application && ! $application->isRejected() && $application->current_stage !== Application::STAGE_DORMANT) {
             return $this->gbpayService->createOrUpdateBillForApplication($application);
         }
 
@@ -149,9 +149,12 @@ class GbpayApiController extends Controller
             // Check if bill is cancelled or application is rejected/dormant
             if (
                 $bill->status === 'cancelled' ||
-                in_array($application?->current_stage, [Application::STAGE_REJECTED, Application::STAGE_DORMANT], true) ||
-                $application?->status === 'rejected'
+                ($application && ($application->isRejected() || $application->current_stage === Application::STAGE_DORMANT))
             ) {
+                if ($bill->status === 'pending' && $application?->isRejected()) {
+                    $bill->update(['status' => 'cancelled']);
+                }
+
                 return response()->json([
                     'response_code' => '02',
                     'message' => 'Bill/Consumer Blocked',
@@ -291,9 +294,12 @@ class GbpayApiController extends Controller
             // Check if bill is blocked/cancelled
             if (
                 $bill->status === 'cancelled' ||
-                in_array($application?->current_stage, [Application::STAGE_REJECTED, Application::STAGE_DORMANT], true) ||
-                $application?->status === 'rejected'
+                ($application && ($application->isRejected() || $application->current_stage === Application::STAGE_DORMANT))
             ) {
+                if ($bill->status === 'pending' && $application?->isRejected()) {
+                    $bill->update(['status' => 'cancelled']);
+                }
+
                 return response()->json([
                     'response_code' => '02',
                     'message' => 'Bill/Consumer Blocked',
@@ -421,7 +427,7 @@ class GbpayApiController extends Controller
                                 ->whereNotNull('challan_no')
                                 ->orderByDesc('id')
                                 ->first();
-                            if ($app) {
+                            if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT) {
                                 $bill = $this->gbpayService->createOrUpdateBillForApplication($app);
                             }
                         }
@@ -445,7 +451,7 @@ class GbpayApiController extends Controller
                                 ->whereNotNull('challan_no')
                                 ->orderByDesc('id')
                                 ->first();
-                            if ($app) {
+                            if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT) {
                                 $bill = $this->gbpayService->createOrUpdateBillForApplication($app);
                             }
                         }
@@ -470,7 +476,7 @@ class GbpayApiController extends Controller
                             ->orWhere('challan_no', $searchValue)
                             ->orWhere('psid', $searchValue)
                             ->first();
-                        if ($app && ($app->challan_no || $app->current_stage === Application::STAGE_CHALLAN_ISSUED)) {
+                        if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT && ($app->challan_no || $app->current_stage === Application::STAGE_CHALLAN_ISSUED)) {
                             $bill = $this->gbpayService->createOrUpdateBillForApplication($app);
                         }
                     }
@@ -495,9 +501,12 @@ class GbpayApiController extends Controller
             $applicant = $application?->applicant;
             $consumerName = $applicant?->full_name ?? 'Applicant';
 
-            $billStatus = match ($bill->status) {
-                'paid' => 'P',
-                'cancelled' => 'C',
+            $isBlockedOrCancelled = $bill->status === 'cancelled'
+                || ($application && ($application->isRejected() || $application->current_stage === Application::STAGE_DORMANT));
+
+            $billStatus = match (true) {
+                $bill->status === 'paid' => 'P',
+                $isBlockedOrCancelled => 'C',
                 default => 'U',
             };
 

@@ -146,11 +146,28 @@
                             <div class="form-text" style="font-size: 11px;">Physically disbursed to farmer</div>
                         </div>
 
+                        @php
+                            $canEditChallanFee = auth()->user()->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
+                        @endphp
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold">Challan Fee (Integer Amount, PKR)</label>
-                            <input type="number" step="1" min="0" name="challan_amount" class="form-control form-control-sm"
-                                value="{{ old('challan_amount', $application->challan_amount ? (int) ceil((float) $application->challan_amount) : '') }}">
-                            <div class="form-text" style="font-size: 11px;">Nearest upper integer amount for fee deposit</div>
+                            <label class="form-label small fw-bold">
+                                Challan Fee (Integer Amount, PKR)
+                                @unless($canEditChallanFee)
+                                    <span class="badge bg-secondary ms-1"><i class="fa-solid fa-lock me-1"></i>Locked</span>
+                                @endunless
+                            </label>
+                            @if($canEditChallanFee)
+                                <input type="number" step="1" min="0" name="challan_amount" class="form-control form-control-sm"
+                                    value="{{ old('challan_amount', $application->challan_amount ? (int) ceil((float) $application->challan_amount) : '') }}">
+                                <div class="form-text" style="font-size: 11px;">Nearest upper integer amount for fee deposit</div>
+                            @else
+                                <input type="number" step="1" min="0" name="challan_amount" class="form-control form-control-sm bg-light"
+                                    value="{{ $application->challan_amount ? (int) ceil((float) $application->challan_amount) : '' }}"
+                                    readonly disabled>
+                                <div class="form-text text-muted" style="font-size: 11px;">
+                                    <i class="fa-solid fa-lock text-muted me-1"></i>Challan fee is system-calculated and locked for Deputy Directors.
+                                </div>
+                            @endif
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Challan Due Date</label>

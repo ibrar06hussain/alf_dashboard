@@ -65,10 +65,12 @@ class ApplicationLifecycleService
             Application::STAGE_VISIT_COMPLETED,
             Application::STAGE_FINDINGS_SUBMITTED,
             Application::STAGE_UNDER_REVIEW,
+            Application::STAGE_REJECTED,
         ],
         Application::STAGE_VISIT_COMPLETED => [
             Application::STAGE_FINDINGS_SUBMITTED,
             Application::STAGE_UNDER_REVIEW,
+            Application::STAGE_REJECTED,
         ],
         Application::STAGE_FINDINGS_SUBMITTED => [
             Application::STAGE_APPROVED,
@@ -118,12 +120,14 @@ class ApplicationLifecycleService
             Application::STAGE_PARTIALLY_DISTRIBUTED,
             Application::STAGE_FULLY_DISTRIBUTED,
             'disbursed',
+            Application::STAGE_REJECTED,
         ],
         Application::STAGE_STOCK_ALLOCATED => [
             Application::STAGE_PARTIALLY_DISTRIBUTED,
             Application::STAGE_FULLY_DISTRIBUTED,
             Application::STAGE_COMPLETED,
             'disbursed',
+            Application::STAGE_REJECTED,
         ],
         Application::STAGE_PARTIALLY_DISTRIBUTED => [
             Application::STAGE_FULLY_DISTRIBUTED,
@@ -338,9 +342,18 @@ class ApplicationLifecycleService
 
             // Synchronize legacy status column
             $updates['status'] = match ($targetStage) {
-                Application::STAGE_APPROVED => 'directorate_approved',
+                Application::STAGE_APPROVED,
+                Application::STAGE_CHALLAN_ISSUED,
+                Application::STAGE_PAYMENT_PROOF_SUBMITTED,
+                Application::STAGE_PAYMENT_VERIFIED,
+                Application::STAGE_ELIGIBLE_BENEFICIARY,
+                Application::STAGE_STOCK_ALLOCATED,
+                Application::STAGE_PARTIALLY_DISTRIBUTED => 'directorate_approved',
                 Application::STAGE_FULLY_DISTRIBUTED, Application::STAGE_COMPLETED => 'disbursed',
                 Application::STAGE_REJECTED => 'rejected',
+                Application::STAGE_SUBMITTED,
+                Application::STAGE_UNDER_REVIEW,
+                Application::STAGE_CORRECTION_REQUIRED => 'pending',
                 Application::STAGE_FIELD_SURVEY_ASSIGNED, Application::STAGE_VISIT_SCHEDULED,
                 Application::STAGE_VISIT_COMPLETED, Application::STAGE_FINDINGS_SUBMITTED => 'district_verified',
                 default => in_array($targetStage, ['pending', 'district_verified', 'directorate_approved', 'disbursed', 'rejected'], true)
@@ -406,8 +419,16 @@ class ApplicationLifecycleService
 
                 case Application::STAGE_REJECTED:
                 case 'rejected':
+                    if ($locked->isChallanPaid() || (int) ($locked->distributed_quantity ?? 0) > 0) {
+                        throw ValidationException::withMessages([
+                            'status' => 'Cannot reject an application whose challan has already been paid or whose stock has been disbursed.',
+                        ]);
+                    }
                     $reason = $params['rejection_reason'] ?? $params['note'] ?? 'Application rejected.';
                     $updates['rejection_reason'] = $reason;
+                    $updates['approved_quantity'] = null;
+                    $updates['allocated_quantity'] = null;
+                    $locked->bills()->where('status', '!=', 'paid')->update(['status' => 'cancelled']);
                     break;
 
                 case Application::STAGE_PAYMENT_PROOF_SUBMITTED:

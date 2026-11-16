@@ -553,5 +553,224 @@ class ApplicationApprovalQuantityTest extends TestCase
         $pdfResponse = $this->get(route('applications.challan.download', $app->application_no));
         $pdfResponse->assertOk();
     }
+
+    public function test_deputy_director_cannot_change_challan_fee_when_editing_application(): void
+    {
+        $app = $this->createTestApplication(5.0, Application::STAGE_UNDER_REVIEW);
+
+        // Approve for 3 bags -> Challan fee generated as 3 * 3000 = 9000 PKR
+        $this->actingAs($this->ddGilgit)
+            ->post(route('admin.applications.status', $app), [
+                'status' => Application::STAGE_APPROVED,
+                'approved_quantity' => 3.0,
+                'verification_note' => 'Approved 3 bags.',
+                'lock_version' => $app->lock_version,
+            ]);
+
+        $app->refresh();
+        $this->assertEquals(Application::STAGE_CHALLAN_ISSUED, $app->current_stage);
+        $this->assertEquals(9000.00, (float) $app->challan_amount);
+
+        // Edit page renders challan_amount input as readonly disabled for DD
+        $editResponse = $this->actingAs($this->ddGilgit)
+            ->get(route('admin.applications.edit', $app));
+        $editResponse->assertOk();
+        $editResponse->assertSee('name="challan_amount"', false);
+        $editResponse->assertSee('readonly disabled', false);
+
+        // Crafted PUT request attempting to change challan_amount by DD is ignored
+        $updateResponse = $this->actingAs($this->ddGilgit)
+            ->put(route('admin.applications.update', $app), [
+                'full_name' => $app->applicant->full_name,
+                'father_name' => $app->applicant->father_name,
+                'phone' => $app->applicant->phone,
+                'district_id' => $app->district_id,
+                'verification_note' => 'Updated verification remark by DD.',
+                'challan_amount' => 100,
+                'modification_reason' => 'Attempted fee edit along with remark update.',
+            ]);
+
+        $updateResponse->assertRedirect(route('admin.applications.show', $app));
+        $updateResponse->assertSessionHas('success');
+
+        $app->refresh();
+        $this->assertEquals(9000.00, (float) $app->challan_amount);
+        $this->assertEquals('Updated verification remark by DD.', $app->verification_note);
+    }
+
+    public function test_dd_can_reject_unpaid_challan_blocks_psid_shows_in_tracking_and_hides_download(): void
+    {
+        $app = $this->createTestApplication(5.0, Application::STAGE_UNDER_REVIEW);
+
+        // 1. DD approves for 3 bags -> challan issued & pending PSID bill created
+        $this->actingAs($this->ddGilgit)
+            ->post(route('admin.applications.status', $app), [
+                'status' => Application::STAGE_APPROVED,
+                'approved_quantity' => 3.0,
+                'verification_note' => 'Approved 3 bags.',
+                'lock_version' => $app->lock_version,
+            ]);
+
+        $app->refresh();
+        $bill = \App\Models\Bill::where('application_id', $app->id)->firstOrFail();
+        $psid = $bill->psid;
+        $this->assertEquals(Application::STAGE_CHALLAN_ISSUED, $app->current_stage);
+        $this->assertSame('pending', $bill->status);
+        $this->assertSame(3, app(\App\Services\QuotaService::class)->usedSlots($this->scheme->id, $this->gilgit->id));
+
+        // 2. DD rejects unpaid challan application
+        $rejectResponse = $this->actingAs($this->ddGilgit)
+            ->post(route('admin.applications.status', $app), [
+                'status' => Application::STAGE_REJECTED,
+                'rejection_reason' => 'Challan fee was not deposited within acceptable timeline.',
+                'lock_version' => $app->lock_version,
+            ]);
+        $rejectResponse->assertRedirect();
+        $rejectResponse->assertSessionHas('success');
+
+        $app->refresh();
+        $bill->refresh();
+        $this->assertEquals(Application::STAGE_REJECTED, $app->current_stage);
+        $this->assertEquals('rejected', $app->status);
+        $this->assertNull($app->approved_quantity);
+        $this->assertNull($app->allocated_quantity);
+        $this->assertSame('cancelled', $bill->status);
+        $this->assertSame(0, app(\App\Services\QuotaService::class)->usedSlots($this->scheme->id, $this->gilgit->id));
+
+        // 3. Admin dossier hides Download Challan PDF & shows cancelled status
+        $showRes = $this->actingAs($this->ddGilgit)->get(route('admin.applications.show', $app));
+        $showRes->assertOk();
+        $showRes->assertSee('REJECTED / CHALLAN CANCELLED');
+        $showRes->assertDontSee('Download Challan PDF');
+
+        // 4. Direct challan PDF download is blocked for rejected application
+        $dlRes = $this->get(route('applications.challan.download', $app->application_no));
+        $dlRes->assertRedirect(route('applications.track', ['application_no' => $app->application_no]));
+
+        // 5. Public tracking shows rejection and hides previous challan download
+        $trackRes = $this->post(route('applications.track'), [
+            'application_no' => $app->application_no,
+            'cnic' => $app->applicant->cnic,
+        ]);
+        $trackRes->assertOk();
+        $trackRes->assertSee('Rejected');
+        $trackRes->assertSee('Application Rejected');
+        $trackRes->assertSee('Challan fee was not deposited within acceptable timeline.');
+        $trackRes->assertDontSee('Download Fee Deposit Challan');
+
+        // 6. PSID payment & inquiry APIs reject payment for cancelled/rejected PSID
+        \App\Models\GbpayApiCredential::create([
+            'username' => 'gbpay_reject_test',
+            'password' => \Illuminate\Support\Facades\Hash::make('secret1234'),
+            'is_active' => true,
+        ]);
+
+        $inquiry = $this->postJson('/api/gb-pay/bill-inquiry', [
+            'username' => 'gbpay_reject_test',
+            'password' => 'secret1234',
+            'voucher_number' => $psid,
+        ]);
+        $inquiry->assertStatus(403);
+        $inquiry->assertJsonPath('response_code', '02');
+
+        $payment = $this->postJson('/api/gb-pay/bill-payment', [
+            'username' => 'gbpay_reject_test',
+            'password' => 'secret1234',
+            'voucher_number' => $psid,
+            'transaction_id' => 'TXN-BLOCKED-1',
+            'transaction_amount' => 9000,
+            'bank_mnemonic' => 'HBL',
+        ]);
+        $payment->assertStatus(403);
+        $payment->assertJsonPath('response_code', '02');
+
+        $search = $this->postJson('/api/gb-pay/search-psid', [
+            'username' => 'gbpay_reject_test',
+            'password' => 'secret1234',
+            'search_by' => 'reference_number',
+            'search_value' => $psid,
+        ]);
+        $search->assertOk();
+        $search->assertJsonPath('bill_status', 'C');
+
+        $this->expectException(\RuntimeException::class);
+        app(\App\Services\GbpayService::class)->handleWebhook([
+            'psid' => $psid,
+            'status' => 'paid',
+            'transaction_id' => 'TXN-WH-BLOCKED',
+            'amount' => 9000,
+        ]);
+    }
+
+    public function test_dd_can_reject_previously_approved_unpaid_app_but_cannot_reject_paid_app(): void
+    {
+        // Case A: Previously approved legacy application (approved stage, unpaid)
+        $legacyApp = $this->createTestApplication(4.0, Application::STAGE_APPROVED);
+        $legacyApp->update([
+            'status' => 'directorate_approved',
+            'approved_quantity' => 4.0,
+            'allocated_quantity' => 4,
+            'challan_no' => 'CHL-2026-009999',
+            'challan_amount' => 12000,
+        ]);
+
+        $showRes = $this->actingAs($this->ddGilgit)->get(route('admin.applications.show', $legacyApp));
+        $showRes->assertOk();
+        $showRes->assertSee('Reject Unpaid Application');
+
+        $rejectLegacy = $this->actingAs($this->ddGilgit)
+            ->post(route('admin.applications.status', $legacyApp), [
+                'status' => Application::STAGE_REJECTED,
+                'rejection_reason' => 'Previously approved applicant did not pay challan.',
+                'lock_version' => $legacyApp->lock_version,
+            ]);
+        $rejectLegacy->assertRedirect();
+        $rejectLegacy->assertSessionHas('success');
+        $legacyApp->refresh();
+        $this->assertEquals(Application::STAGE_REJECTED, $legacyApp->current_stage);
+        $this->assertEquals('rejected', $legacyApp->status);
+
+        // Case B: Paid challan application cannot be rejected by DD
+        $paidApplicant = Applicant::create([
+            'full_name' => 'Ali Khan Paid',
+            'father_name' => 'Khan',
+            'cnic' => '7150122222222',
+            'phone' => '03450000002',
+            'district_id' => $this->gilgit->id,
+            'tehsil' => 'Gilgit',
+            'village' => 'Danyore',
+        ]);
+        $paidApp = Application::create([
+            'application_no' => 'APP-QTY-' . uniqid(),
+            'applicant_id' => $paidApplicant->id,
+            'scheme_id' => $this->scheme->id,
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'current_stage' => Application::STAGE_CHALLAN_ISSUED,
+            'status' => 'directorate_approved',
+            'demanded_quantity' => 2.0,
+            'approved_quantity' => 2.0,
+            'allocated_quantity' => 2,
+            'challan_no' => 'CHL-2026-008888',
+            'challan_amount' => 6000,
+            'payment_verified_at' => now(),
+            'gbpay_transaction_id' => 'TXN-PAID-8888',
+            'assigned_to' => $this->ddGilgit->id,
+            'submitted_at' => now(),
+            'lock_version' => 1,
+        ]);
+
+        $rejectPaid = $this->actingAs($this->ddGilgit)
+            ->post(route('admin.applications.status', $paidApp), [
+                'status' => Application::STAGE_REJECTED,
+                'rejection_reason' => 'Attempt to reject already paid application.',
+                'lock_version' => $paidApp->lock_version,
+            ]);
+        $rejectPaid->assertRedirect();
+        $rejectPaid->assertSessionHas('error');
+
+        $paidApp->refresh();
+        $this->assertEquals(Application::STAGE_CHALLAN_ISSUED, $paidApp->current_stage);
+    }
 }
 

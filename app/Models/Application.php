@@ -271,6 +271,35 @@ class Application extends Model
     }
 
     /**
+     * Determine whether the application has been rejected.
+     */
+    public function isRejected(): bool
+    {
+        return $this->status === self::STATUS_REJECTED || $this->current_stage === self::STAGE_REJECTED;
+    }
+
+    /**
+     * Determine whether the application's challan/fee has actually been paid/verified.
+     */
+    public function isChallanPaid(): bool
+    {
+        $hasPaidBill = $this->relationLoaded('bills')
+            ? $this->bills->where('status', 'paid')->isNotEmpty()
+            : $this->bills()->where('status', 'paid')->exists();
+
+        return $this->payment_verified_at !== null
+            || ! empty($this->gbpay_transaction_id)
+            || $hasPaidBill
+            || $this->status === self::STATUS_DISBURSED
+            || in_array($this->current_stage, [
+                self::STAGE_PAYMENT_VERIFIED,
+                self::STAGE_FULLY_DISTRIBUTED,
+                self::STAGE_COMPLETED,
+                self::STAGE_DISBURSED,
+            ], true);
+    }
+
+    /**
      * Determine if applicant is eligible for stock disbursement.
      */
     public function isEligibleForDisbursement(): bool

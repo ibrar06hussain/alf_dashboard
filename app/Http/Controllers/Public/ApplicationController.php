@@ -595,11 +595,12 @@ class ApplicationController extends Controller
             ]);
 
             $cnic = $data['cnic'];
+            $dashedCnic = \App\Support\Cnic::dashed($cnic);
 
             $application = Application::query()
                 ->with(['scheme.department', 'applicant', 'district', 'statusLogs', 'bills'])
                 ->where('application_no', trim($data['application_no']))
-                ->whereHas('applicant', fn ($q) => $q->where('cnic', $cnic))
+                ->whereHas('applicant', fn ($q) => $q->whereIn('cnic', array_unique([$cnic, $dashedCnic])))
                 ->first();
 
             if (! $application) {
@@ -631,6 +632,11 @@ class ApplicationController extends Controller
         $application = Application::with(['scheme.department', 'scheme.challanTemplate', 'applicant', 'district'])
             ->where('application_no', $application_no)
             ->firstOrFail();
+
+        if ($application->isRejected()) {
+            return redirect()->route('applications.track', ['application_no' => $application->application_no])
+                ->with('error', 'This application has been rejected. Its previous challan is cancelled and cannot be downloaded or paid.');
+        }
 
         if ($application->current_stage === Application::STAGE_DORMANT || ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired())) {
             app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
@@ -679,6 +685,11 @@ class ApplicationController extends Controller
     public function uploadPaymentProof(Request $request, string $application_no): RedirectResponse
     {
         $application = Application::where('application_no', $application_no)->firstOrFail();
+
+        if ($application->isRejected()) {
+            return redirect()->route('applications.track', ['application_no' => $application->application_no])
+                ->with('error', 'Cannot submit payment receipt for a rejected application.');
+        }
 
         if ($application->current_stage === Application::STAGE_DORMANT || ($application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired())) {
             app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);

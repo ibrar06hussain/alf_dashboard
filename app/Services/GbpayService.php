@@ -64,6 +64,10 @@ class GbpayService
         ?float $amount = null,
         bool $forceNew = false
     ): Bill {
+        if ($application->isRejected()) {
+            throw new \RuntimeException('Cannot create or sync a GBPay bill/PSID for a rejected application.');
+        }
+
         $application->loadMissing(['applicant', 'scheme.challanTemplate', 'district']);
 
         $breakdown = $application->getChallanBreakdown();
@@ -359,11 +363,15 @@ class GbpayService
             throw new \InvalidArgumentException('PSID not found in webhook data');
         }
 
-        $bill = Bill::where('psid', $psid)->first();
+        $bill = Bill::with('application')->where('psid', $psid)->first();
 
         if (!$bill) {
             throw new \RuntimeException('Bill not found for PSID: ' . $psid);
         }
+
+        $application = $bill->application;
+        $isBlocked = $bill->status === 'cancelled'
+            || ($application && ($application->isRejected() || $application->current_stage === Application::STAGE_DORMANT));
 
         GbpayResponse::create([
             'bill_id' => $bill->bill_id,
@@ -371,11 +379,15 @@ class GbpayService
             'request_type' => 'webhook',
             'request_data' => [],
             'response_data' => $webhookData,
-            'status_code' => isset($webhookData['status_code']) ? (string) $webhookData['status_code'] : '200',
-            'status_message' => $webhookData['message'] ?? 'Webhook received',
+            'status_code' => $isBlocked ? '403' : (isset($webhookData['status_code']) ? (string) $webhookData['status_code'] : '200'),
+            'status_message' => $isBlocked ? 'Bill/Consumer Blocked' : ($webhookData['message'] ?? 'Webhook received'),
         ]);
 
         if (($webhookData['status'] ?? null) === 'paid') {
+            if ($isBlocked) {
+                throw new \RuntimeException('Bill/Consumer Blocked: Payment is not accepted for cancelled, dormant, or rejected challan PSID.');
+            }
+
             $this->markBillAsPaid(
                 $bill,
                 (string) ($webhookData['transaction_id'] ?? $bill->transaction_id ?? ('WH-' . time())),
@@ -399,14 +411,26 @@ class GbpayService
         array $rawPayload = []
     ): void {
         DB::transaction(function () use ($bill, $transactionId, $transactionAmount, $bankMnemonic, $rawPayload) {
+            $lockedBill = Bill::where('bill_id', $bill->bill_id)->lockForUpdate()->firstOrFail();
+            $lockedApp = $lockedBill->application_id
+                ? Application::where('id', $lockedBill->application_id)->lockForUpdate()->first()
+                : null;
+
+            if (
+                $lockedBill->status === 'cancelled'
+                || ($lockedApp && ($lockedApp->isRejected() || $lockedApp->current_stage === Application::STAGE_DORMANT))
+            ) {
+                throw new \RuntimeException('Cannot accept payment for a cancelled, dormant, or rejected challan/PSID.');
+            }
+
             $paidAt = now();
 
-            $bill->update([
+            $lockedBill->update([
                 'status' => 'paid',
                 'paid_at' => $paidAt,
                 'transaction_id' => $transactionId,
                 'bank_mnemonic' => $bankMnemonic,
-                'gbpay_response' => array_merge($bill->gbpay_response ?? [], [
+                'gbpay_response' => array_merge($lockedBill->gbpay_response ?? [], [
                     'payment_received' => array_merge([
                         'transaction_id' => $transactionId,
                         'transaction_amount' => $transactionAmount,
@@ -416,7 +440,7 @@ class GbpayService
                 ]),
             ]);
 
-            $this->updateApplicationPaymentStatus($bill, $transactionId, $bankMnemonic);
+            $this->updateApplicationPaymentStatus($lockedBill, $transactionId, $bankMnemonic);
         });
     }
 

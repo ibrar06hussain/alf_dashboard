@@ -15,9 +15,26 @@ class QuotaService
      */
     public function usedSlots(int $schemeId, int $districtId): int
     {
-        $applications = Application::with('fieldValues.formField')
+        $applications = Application::with(['fieldValues.formField', 'scheme'])
             ->where('scheme_id', $schemeId)
             ->where('district_id', $districtId)
+            ->where(function ($q) {
+                $q->whereNull('status')
+                    ->orWhereNotIn('status', [Application::STATUS_REJECTED, Application::STATUS_DISTRICT_VERIFIED]);
+            })
+            ->where(function ($q) {
+                $q->whereNull('current_stage')
+                    ->orWhereNotIn('current_stage', [
+                        Application::STAGE_UNDER_REVIEW,
+                        Application::STAGE_CORRECTION_REQUIRED,
+                        Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                        Application::STAGE_VISIT_SCHEDULED,
+                        Application::STAGE_VISIT_COMPLETED,
+                        Application::STAGE_FINDINGS_SUBMITTED,
+                        Application::STAGE_REJECTED,
+                        Application::STAGE_DORMANT,
+                    ]);
+            })
             ->where(function ($q) {
                 $q->whereIn('status', [Application::STATUS_DIRECTORATE_APPROVED, Application::STATUS_DISBURSED])
                   ->orWhereIn('current_stage', [
@@ -41,8 +58,13 @@ class QuotaService
             if ($approvedQty !== null && $approvedQty > 0) {
                 $totalApprovedBags += (int) ceil((float) $approvedQty);
             } else {
-                $demanded = (int) ceil((float) $app->getDemandedQuantity());
-                $totalApprovedBags += ($demanded > 0 ? $demanded : 1);
+                $bagsRequired = $app->getBagsRequired();
+                if ($bagsRequired !== null && $bagsRequired > 0) {
+                    $totalApprovedBags += (int) $bagsRequired;
+                } else {
+                    $demanded = (int) ceil((float) $app->getDemandedQuantity());
+                    $totalApprovedBags += ($demanded > 0 ? $demanded : 1);
+                }
             }
         }
 

@@ -1037,6 +1037,8 @@ class ApplicationReviewController extends Controller
 
         // Deputy Director permissions
         if ($user->hasAnyRole(['District Deputy Director', 'District Officer'])) {
+            $canRejectUnpaid = ! $application->isChallanPaid() && (int) ($application->distributed_quantity ?? 0) <= 0;
+
             if (in_array($currentStage, ['pending', Application::STAGE_SUBMITTED], true)) {
                 $allowed[] = Application::STAGE_UNDER_REVIEW;
                 $allowed[] = Application::STAGE_FIELD_SURVEY_ASSIGNED;
@@ -1053,6 +1055,13 @@ class ApplicationReviewController extends Controller
                 $allowed[] = Application::STAGE_REJECTED;
                 $allowed[] = Application::STAGE_CORRECTION_REQUIRED;
                 $allowed[] = 'directorate_approved';
+            } elseif (in_array($currentStage, [
+                Application::STAGE_CORRECTION_REQUIRED,
+                Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                Application::STAGE_VISIT_SCHEDULED,
+                Application::STAGE_VISIT_COMPLETED,
+            ], true)) {
+                $allowed[] = Application::STAGE_REJECTED;
             } elseif ($currentStage === Application::STAGE_FINDINGS_SUBMITTED) {
                 $allowed[] = Application::STAGE_APPROVED;
                 $allowed[] = Application::STAGE_REJECTED;
@@ -1065,9 +1074,24 @@ class ApplicationReviewController extends Controller
             } elseif ($currentStage === Application::STAGE_DORMANT) {
                 $allowed[] = Application::STAGE_UNDER_REVIEW;
                 $allowed[] = Application::STAGE_CHALLAN_ISSUED;
+                if ($canRejectUnpaid) {
+                    $allowed[] = Application::STAGE_REJECTED;
+                }
             } elseif (in_array($currentStage, [Application::STAGE_APPROVED, 'directorate_approved'], true)) {
                 $allowed[] = Application::STAGE_CHALLAN_ISSUED;
                 $allowed[] = Application::STAGE_ELIGIBLE_BENEFICIARY;
+                if ($canRejectUnpaid) {
+                    $allowed[] = Application::STAGE_REJECTED;
+                }
+            } elseif (in_array($currentStage, [
+                Application::STAGE_CHALLAN_ISSUED,
+                Application::STAGE_PAYMENT_PROOF_SUBMITTED,
+                Application::STAGE_ELIGIBLE_BENEFICIARY,
+                Application::STAGE_STOCK_ALLOCATED,
+            ], true)) {
+                if ($canRejectUnpaid) {
+                    $allowed[] = Application::STAGE_REJECTED;
+                }
             }
         }
 
@@ -1196,6 +1220,8 @@ class ApplicationReviewController extends Controller
             }
         }
 
+        $canEditChallanFee = $user->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
+
         // Track Application core attributes
         $appAttributes = [
             'district_id' => 'District ID',
@@ -1203,10 +1229,14 @@ class ApplicationReviewController extends Controller
             'approved_quantity' => 'Approved Quantity',
             'allocated_quantity' => 'Allocated Quantity',
             'distributed_quantity' => 'Distributed Quantity',
-            'challan_amount' => 'Challan Amount',
-            'challan_due_date' => 'Challan Due Date',
-            'verification_note' => 'Verification Note',
         ];
+
+        if ($canEditChallanFee) {
+            $appAttributes['challan_amount'] = 'Challan Amount';
+        }
+
+        $appAttributes['challan_due_date'] = 'Challan Due Date';
+        $appAttributes['verification_note'] = 'Verification Note';
 
         foreach ($appAttributes as $attr => $label) {
             $oldRaw = $application->{$attr};
@@ -1249,7 +1279,7 @@ class ApplicationReviewController extends Controller
             return back()->with('info', 'No modifications were detected. All values remain unchanged.');
         }
 
-        DB::transaction(function () use ($application, $applicant, $request, $submittedFields, $oldValues, $newValues, $changedFields, $user) {
+        DB::transaction(function () use ($application, $applicant, $request, $submittedFields, $oldValues, $newValues, $changedFields, $user, $canEditChallanFee) {
             // 1. Update Applicant
             if ($applicant) {
                 $applicant->update([
@@ -1281,7 +1311,7 @@ class ApplicationReviewController extends Controller
                 'lock_version' => ($application->lock_version ?? 1) + 1,
             ];
 
-            if ($request->filled('challan_amount')) {
+            if ($canEditChallanFee && $request->filled('challan_amount')) {
                 $appUpdates['challan_amount'] = (int) ceil((float) $request->input('challan_amount'));
             }
 

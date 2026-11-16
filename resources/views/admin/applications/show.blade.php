@@ -902,7 +902,9 @@
             <div class="card alf-panel mb-3 border-info">
                 <div class="card-header bg-info-subtle text-info-emphasis d-flex justify-content-between align-items-center">
                     <span><i class="fa-solid fa-file-invoice-dollar me-1"></i> Challan & Payment</span>
-                    @if($application->current_stage === \App\Models\Application::STAGE_DORMANT)
+                    @if($application->isRejected())
+                        <span class="badge bg-danger">REJECTED / CHALLAN CANCELLED</span>
+                    @elseif($application->current_stage === \App\Models\Application::STAGE_DORMANT)
                         <span class="badge bg-secondary">DORMANT (EXPIRED)</span>
                     @elseif($application->payment_verified_at)
                         <span class="badge bg-success">PAYMENT VERIFIED</span>
@@ -991,7 +993,7 @@
                     </div>
 
                     <div class="d-flex gap-2 flex-wrap mb-2">
-                        @if($application->challan_no)
+                        @if($application->challan_no && ! $application->isRejected() && $application->current_stage !== \App\Models\Application::STAGE_DORMANT)
                             <a href="{{ route('applications.challan.download', $application->application_no) }}" class="btn btn-sm btn-outline-primary" target="_blank">
                                 <i class="fa-solid fa-download me-1"></i> Download Challan PDF
                             </a>
@@ -1001,7 +1003,7 @@
                                 <i class="fa-solid fa-receipt me-1"></i> View Payment Receipt
                             </a>
                         @endif
-                        @if(auth()->user()?->hasRole('Super Admin') && $activeBill?->status !== 'paid')
+                        @if(auth()->user()?->hasRole('Super Admin') && $activeBill?->status !== 'paid' && ! $application->isRejected())
                             <form method="POST" action="{{ route('admin.applications.generate-gbpay-bill', $application) }}" class="d-inline">
                                 @csrf
                                 <button type="submit" class="btn btn-sm btn-outline-dark">
@@ -1035,6 +1037,22 @@
                             </div>
                             <button type="submit" class="btn btn-sm btn-warning w-100">
                                 <i class="fa-solid fa-arrows-rotate me-1"></i> Reactivate & Reissue Challan (14 Days)
+                            </button>
+                        </form>
+                    @endif
+
+                    {{-- Reject Application with Unpaid Challan (DD Authority) --}}
+                    @if(! $application->isChallanPaid() && ! $application->isRejected() && in_array(\App\Models\Application::STAGE_REJECTED, $allowedTransitions, true))
+                        <form method="POST" action="{{ route('admin.applications.status', $application) }}" class="mt-2 pt-2 border-top">
+                            @csrf
+                            <input type="hidden" name="lock_version" value="{{ $application->lock_version }}">
+                            <input type="hidden" name="status" value="{{ \App\Models\Application::STAGE_REJECTED }}">
+                            <div class="mb-2">
+                                <label class="form-label small fw-bold text-danger">Reject Unpaid Application &amp; Cancel PSID</label>
+                                <textarea name="rejection_reason" class="form-control form-control-sm" rows="2" placeholder="Enter reason for rejecting this unpaid challan application..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100" onclick="return confirm('Reject this application and permanently cancel its unpaid challan & PSID?');">
+                                <i class="fa-solid fa-ban me-1"></i> Reject Application &amp; Cancel Challan / PSID
                             </button>
                         </form>
                     @endif

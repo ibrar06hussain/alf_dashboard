@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 154
+Total Prompts Logged: 160
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-15T14:26:26+05:00 (UTC: 2026-11-15T09:26:26Z)
-File Last Updated  : 2026-11-15 10:26:26 (PKT)
+Latest Prompt Date : 2026-11-16T16:55:13+05:00 (UTC: 2026-11-16T11:55:13Z)
+File Last Updated  : 2026-11-16 12:55:13 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -1855,6 +1855,56 @@ Date & Time (UTC)   : 2026-11-15T09:26:26Z
 Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
 --------------------------------------------------------------------------------
 explain the counts and stats in the MIS dashboard page, verify each no is calculated from the applications received, how the counts , totals, are calculated for each no
+
+--------------------------------------------------------------------------------
+PROMPT #155
+Date & Time (Local) : 2026-11-16T15:32:34+05:00
+Date & Time (UTC)   : 2026-11-16T10:32:34Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Check how the quota for each district is calculated and also check if the rejected applications are removed from approved quota or not
+
+--------------------------------------------------------------------------------
+PROMPT #156
+Date & Time (Local) : 2026-11-16T16:19:49+05:00
+Date & Time (UTC)   : 2026-11-16T11:19:49Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+on my online server in case of hunza district the directorate approved bags is 147 while the system while viewing applicant from dd login shows 150/150 150 / 150 Bags
+Approved / Disbursed vs quota for Hunza
+Quota full — further approvals blocked.
+
+--------------------------------------------------------------------------------
+PROMPT #157
+Date & Time (Local) : 2026-11-16T16:33:22+05:00
+Date & Time (UTC)   : 2026-11-16T11:33:22Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+In the dd login while editing applications don't allow the dd to change the Challan Fee
+
+--------------------------------------------------------------------------------
+PROMPT #158
+Date & Time (Local) : 2026-11-16T16:46:55+05:00
+Date & Time (UTC)   : 2026-11-16T11:46:55Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+if a challan is unpaid allow the deputy director login to reject that applicATION , ALSO don't accept payments for that challaqn from psid,Show rejection in the trAcking of that application and hide PREVIOUS CHALLAN DOWNLOADING
+
+--------------------------------------------------------------------------------
+PROMPT #159
+Date & Time (Local) : 2026-11-16T16:47:44+05:00
+Date & Time (UTC)   : 2026-11-16T11:47:44Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+INCLUDING THE PREVIOUSLY APPROVED APPLICATIONS
+
+--------------------------------------------------------------------------------
+PROMPT #160
+Date & Time (Local) : 2026-11-16T16:55:13+05:00
+Date & Time (UTC)   : 2026-11-16T11:55:13Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+CONTINUE
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             
