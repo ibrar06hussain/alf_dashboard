@@ -23,7 +23,9 @@ class GenerateHeadTestPsidsCommand extends Command
     protected $signature = 'gbpay:generate-head-test-psids
                             {--min-fee=5 : Minimum random fee in PKR}
                             {--max-fee=50 : Maximum random fee in PKR}
-                            {--applicants=5 : Number of first applicant records from DB to use}
+                            {--applicants=5 : Number of applicant records per scheme to use}
+                            {--offset=0 : Skip the first N applicant records before selecting}
+                            {--next : Select the next applicants who do not yet have an application on each test scheme}
                             {--validity-days=30 : Challan & PSID validity window in days}
                             {--dry-run : Preview schemes, applicants, and service codes without writing to database}';
 
@@ -112,21 +114,20 @@ class GenerateHeadTestPsidsCommand extends Command
         $minFee = max(1, (int) $this->option('min-fee'));
         $maxFee = max($minFee, (int) $this->option('max-fee'));
         $limit = max(1, (int) $this->option('applicants'));
+        $offset = max(0, (int) $this->option('offset'));
+        $nextOnly = (bool) $this->option('next');
         $validityDays = max(1, (int) $this->option('validity-days'));
         $dryRun = (bool) $this->option('dry-run');
 
-        $applicants = Applicant::with('district')->orderBy('id')->limit($limit)->get();
-        if ($applicants->isEmpty()) {
+        $totalApplicants = Applicant::count();
+        if ($totalApplicants === 0) {
             $this->error('No applicant records exist in the database.');
             return Command::FAILURE;
         }
 
-        if ($applicants->count() < $limit) {
-            $this->warn("Requested {$limit} applicants, found only {$applicants->count()} in database.");
-        }
-
         $fallbackDistrict = District::orderBy('id')->first();
-        if (! $fallbackDistrict && ! $applicants->first()->district_id) {
+        $firstApplicantWithDistrict = Applicant::whereNotNull('district_id')->orderBy('id')->first();
+        if (! $fallbackDistrict && ! $firstApplicantWithDistrict) {
             $this->error('No districts exist in the database to resolve district RCO.');
             return Command::FAILURE;
         }
@@ -137,13 +138,20 @@ class GenerateHeadTestPsidsCommand extends Command
             return Command::FAILURE;
         }
 
-        $this->info(($dryRun ? '[DRY RUN] ' : '') . 'Generating schemes, approvals, and real reserved PSIDs for ' . count(self::HEAD_DEFINITIONS) . ' account heads × ' . $applicants->count() . ' applicants...');
+        $this->info(($dryRun ? '[DRY RUN] ' : '') . 'Generating schemes, approvals, and real reserved PSIDs for ' . count(self::HEAD_DEFINITIONS) . " account heads × up to {$limit} applicants...");
 
         if ($dryRun) {
             $previewRows = [];
             foreach (self::HEAD_DEFINITIONS as $def) {
                 $dept = $departments[$def['dept_key']];
-                foreach ($applicants as $applicant) {
+                $existingScheme = Scheme::where('slug', $def['slug'])->first();
+                $schemeApplicants = $this->selectApplicantsForScheme($existingScheme, $limit, $offset, $nextOnly);
+
+                if ($schemeApplicants->count() < $limit) {
+                    $this->warn("Head {$def['head']}: requested {$limit} applicants, found {$schemeApplicants->count()}.");
+                }
+
+                foreach ($schemeApplicants as $applicant) {
                     $dist = $applicant->district ?? $fallbackDistrict;
                     $previewRows[] = [
                         $def['head'],
@@ -230,7 +238,12 @@ class GenerateHeadTestPsidsCommand extends Command
                 ]
             );
 
-            foreach ($applicants as $applicant) {
+            $schemeApplicants = $this->selectApplicantsForScheme($scheme, $limit, $offset, $nextOnly);
+            if ($schemeApplicants->count() < $limit) {
+                $this->warn("Head {$def['head']}: requested {$limit} applicants, found {$schemeApplicants->count()}.");
+            }
+
+            foreach ($schemeApplicants as $applicant) {
                 $dist = $applicant->district ?? $fallbackDistrict;
                 $districtId = $dist->id;
 
@@ -418,5 +431,27 @@ class GenerateHeadTestPsidsCommand extends Command
             'livestock' => $livestock,
             'fisheries' => $fisheries,
         ];
+    }
+
+    /**
+     * Select applicants for a test scheme, optionally skipping applicants already enrolled in that scheme.
+     */
+    private function selectApplicantsForScheme(?Scheme $scheme, int $limit, int $offset, bool $nextOnly)
+    {
+        $query = Applicant::with('district')->orderBy('id');
+
+        if ($nextOnly && $scheme) {
+            $query->whereNotIn('id', function ($sub) use ($scheme) {
+                $sub->select('applicant_id')
+                    ->from('applications')
+                    ->where('scheme_id', $scheme->id);
+            });
+        }
+
+        if ($offset > 0) {
+            $query->skip($offset);
+        }
+
+        return $query->limit($limit)->get();
     }
 }

@@ -163,4 +163,57 @@ class GenerateHeadTestPsidsCommandTest extends TestCase
             }
         }
     }
+
+    public function test_next_flag_generates_new_batch_of_psids_with_configured_fee_range(): void
+    {
+        for ($i = 7; $i <= 11; $i++) {
+            $suffix = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            Applicant::create([
+                'cnic' => '71501000000' . $suffix,
+                'full_name' => "DB Applicant {$i}",
+                'father_name' => "Father {$i}",
+                'phone' => '034500000' . $suffix,
+                'phone_verified' => true,
+                'district_id' => $i % 2 === 0 ? $this->hunza->id : $this->gilgit->id,
+            ]);
+        }
+
+        $existingCsvs = glob(storage_path('app/gbpay_head_test_psids_*.csv')) ?: [];
+
+        try {
+            // Batch 1 for first 5 applicants
+            $this->artisan('gbpay:generate-head-test-psids')
+                ->assertSuccessful();
+            $this->assertSame(45, Bill::count());
+            $batch1MaxSerial = (int) VoucherSerial::max('serial_no');
+
+            // Batch 2 using --next and PKR 5..25
+            $this->artisan('gbpay:generate-head-test-psids --next --min-fee=5 --max-fee=25')
+                ->assertSuccessful();
+
+            $this->assertSame(9, Scheme::count());
+            $this->assertSame(90, Application::count());
+            $this->assertSame(90, Bill::count());
+            $this->assertSame(90, VoucherSerial::count());
+
+            $newBills = Bill::with('application')->where('voucher_serial', '>', $batch1MaxSerial)->get();
+            $this->assertCount(45, $newBills);
+            $this->assertCount(90, Bill::pluck('psid')->unique());
+
+            $eleventhApplicant = Applicant::where('cnic', '7150100000011')->firstOrFail();
+            $this->assertSame(0, Application::where('applicant_id', $eleventhApplicant->id)->count());
+
+            foreach ($newBills as $bill) {
+                $amount = (float) $bill->bill_amount;
+                $this->assertGreaterThanOrEqual(5, $amount);
+                $this->assertLessThanOrEqual(25, $amount);
+                $this->assertSame('directorate_approved', $bill->application->status);
+            }
+        } finally {
+            $afterCsvs = glob(storage_path('app/gbpay_head_test_psids_*.csv')) ?: [];
+            foreach (array_diff($afterCsvs, $existingCsvs) as $csvPath) {
+                @unlink($csvPath);
+            }
+        }
+    }
 }
