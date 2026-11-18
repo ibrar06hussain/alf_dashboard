@@ -203,5 +203,76 @@ class UserMultipleRolesAndPagePermissionsTest extends TestCase
         $this->assertNotNull($user);
         $this->assertTrue($user->hasRole('District Deputy Director'));
     }
+
+    public function test_admin_users_index_can_filter_by_role_user_department_district_and_status(): void
+    {
+        $livestockDept = Department::create([
+            'name' => 'Livestock Filter Dept',
+            'slug' => 'livestock-filter-dept',
+            'is_active' => true,
+            'display_order' => 2,
+        ]);
+
+        $foGilgit = User::factory()->create([
+            'name' => 'Karim Field Officer',
+            'email' => 'karim.fo@alf.gb.gov.pk',
+            'department_id' => $this->agriDept->id,
+            'district_id' => $this->gilgitDist->id,
+            'is_active' => true,
+        ]);
+        $foGilgit->assignRole('Field Officer');
+
+        $aoDiamer = User::factory()->create([
+            'name' => 'Salma Accounts Inactive',
+            'email' => 'salma.ao@alf.gb.gov.pk',
+            'department_id' => $livestockDept->id,
+            'district_id' => $this->diamerDist->id,
+            'is_active' => false,
+        ]);
+        $aoDiamer->assignRole('Accounts Officer');
+
+        // Filter by role
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.users.index', ['role' => 'Field Officer']))
+            ->assertOk()
+            ->assertSee('Karim Field Officer')
+            ->assertDontSee('Salma Accounts Inactive');
+
+        // Filter by user name/email search
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.users.index', ['q' => 'salma.ao']))
+            ->assertOk()
+            ->assertSee('Salma Accounts Inactive')
+            ->assertDontSee('Karim Field Officer');
+
+        // Filter by department_id
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.users.index', ['department_id' => $livestockDept->id]))
+            ->assertOk()
+            ->assertSee('Salma Accounts Inactive')
+            ->assertDontSee('Karim Field Officer');
+
+        // Filter by district_id
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.users.index', ['district_id' => $this->diamerDist->id]))
+            ->assertOk()
+            ->assertSee('Salma Accounts Inactive')
+            ->assertDontSee('Karim Field Officer');
+
+        // Filter by status = inactive
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.users.index', ['status' => 'inactive']))
+            ->assertOk()
+            ->assertSee('Salma Accounts Inactive')
+            ->assertDontSee('Karim Field Officer');
+
+        // Filter with AJAX header
+        $this->actingAs($this->superAdmin)
+            ->withHeader('X-Alf-Ajax-Pagination', '1')
+            ->get(route('admin.users.index', ['role' => 'Accounts Officer', 'status' => 'inactive']))
+            ->assertOk()
+            ->assertSee('Salma Accounts Inactive')
+            ->assertDontSee('Karim Field Officer');
+    }
 }
 

@@ -151,6 +151,16 @@
             return;
         }
 
+        var resetLink = e.target.closest('a[data-ajax-reset][href]');
+        if (resetLink) {
+            var resetContainer = findPaginationContainer(resetLink) || resetLink.closest('.card, .alf-panel, section');
+            if (resetContainer) {
+                e.preventDefault();
+                loadPageInPlace(resetLink.href, resetContainer, 0, resetContainer.id || '', true);
+                return;
+            }
+        }
+
         var link = e.target.closest('.pagination a[href], nav[role="navigation"] a[href]');
         if (!link || link.getAttribute('target') === '_blank') return;
 
@@ -178,6 +188,25 @@
         var containerId = container.id || '';
 
         loadPageInPlace(link.href, container, pagIndex, containerId, true);
+    });
+
+    document.addEventListener('submit', function (e) {
+        var form = e.target.closest('form[data-ajax-filter]');
+        if (!form || e.defaultPrevented) return;
+        var container = form.closest('[data-ajax-pagination], .card, .alf-panel, .tab-pane, #directory-section, section');
+        if (!container) return;
+
+        e.preventDefault();
+        var actionUrl = form.getAttribute('action') || window.location.pathname;
+        var urlObj = new URL(actionUrl, window.location.origin);
+        var params = new URLSearchParams();
+        new FormData(form).forEach(function (val, key) {
+            if (String(val).trim() !== '') {
+                params.append(key, String(val));
+            }
+        });
+        urlObj.search = params.toString();
+        loadPageInPlace(urlObj.toString(), container, 0, container.id || '', true);
     });
 
     window.addEventListener('popstate', function (e) {

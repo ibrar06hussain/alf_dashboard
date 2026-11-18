@@ -16,8 +16,68 @@
 
 @include('admin.partials.stats', ['stats' => $pageStats])
 
-<div class="card alf-panel mb-3">
+<div class="card alf-panel mb-3" id="admin-users-card">
     <div class="card-body">
+        <form method="GET" action="{{ route('admin.users.index') }}" data-ajax-filter="true" class="mb-3 pb-3 border-bottom">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1 fw-semibold">Search User</label>
+                    <input type="text" name="q" value="{{ request('q') }}" class="form-control form-control-sm"
+                        placeholder="Name, email, office, or designation...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1 fw-semibold">Role</label>
+                    <select name="role" class="form-select form-select-sm">
+                        <option value="">All Roles</option>
+                        @foreach($roles as $role)
+                            <option value="{{ $role->name }}" @selected(request('role') === $role->name)>{{ $role->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1 fw-semibold">Department</label>
+                    <select name="department_id" class="form-select form-select-sm">
+                        <option value="">All Departments</option>
+                        @foreach($departments as $dept)
+                            <option value="{{ $dept->id }}" @selected((string) request('department_id') === (string) $dept->id)>{{ $dept->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1 fw-semibold">District</label>
+                    <select name="district_id" class="form-select form-select-sm">
+                        <option value="">All Districts</option>
+                        @foreach($districts as $dist)
+                            <option value="{{ $dist->id }}" @selected((string) request('district_id') === (string) $dist->id)>{{ $dist->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small text-muted mb-1 fw-semibold">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="active" @selected(request('status') === 'active')>Active</option>
+                        <option value="inactive" @selected(request('status') === 'inactive')>Inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-sm btn-primary flex-fill fw-semibold">
+                        <i class="fa-solid fa-filter me-1"></i> Filter
+                    </button>
+                    @if(request()->hasAny(['q', 'role', 'department_id', 'district_id', 'status']))
+                        <a href="{{ route('admin.users.index') }}" class="btn btn-sm btn-outline-secondary" data-ajax-reset="true" title="Reset filters">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </a>
+                    @endif
+                </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <small class="text-muted">
+                    Showing <strong>{{ $users->firstItem() ?? 0 }}–{{ $users->lastItem() ?? 0 }}</strong> of <strong>{{ $users->total() }}</strong> user(s)
+                </small>
+            </div>
+        </form>
+
         <div class="table-responsive">
             <table class="table alf-table align-middle">
                 <thead>
@@ -81,7 +141,7 @@
                                     $authDepts = $user->authorizedDepartmentIds();
                                     $authDistricts = $user->authorizedDistrictIds();
                                     $isAllDistricts = count($authDistricts) >= 10;
-                                    $divNames = \App\Models\Division::whereIn('id', $user->authorizedDivisionIds())->pluck('name')->all();
+                                    $divNames = collect($user->authorizedDivisionIds())->map(fn ($id) => $divNameMap[$id] ?? null)->filter()->values()->all();
                                 @endphp
                                 @if($user->isGlobalScope())
                                     <span class="badge bg-purple-subtle text-purple"><i class="fa-solid fa-globe me-1"></i>Global Scope</span>
@@ -90,7 +150,7 @@
                                         <div class="mb-1 text-dark">
                                             <i class="fa-solid fa-building-columns text-primary me-1"></i>
                                             @php
-                                                $deptNames = \App\Models\Department::whereIn('id', $authDepts)->pluck('name');
+                                                $deptNames = collect($authDepts)->map(fn ($id) => $deptNameMap[$id] ?? null)->filter();
                                             @endphp
                                             <strong>{{ $deptNames->implode(', ') }}</strong>
                                         </div>
@@ -103,7 +163,7 @@
                                         <div class="text-dark">
                                             <i class="fa-solid fa-location-dot text-success me-1"></i>
                                             @php
-                                                $distNames = \App\Models\District::whereIn('id', $authDistricts)->pluck('name');
+                                                $distNames = collect($authDistricts)->map(fn ($id) => $distNameMap[$id] ?? null)->filter();
                                             @endphp
                                             {{ $distNames->implode(', ') }}
                                         </div>

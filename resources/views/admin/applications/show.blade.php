@@ -933,9 +933,7 @@
                         @if($diff != 0)
                             <div class="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-1">
                                 <i class="fa-solid fa-triangle-exclamation"></i>
-                                <span>Adjusted by Officer: <strong>{{ $diff > 0 ? '+' . $diff : $diff }}
-                                        {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong> vs
-                                    demand.</span>
+                                <span>Adjusted by Officer: <strong>{{ ($diff > 0 ? '+' . $diff : $diff) . ' ' . ($application->scheme?->stockItems?->first()?->unit ?? 'Bags') }}</strong> vs demand.</span>
                             </div>
                         @endif
                     @endif

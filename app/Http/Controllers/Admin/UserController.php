@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\UserOfficeAssignment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -22,25 +23,103 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $users = User::with(['roles', 'permissions', 'department:id,name', 'district:id,name', 'activeOfficeAssignments.office', 'activeOfficeAssignments.role'])
-            ->latest()
-            ->paginate(25);
+        $isAjaxPagination = (bool) $request->header('X-Alf-Ajax-Pagination');
 
-        $userAgg = User::toBase()->selectRaw("
-            COUNT(*) as total_users,
-            COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) as active_users
-        ")->first();
+        $query = User::with(['roles', 'permissions', 'department:id,name', 'district:id,name', 'activeOfficeAssignments.office', 'activeOfficeAssignments.role'])
+            ->latest();
 
-        $pageStats = [
-            ['label' => 'Users', 'value' => (int) ($userAgg->total_users ?? 0), 'icon' => 'fa-solid fa-users', 'tone' => 'green'],
-            ['label' => 'Active', 'value' => (int) ($userAgg->active_users ?? 0), 'icon' => 'fa-solid fa-user-check', 'tone' => 'teal'],
-            ['label' => 'Assignments', 'value' => UserOfficeAssignment::where('is_active', true)->count(), 'icon' => 'fa-solid fa-building-user', 'tone' => 'amber'],
-            ['label' => 'Roles', 'value' => Role::count(), 'icon' => 'fa-solid fa-user-shield', 'tone' => 'blue'],
-        ];
+        if ($request->filled('q')) {
+            $q = trim((string) $request->input('q'));
+            $query->where(function ($sub) use ($q) {
+                $sub->where('name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%")
+                    ->orWhereHas('activeOfficeAssignments', function ($aq) use ($q) {
+                        $aq->where('designation', 'like', "%{$q}%")
+                            ->orWhereHas('office', fn ($oq) => $oq->where('name', 'like', "%{$q}%"));
+                    });
+            });
+        }
 
-        return view('admin.users.index', compact('users', 'pageStats'));
+        if ($request->filled('role')) {
+            $roleName = trim((string) $request->input('role'));
+            $query->whereHas('roles', fn ($rq) => $rq->where('name', $roleName));
+        }
+
+        if ($request->filled('department_id')) {
+            $deptId = $request->integer('department_id');
+            $query->where(function ($sub) use ($deptId) {
+                $sub->where('department_id', $deptId)
+                    ->orWhereHas('activeOfficeAssignments', fn ($aq) => $aq->where('department_id', $deptId));
+            });
+        }
+
+        if ($request->filled('district_id')) {
+            $distId = $request->integer('district_id');
+            $divisionIdsForDistrict = DB::table('division_districts')
+                ->where('district_id', $distId)
+                ->pluck('division_id')
+                ->all();
+
+            $query->where(function ($sub) use ($distId, $divisionIdsForDistrict) {
+                $sub->where('district_id', $distId)
+                    ->orWhereHas('activeOfficeAssignments', function ($aq) use ($distId, $divisionIdsForDistrict) {
+                        $aq->where('district_id', $distId);
+                        if (! empty($divisionIdsForDistrict)) {
+                            $aq->orWhere(function ($dq) use ($divisionIdsForDistrict) {
+                                $dq->whereNull('district_id')
+                                    ->whereIn('division_id', $divisionIdsForDistrict);
+                            });
+                        }
+                    });
+            });
+        }
+
+        if ($request->filled('status')) {
+            $status = strtolower(trim((string) $request->input('status')));
+            if (in_array($status, ['active', '1'], true)) {
+                $query->where('is_active', true);
+            } elseif (in_array($status, ['inactive', '0'], true)) {
+                $query->where('is_active', false);
+            }
+        }
+
+        $users = $query->paginate(25)->withQueryString();
+
+        $roles = Role::orderBy('name')->get(['id', 'name']);
+        $departments = Department::orderBy('display_order')->get(['id', 'name']);
+        $districts = District::orderBy('name')->get(['id', 'name']);
+        $deptNameMap = $departments->pluck('name', 'id');
+        $distNameMap = $districts->pluck('name', 'id');
+        $divNameMap = Division::pluck('name', 'id');
+
+        if ($isAjaxPagination) {
+            $pageStats = [];
+        } else {
+            $userAgg = User::toBase()->selectRaw("
+                COUNT(*) as total_users,
+                COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) as active_users
+            ")->first();
+
+            $pageStats = [
+                ['label' => 'Users', 'value' => (int) ($userAgg->total_users ?? 0), 'icon' => 'fa-solid fa-users', 'tone' => 'green'],
+                ['label' => 'Active', 'value' => (int) ($userAgg->active_users ?? 0), 'icon' => 'fa-solid fa-user-check', 'tone' => 'teal'],
+                ['label' => 'Assignments', 'value' => UserOfficeAssignment::where('is_active', true)->count(), 'icon' => 'fa-solid fa-building-user', 'tone' => 'amber'],
+                ['label' => 'Roles', 'value' => $roles->count(), 'icon' => 'fa-solid fa-user-shield', 'tone' => 'blue'],
+            ];
+        }
+
+        return view('admin.users.index', compact(
+            'users',
+            'pageStats',
+            'roles',
+            'departments',
+            'districts',
+            'deptNameMap',
+            'distNameMap',
+            'divNameMap'
+        ));
     }
 
     public function create(): View
