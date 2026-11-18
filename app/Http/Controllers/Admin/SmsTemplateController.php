@@ -21,12 +21,9 @@ class SmsTemplateController extends Controller
 
     public function index(Request $request): View
     {
-        $templates = SmsTemplate::with('scheme')
-            ->withCount('logs')
-            ->orderBy('id')
-            ->get();
+        $isAjaxPagination = (bool) $request->header('X-Alf-Ajax-Pagination');
 
-        $logsQuery = SmsLog::with(['application', 'template', 'sender'])->latest();
+        $logsQuery = SmsLog::with(['application:id,application_no', 'template:id,name', 'sender:id,name'])->latest();
 
         if ($request->filled('event_key')) {
             $logsQuery->where('event_key', $request->string('event_key'));
@@ -48,32 +45,62 @@ class SmsTemplateController extends Controller
         $gatewayConfig = $this->smsService->getConfig();
         $eventLabels = SmsTemplate::eventLabels();
 
-        $stats = [
-            'total_templates' => $templates->count(),
-            'active_templates' => $templates->where('is_active', true)->count(),
-            'total_sent' => SmsLog::where('status', 'sent')->count(),
-            'total_simulated' => SmsLog::where('status', 'simulated')->count(),
-            'total_failed' => SmsLog::where('status', 'failed')->count(),
-        ];
+        if ($isAjaxPagination) {
+            $templates = collect();
+            $stats = [
+                'total_templates' => 0,
+                'active_templates' => 0,
+                'total_sent' => 0,
+                'total_simulated' => 0,
+                'total_failed' => 0,
+            ];
+            $applicants = collect();
+            $districts = collect();
+            $schemes = collect();
+            $tehsils = collect();
+            $operators = ZongSmsService::supportedOperators();
+            $networkCodePresets = ZongSmsService::networkCodePresets();
+        } else {
+            $templates = SmsTemplate::with('scheme:id,title')
+                ->withCount('logs')
+                ->orderBy('id')
+                ->get();
 
-        $applicants = Applicant::with([
-            'district',
-            'applications' => fn ($q) => $q->with('scheme')->latest('id'),
-        ])
-            ->whereNotNull('phone')
-            ->where('phone', '!=', '')
-            ->orderBy('full_name')
-            ->get();
+            $logAgg = SmsLog::toBase()->selectRaw("
+                COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0) as total_sent,
+                COALESCE(SUM(CASE WHEN status = 'simulated' THEN 1 ELSE 0 END), 0) as total_simulated,
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as total_failed
+            ")->first();
 
-        $districts = District::orderBy('name')->get();
-        $schemes = Scheme::orderBy('title')->get();
-        $tehsils = $applicants->pluck('tehsil')
-            ->filter(fn ($t) => ! empty(trim((string) $t)))
-            ->map(fn ($t) => trim((string) $t))
-            ->unique(fn ($t) => strtolower($t))
-            ->sort()
-            ->values();
-        $operators = ZongSmsService::supportedOperators();
+            $stats = [
+                'total_templates' => $templates->count(),
+                'active_templates' => $templates->where('is_active', true)->count(),
+                'total_sent' => (int) ($logAgg->total_sent ?? 0),
+                'total_simulated' => (int) ($logAgg->total_simulated ?? 0),
+                'total_failed' => (int) ($logAgg->total_failed ?? 0),
+            ];
+
+            $applicants = Applicant::with([
+                'district:id,name',
+                'applications' => fn ($q) => $q->select(['id', 'applicant_id', 'scheme_id'])->with('scheme:id,title')->latest('id'),
+            ])
+                ->select(['id', 'full_name', 'cnic', 'phone', 'tehsil', 'district_id'])
+                ->whereNotNull('phone')
+                ->where('phone', '!=', '')
+                ->orderBy('full_name')
+                ->get();
+
+            $districts = District::orderBy('name')->get(['id', 'name']);
+            $schemes = Scheme::orderBy('title')->get(['id', 'title']);
+            $tehsils = $applicants->pluck('tehsil')
+                ->filter(fn ($t) => ! empty(trim((string) $t)))
+                ->map(fn ($t) => trim((string) $t))
+                ->unique(fn ($t) => strtolower($t))
+                ->sort()
+                ->values();
+            $operators = ZongSmsService::supportedOperators();
+            $networkCodePresets = ZongSmsService::networkCodePresets();
+        }
 
         return view('admin.sms-templates.index', compact(
             'templates',
@@ -85,7 +112,8 @@ class SmsTemplateController extends Controller
             'districts',
             'schemes',
             'tehsils',
-            'operators'
+            'operators',
+            'networkCodePresets'
         ));
     }
 
@@ -162,6 +190,8 @@ class SmsTemplateController extends Controller
 
     public function updateGateway(Request $request): RedirectResponse
     {
+        $allowedOperators = implode(',', array_keys(ZongSmsService::supportedOperators()));
+
         $data = $request->validate([
             'sms_enabled' => ['nullable'],
             'zong_cbs_api_mode' => ['required', 'in:rest,rest_encoded,soap'],
@@ -171,7 +201,28 @@ class SmsTemplateController extends Controller
             'zong_cbs_login_password' => ['nullable', 'string', 'max:255'],
             'zong_cbs_mask' => ['required', 'string', 'max:50'],
             'zong_cbs_shortcode_preferred' => ['required', 'in:N,Y,n,y'],
+            'sms_send_language' => ['nullable', 'in:template,en,ur,both'],
+            'sms_barred_operators' => ['nullable', 'array'],
+            'sms_barred_operators.*' => ['string', "in:{$allowedOperators}"],
+            'sms_barred_network_codes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        $rawNetworkCodes = trim((string) ($data['sms_barred_network_codes'] ?? ''));
+        $parsedNetworkCodes = [];
+        if ($rawNetworkCodes !== '') {
+            $tokens = preg_split('/[\s,;]+/', $rawNetworkCodes, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach ($tokens as $token) {
+                $normalizedCode = ZongSmsService::normalizeSingleNetworkCode($token);
+                if ($normalizedCode === null) {
+                    return back()
+                        ->withErrors(['sms_barred_network_codes' => "Invalid cellular network code '{$token}'. Enter 4-digit codes such as 0355, 0345, or 0314."])
+                        ->withInput();
+                }
+                if (! in_array($normalizedCode, $parsedNetworkCodes, true)) {
+                    $parsedNetworkCodes[] = $normalizedCode;
+                }
+            }
+        }
 
         SiteSetting::updateOrCreate(
             ['key' => 'sms_enabled'],
@@ -209,6 +260,26 @@ class SmsTemplateController extends Controller
             ['key' => 'zong_cbs_shortcode_preferred'],
             ['value' => strtoupper($data['zong_cbs_shortcode_preferred']), 'label' => 'Short Code Preferred', 'group' => 'sms']
         );
+        if (! empty($data['sms_send_language'])) {
+            SiteSetting::updateOrCreate(
+                ['key' => 'sms_send_language'],
+                ['value' => $data['sms_send_language'], 'label' => 'Status Change SMS Language', 'group' => 'sms']
+            );
+        }
+        if ($request->boolean('sms_barring_submitted') || $request->has('sms_barred_operators')) {
+            $barredOps = array_values(array_unique($data['sms_barred_operators'] ?? []));
+            SiteSetting::updateOrCreate(
+                ['key' => 'sms_barred_operators'],
+                ['value' => implode(',', $barredOps), 'label' => 'Barred Mobile Networks (Automated SMS)', 'group' => 'sms']
+            );
+        }
+        if ($request->boolean('sms_barring_submitted') || $request->has('sms_barred_network_codes')) {
+            SiteSetting::updateOrCreate(
+                ['key' => 'sms_barred_network_codes'],
+                ['value' => implode(',', $parsedNetworkCodes), 'label' => 'Barred 4-Digit Network Codes (Automated SMS)', 'group' => 'sms']
+            );
+        }
+        SiteSetting::flushCache();
 
         return back()->with('success', 'Zong 4G CBS SMS Gateway configuration updated successfully.');
     }
@@ -445,7 +516,7 @@ class SmsTemplateController extends Controller
         $data = $request->validate([
             'event_key' => ['nullable', 'string', 'max:80'],
             'custom_message' => ['nullable', 'string', 'max:1500'],
-            'language' => ['nullable', 'in:en,ur,both'],
+            'language' => ['nullable', 'in:template,en,ur,both'],
         ]);
 
         $application->loadMissing(['applicant', 'scheme.department', 'district', 'bills']);
@@ -471,7 +542,8 @@ class SmsTemplateController extends Controller
         }
 
         $eventKey = $data['event_key'] ?: ($application->current_stage ?: 'submitted');
-        $logs = $this->smsService->sendForApplicationEvent($application, $eventKey, [], auth()->id(), false);
+        $languageOverride = in_array($data['language'] ?? null, ['en', 'ur', 'both'], true) ? $data['language'] : null;
+        $logs = $this->smsService->sendForApplicationEvent($application, $eventKey, [], auth()->id(), false, $languageOverride, true);
 
         if (empty($logs)) {
             return back()->with('error', "No active SMS template found for event '{$eventKey}'. Enable or create a template in SMS Templates.");

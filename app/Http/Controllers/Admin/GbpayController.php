@@ -24,11 +24,14 @@ class GbpayController extends Controller
      */
     public function index(Request $request): View
     {
-        $psidConfig = PsidConfig::getActive();
-        $credentials = GbpayApiCredential::orderByDesc('created_at')->get();
+        $isAjaxPagination = (bool) $request->header('X-Alf-Ajax-Pagination');
 
-        $billsQuery = Bill::with(['application.applicant', 'application.scheme', 'application.district'])
-            ->orderByDesc('bill_id');
+        $billsQuery = Bill::with([
+            'application:id,application_no,challan_no,applicant_id,scheme_id,district_id',
+            'application.applicant:id,full_name,cnic',
+            'application.scheme:id,title',
+            'application.district:id,name',
+        ])->orderByDesc('bill_id');
 
         if ($request->filled('status')) {
             $billsQuery->where('status', $request->string('status'));
@@ -53,26 +56,51 @@ class GbpayController extends Controller
 
         $bills = $billsQuery->paginate(15)->withQueryString();
 
-        // Calculate summary metrics strictly from the bills table
-        $stats = [
-            'total_bills' => Bill::count(),
-            'paid_bills' => Bill::where('status', 'paid')->count(),
-            'pending_bills' => Bill::where('status', 'pending')->count(),
-            'total_paid_amount' => (int) ceil((float) Bill::where('status', 'paid')->sum('bill_amount')),
-            'total_pending_amount' => (int) ceil((float) Bill::where('status', 'pending')->sum('bill_amount')),
-        ];
+        $psidConfig = PsidConfig::getActive();
 
-        $recentLogs = GbpayResponse::with('bill.application')
-            ->orderByDesc('response_id')
-            ->limit(25)
-            ->get();
+        if ($isAjaxPagination) {
+            $credentials = collect();
+            $stats = [
+                'total_bills' => 0,
+                'paid_bills' => 0,
+                'pending_bills' => 0,
+                'total_paid_amount' => 0,
+                'total_pending_amount' => 0,
+            ];
+            $recentLogs = collect();
+            $schemePsidConfigs = collect();
+            $schemes = collect();
+        } else {
+            $credentials = GbpayApiCredential::orderByDesc('created_at')->get();
 
-        $schemePsidConfigs = PsidConfig::with('scheme.department')
-            ->whereNotNull('scheme_id')
-            ->orderBy('config_id')
-            ->get();
+            $billAgg = Bill::toBase()->selectRaw("
+                COUNT(*) as total_bills,
+                COALESCE(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END), 0) as paid_bills,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending_bills,
+                COALESCE(SUM(CASE WHEN status = 'paid' THEN bill_amount ELSE 0 END), 0) as total_paid_amount,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN bill_amount ELSE 0 END), 0) as total_pending_amount
+            ")->first();
 
-        $schemes = Scheme::with('department')->orderBy('title')->get();
+            $stats = [
+                'total_bills' => (int) ($billAgg->total_bills ?? 0),
+                'paid_bills' => (int) ($billAgg->paid_bills ?? 0),
+                'pending_bills' => (int) ($billAgg->pending_bills ?? 0),
+                'total_paid_amount' => (int) ceil((float) ($billAgg->total_paid_amount ?? 0)),
+                'total_pending_amount' => (int) ceil((float) ($billAgg->total_pending_amount ?? 0)),
+            ];
+
+            $recentLogs = GbpayResponse::with('bill.application:id,application_no')
+                ->orderByDesc('response_id')
+                ->limit(25)
+                ->get();
+
+            $schemePsidConfigs = PsidConfig::with('scheme.department')
+                ->whereNotNull('scheme_id')
+                ->orderBy('config_id')
+                ->get();
+
+            $schemes = Scheme::with('department')->orderBy('title')->get();
+        }
 
         return view('admin.gbpay.index', compact(
             'psidConfig',

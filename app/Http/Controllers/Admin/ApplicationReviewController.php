@@ -31,15 +31,16 @@ class ApplicationReviewController extends Controller
     public function index(Request $request): View
     {
         $user = auth()->user();
-        $query = $this->filteredQuery($request);
+        $isAjaxPagination = (bool) $request->header('X-Alf-Ajax-Pagination');
+        $query = $this->filteredQuery($request, true);
 
         $departments = Department::when(! $user->isGlobalScope() && ! empty($user->authorizedDepartmentIds()), function ($q) use ($user) {
             $q->whereIn('id', $user->authorizedDepartmentIds());
-        })->orderBy('display_order')->get();
+        })->orderBy('display_order')->get(['id', 'name']);
 
         $districts = District::when(! $user->isGlobalScope() && ! empty($user->authorizedDistrictIds()), function ($q) use ($user) {
             $q->whereIn('id', $user->authorizedDistrictIds());
-        })->orderBy('name')->get();
+        })->orderBy('name')->get(['id', 'name']);
 
         $schemes = Scheme::when(! $user->isGlobalScope(), function ($q) use ($user) {
             $authorizedDepts = $user->authorizedDepartmentIds();
@@ -60,70 +61,84 @@ class ApplicationReviewController extends Controller
         $isFieldOfficer = $user->hasRole('Field Officer') && ! $user->hasRole('Super Admin');
         $pendingCount = null;
         $completedCount = null;
+        $pageStats = [];
 
-        if ($isFieldOfficer) {
-            $baseFoQuery = Application::query()->authorizedFor($user);
+        if (! $isAjaxPagination) {
+            if ($isFieldOfficer) {
+                $baseFoQuery = Application::query()->authorizedFor($user);
 
-            $pendingCount = (clone $baseFoQuery)->where(function ($sub) use ($user) {
-                $sub->where(function ($sqSub) use ($user) {
+                $pendingCount = (clone $baseFoQuery)->where(function ($sub) use ($user) {
+                    $sub->where(function ($sqSub) use ($user) {
+                        $sqSub->whereHas('surveys', function ($sq) use ($user) {
+                            $sq->where('assigned_to', $user->id)
+                               ->whereNotIn('status', ['findings_submitted']);
+                        })->whereIn('current_stage', [
+                            Application::STAGE_FIELD_SURVEY_ASSIGNED,
+                            Application::STAGE_VISIT_SCHEDULED,
+                            Application::STAGE_VISIT_COMPLETED,
+                        ]);
+                    })->orWhere(function ($aqSub) use ($user) {
+                        $aqSub->whereHas('assignments', function ($aq) use ($user) {
+                            $aq->where('assigned_to', $user->id)
+                               ->whereIn('status', ['assigned', 'in_progress']);
+                        })->whereNotIn('current_stage', [
+                            Application::STAGE_FINDINGS_SUBMITTED,
+                            Application::STAGE_APPROVED,
+                            Application::STAGE_REJECTED,
+                            Application::STAGE_COMPLETED,
+                            Application::STAGE_CHALLAN_ISSUED,
+                            Application::STAGE_PAYMENT_VERIFIED,
+                            Application::STAGE_ELIGIBLE_BENEFICIARY,
+                            Application::STAGE_PARTIALLY_DISTRIBUTED,
+                            Application::STAGE_FULLY_DISTRIBUTED,
+                            Application::STAGE_DISBURSED,
+                        ]);
+                    });
+                })->count();
+
+                $scheduledCount = (clone $baseFoQuery)->where(function ($sqSub) use ($user) {
                     $sqSub->whereHas('surveys', function ($sq) use ($user) {
                         $sq->where('assigned_to', $user->id)
-                           ->whereNotIn('status', ['findings_submitted']);
-                    })->whereIn('current_stage', [
-                        Application::STAGE_FIELD_SURVEY_ASSIGNED,
-                        Application::STAGE_VISIT_SCHEDULED,
-                        Application::STAGE_VISIT_COMPLETED,
-                    ]);
-                })->orWhere(function ($aqSub) use ($user) {
-                    $aqSub->whereHas('assignments', function ($aq) use ($user) {
+                           ->where('status', 'visit_scheduled');
+                    })->orWhere('current_stage', Application::STAGE_VISIT_SCHEDULED);
+                })->count();
+
+                $completedCount = (clone $baseFoQuery)->where(function ($sub) use ($user) {
+                    $sub->whereHas('surveys', function ($sq) use ($user) {
+                        $sq->where('assigned_to', $user->id)
+                           ->where('status', 'findings_submitted');
+                    })->orWhereHas('assignments', function ($aq) use ($user) {
                         $aq->where('assigned_to', $user->id)
-                           ->whereIn('status', ['assigned', 'in_progress']);
-                    })->whereNotIn('current_stage', [
-                        Application::STAGE_FINDINGS_SUBMITTED,
-                        Application::STAGE_APPROVED,
-                        Application::STAGE_REJECTED,
-                        Application::STAGE_COMPLETED,
-                        Application::STAGE_CHALLAN_ISSUED,
-                        Application::STAGE_PAYMENT_VERIFIED,
-                        Application::STAGE_ELIGIBLE_BENEFICIARY,
-                        Application::STAGE_PARTIALLY_DISTRIBUTED,
-                        Application::STAGE_FULLY_DISTRIBUTED,
-                        Application::STAGE_DISBURSED,
-                    ]);
-                });
-            })->count();
+                           ->where('status', 'completed');
+                    });
+                })->count();
 
-            $scheduledCount = (clone $baseFoQuery)->where(function ($sqSub) use ($user) {
-                $sqSub->whereHas('surveys', function ($sq) use ($user) {
-                    $sq->where('assigned_to', $user->id)
-                       ->where('status', 'visit_scheduled');
-                })->orWhere('current_stage', Application::STAGE_VISIT_SCHEDULED);
-            })->count();
+                $pageStats = [
+                    ['label' => 'Pending Verification', 'value' => $pendingCount, 'icon' => 'fa-solid fa-clock-rotate-left', 'tone' => 'amber'],
+                    ['label' => 'Visits Scheduled', 'value' => $scheduledCount, 'icon' => 'fa-solid fa-calendar-check', 'tone' => 'teal'],
+                    ['label' => 'Completed Verifications', 'value' => $completedCount, 'icon' => 'fa-solid fa-circle-check', 'tone' => 'green'],
+                ];
+            } else {
+                $agg = (clone $query)->reorder()->toBase()
+                    ->selectRaw("
+                        COUNT(*) as matching_count,
+                        COALESCE(SUM(CASE WHEN current_stage IN ('submitted', 'under_review') THEN 1 ELSE 0 END), 0) as under_review_count,
+                        COALESCE(SUM(CASE WHEN current_stage IN ('field_survey_assigned', 'visit_scheduled', 'visit_completed', 'findings_submitted') THEN 1 ELSE 0 END), 0) as field_survey_count,
+                        COALESCE(SUM(CASE WHEN current_stage IN ('approved', 'challan_issued', 'payment_proof_submitted', 'payment_verified', 'eligible_beneficiary') THEN 1 ELSE 0 END), 0) as approved_count,
+                        COALESCE(SUM(CASE WHEN current_stage IN ('partially_distributed', 'fully_distributed', 'completed', 'disbursed') THEN 1 ELSE 0 END), 0) as disbursed_count,
+                        COALESCE(SUM(CASE WHEN is_unassigned = 1 THEN 1 ELSE 0 END), 0) as unassigned_count
+                    ")
+                    ->first();
 
-            $completedCount = (clone $baseFoQuery)->where(function ($sub) use ($user) {
-                $sub->whereHas('surveys', function ($sq) use ($user) {
-                    $sq->where('assigned_to', $user->id)
-                       ->where('status', 'findings_submitted');
-                })->orWhereHas('assignments', function ($aq) use ($user) {
-                    $aq->where('assigned_to', $user->id)
-                       ->where('status', 'completed');
-                });
-            })->count();
-
-            $pageStats = [
-                ['label' => 'Pending Verification', 'value' => $pendingCount, 'icon' => 'fa-solid fa-clock-rotate-left', 'tone' => 'amber'],
-                ['label' => 'Visits Scheduled', 'value' => $scheduledCount, 'icon' => 'fa-solid fa-calendar-check', 'tone' => 'teal'],
-                ['label' => 'Completed Verifications', 'value' => $completedCount, 'icon' => 'fa-solid fa-circle-check', 'tone' => 'green'],
-            ];
-        } else {
-            $pageStats = [
-                ['label' => 'Matching', 'value' => (clone $query)->count(), 'icon' => 'fa-solid fa-folder-open', 'tone' => 'green'],
-                ['label' => 'Under Review', 'value' => (clone $query)->whereIn('current_stage', ['submitted', 'under_review'])->count(), 'icon' => 'fa-solid fa-clock', 'tone' => 'amber'],
-                ['label' => 'Field Survey', 'value' => (clone $query)->whereIn('current_stage', ['field_survey_assigned', 'visit_scheduled', 'visit_completed', 'findings_submitted'])->count(), 'icon' => 'fa-solid fa-magnifying-glass-location', 'tone' => 'teal'],
-                ['label' => 'Approved / Challan', 'value' => (clone $query)->whereIn('current_stage', ['approved', 'challan_issued', 'payment_proof_submitted', 'payment_verified', 'eligible_beneficiary'])->count(), 'icon' => 'fa-solid fa-thumbs-up', 'tone' => 'blue'],
-                ['label' => 'Disbursed / Done', 'value' => (clone $query)->whereIn('current_stage', ['partially_distributed', 'fully_distributed', 'completed', 'disbursed'])->count(), 'icon' => 'fa-solid fa-hand-holding-dollar', 'tone' => 'purple'],
-                ['label' => 'Unassigned Queue', 'value' => (clone $query)->where('is_unassigned', true)->count(), 'icon' => 'fa-solid fa-triangle-exclamation', 'tone' => 'rose'],
-            ];
+                $pageStats = [
+                    ['label' => 'Matching', 'value' => (int) ($agg->matching_count ?? 0), 'icon' => 'fa-solid fa-folder-open', 'tone' => 'green'],
+                    ['label' => 'Under Review', 'value' => (int) ($agg->under_review_count ?? 0), 'icon' => 'fa-solid fa-clock', 'tone' => 'amber'],
+                    ['label' => 'Field Survey', 'value' => (int) ($agg->field_survey_count ?? 0), 'icon' => 'fa-solid fa-magnifying-glass-location', 'tone' => 'teal'],
+                    ['label' => 'Approved / Challan', 'value' => (int) ($agg->approved_count ?? 0), 'icon' => 'fa-solid fa-thumbs-up', 'tone' => 'blue'],
+                    ['label' => 'Disbursed / Done', 'value' => (int) ($agg->disbursed_count ?? 0), 'icon' => 'fa-solid fa-hand-holding-dollar', 'tone' => 'purple'],
+                    ['label' => 'Unassigned Queue', 'value' => (int) ($agg->unassigned_count ?? 0), 'icon' => 'fa-solid fa-triangle-exclamation', 'tone' => 'rose'],
+                ];
+            }
         }
 
         $applications = $query->paginate(25)->withQueryString();
@@ -250,16 +265,26 @@ class ApplicationReviewController extends Controller
         );
     }
 
-    private function filteredQuery(Request $request)
+    private function filteredQuery(Request $request, bool $forListing = false)
     {
         $user = auth()->user();
-        $query = Application::with([
-            'scheme.department',
-            'applicant',
-            'district',
-            'assignments.assignee',
-            'fieldValues.formField',
-        ])
+        $relations = $forListing
+            ? [
+                'scheme:id,title,department_id,slug',
+                'scheme.department:id,name',
+                'applicant:id,full_name,cnic,tehsil,village',
+                'district:id,name',
+                'fieldValues.formField:id,field_key',
+            ]
+            : [
+                'scheme.department',
+                'applicant',
+                'district',
+                'assignments.assignee',
+                'fieldValues.formField',
+            ];
+
+        $query = Application::with($relations)
             ->authorizedFor($user)
             ->latest();
 

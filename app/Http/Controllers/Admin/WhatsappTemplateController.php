@@ -25,12 +25,9 @@ class WhatsappTemplateController extends Controller
 
     public function index(Request $request): View
     {
-        $templates = WhatsappTemplate::with('scheme')
-            ->withCount('logs')
-            ->orderBy('id')
-            ->get();
+        $isAjaxPagination = (bool) $request->header('X-Alf-Ajax-Pagination');
 
-        $logsQuery = WhatsappLog::with(['application', 'template', 'sender'])->latest();
+        $logsQuery = WhatsappLog::with(['application:id,application_no', 'template:id,name', 'sender:id,name'])->latest();
 
         if ($request->filled('event_key')) {
             $logsQuery->where('event_key', $request->string('event_key'));
@@ -54,33 +51,60 @@ class WhatsappTemplateController extends Controller
         $logs = $logsQuery->paginate(20)->withQueryString();
         $gatewayConfig = $this->whatsappService->getConfig();
         $eventLabels = WhatsappTemplate::eventLabels();
-
-        $stats = [
-            'total_templates' => $templates->count(),
-            'active_templates' => $templates->where('is_active', true)->count(),
-            'total_sent' => WhatsappLog::where('status', 'sent')->count(),
-            'total_simulated' => WhatsappLog::where('status', 'simulated')->count(),
-            'total_failed' => WhatsappLog::where('status', 'failed')->count(),
-        ];
-
-        $applicants = Applicant::with([
-            'district',
-            'applications' => fn ($q) => $q->with('scheme')->latest('id'),
-        ])
-            ->whereNotNull('phone')
-            ->where('phone', '!=', '')
-            ->orderBy('full_name')
-            ->get();
-
-        $districts = District::orderBy('name')->get();
-        $schemes = Scheme::orderBy('title')->get();
-        $tehsils = $applicants->pluck('tehsil')
-            ->filter(fn ($t) => ! empty(trim((string) $t)))
-            ->map(fn ($t) => trim((string) $t))
-            ->unique(fn ($t) => strtolower($t))
-            ->sort()
-            ->values();
         $operators = WhatsappService::supportedOperators();
+
+        if ($isAjaxPagination) {
+            $templates = collect();
+            $stats = [
+                'total_templates' => 0,
+                'active_templates' => 0,
+                'total_sent' => 0,
+                'total_simulated' => 0,
+                'total_failed' => 0,
+            ];
+            $applicants = collect();
+            $districts = collect();
+            $schemes = collect();
+            $tehsils = collect();
+        } else {
+            $templates = WhatsappTemplate::with('scheme:id,title')
+                ->withCount('logs')
+                ->orderBy('id')
+                ->get();
+
+            $logAgg = WhatsappLog::toBase()->selectRaw("
+                COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0) as total_sent,
+                COALESCE(SUM(CASE WHEN status = 'simulated' THEN 1 ELSE 0 END), 0) as total_simulated,
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as total_failed
+            ")->first();
+
+            $stats = [
+                'total_templates' => $templates->count(),
+                'active_templates' => $templates->where('is_active', true)->count(),
+                'total_sent' => (int) ($logAgg->total_sent ?? 0),
+                'total_simulated' => (int) ($logAgg->total_simulated ?? 0),
+                'total_failed' => (int) ($logAgg->total_failed ?? 0),
+            ];
+
+            $applicants = Applicant::with([
+                'district:id,name',
+                'applications' => fn ($q) => $q->select(['id', 'applicant_id', 'scheme_id'])->with('scheme:id,title')->latest('id'),
+            ])
+                ->select(['id', 'full_name', 'cnic', 'phone', 'tehsil', 'district_id'])
+                ->whereNotNull('phone')
+                ->where('phone', '!=', '')
+                ->orderBy('full_name')
+                ->get();
+
+            $districts = District::orderBy('name')->get(['id', 'name']);
+            $schemes = Scheme::orderBy('title')->get(['id', 'title']);
+            $tehsils = $applicants->pluck('tehsil')
+                ->filter(fn ($t) => ! empty(trim((string) $t)))
+                ->map(fn ($t) => trim((string) $t))
+                ->unique(fn ($t) => strtolower($t))
+                ->sort()
+                ->values();
+        }
 
         return view('admin.whatsapp-templates.index', compact(
             'templates',

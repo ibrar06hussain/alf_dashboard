@@ -22,7 +22,7 @@ class SchemeInterestController extends Controller
         }
 
         if ($request->filled('department_id')) {
-            $query->whereHas('scheme', fn ($q) => $q->where('department_id', $request->integer('department_id')));
+            $query->whereHas('scheme', fn($q) => $q->where('department_id', $request->integer('department_id')));
         }
 
         if ($request->filled('q')) {
@@ -37,11 +37,19 @@ class SchemeInterestController extends Controller
         $schemes = Scheme::where('type', 'proposed')->orderBy('title')->get(['id', 'title']);
         $departments = Department::orderBy('display_order')->get();
 
+        $weekAgo = now()->subDays(7);
+        $agg = (clone $query)->reorder()->toBase()->selectRaw("
+            COUNT(*) as total_count,
+            COUNT(DISTINCT scheme_id) as schemes_count,
+            COUNT(DISTINCT district_id) as districts_count,
+            COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) as recent_count
+        ", [$weekAgo])->first();
+
         $pageStats = [
-            ['label' => 'Total interests', 'value' => (clone $query)->count(), 'icon' => 'fa-solid fa-bell', 'tone' => 'amber'],
-            ['label' => 'Schemes', 'value' => (int) (clone $query)->reorder()->toBase()->distinct()->count('scheme_id'), 'icon' => 'fa-solid fa-flag', 'tone' => 'green'],
-            ['label' => 'Districts', 'value' => (int) (clone $query)->reorder()->whereNotNull('district_id')->toBase()->distinct()->count('district_id'), 'icon' => 'fa-solid fa-location-dot', 'tone' => 'blue'],
-            ['label' => 'This week', 'value' => (clone $query)->where('created_at', '>=', now()->subDays(7))->count(), 'icon' => 'fa-solid fa-calendar-week', 'tone' => 'teal'],
+            ['label' => 'Total interests', 'value' => (int) ($agg->total_count ?? 0), 'icon' => 'fa-solid fa-bell', 'tone' => 'amber'],
+            ['label' => 'Schemes', 'value' => (int) ($agg->schemes_count ?? 0), 'icon' => 'fa-solid fa-flag', 'tone' => 'green'],
+            ['label' => 'Districts', 'value' => (int) ($agg->districts_count ?? 0), 'icon' => 'fa-solid fa-location-dot', 'tone' => 'blue'],
+            ['label' => 'This week', 'value' => (int) ($agg->recent_count ?? 0), 'icon' => 'fa-solid fa-calendar-week', 'tone' => 'teal'],
         ];
 
         $interests = $query->paginate(25)->withQueryString();

@@ -366,5 +366,258 @@ class SmsNotificationTest extends TestCase
         $this->assertEquals('en', $submittedTemplate->send_language);
         $this->assertStringContainsString('Login ID: {cnic}, Password: {password}', $submittedTemplate->message_en);
     }
+
+    public function test_admin_can_restrict_status_change_sms_to_urdu_only_via_gateway_setting(): void
+    {
+        Http::fake([
+            'cbs.zong.com.pk/reachrestapi/home/SendQuickSMS*' => Http::response('0|success|5220980666', 200),
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.sms-templates.gateway.update'), [
+                'sms_enabled' => '1',
+                'zong_cbs_api_mode' => 'rest',
+                'zong_cbs_base_url' => 'https://cbs.zong.com.pk/reachrestapi/home',
+                'zong_cbs_login_id' => '923149059535',
+                'zong_cbs_mask' => 'ALFFD-GB',
+                'zong_cbs_shortcode_preferred' => 'N',
+                'sms_send_language' => 'ur',
+            ])
+            ->assertRedirect();
+
+        $app = Application::create([
+            'application_no' => 'ALF-2026-000106',
+            'scheme_id' => $this->scheme->id,
+            'applicant_id' => $this->applicant->id,
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'status' => Application::STAGE_UNDER_REVIEW,
+            'current_stage' => Application::STAGE_UNDER_REVIEW,
+            'submitted_at' => now(),
+        ]);
+
+        app(ApplicationLifecycleService::class)->transition($app, Application::STAGE_APPROVED, $this->ddGilgit, [
+            'approved_quantity' => 2,
+        ]);
+
+        $logs = SmsLog::where('application_id', $app->id)
+            ->where('event_key', SmsTemplate::EVENT_APPROVED)
+            ->get();
+
+        $this->assertCount(1, $logs);
+        $this->assertSame('ur', $logs->first()->language);
+        $this->assertTrue($logs->first()->is_unicode);
+    }
+
+    public function test_admin_can_restrict_status_change_sms_to_english_only_and_override_manual_send_language(): void
+    {
+        Http::fake([
+            'cbs.zong.com.pk/reachrestapi/home/SendQuickSMS*' => Http::response('0|success|5220980777', 200),
+        ]);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.sms-templates.gateway.update'), [
+                'sms_enabled' => '1',
+                'zong_cbs_api_mode' => 'rest',
+                'zong_cbs_base_url' => 'https://cbs.zong.com.pk/reachrestapi/home',
+                'zong_cbs_login_id' => '923149059535',
+                'zong_cbs_mask' => 'ALFFD-GB',
+                'zong_cbs_shortcode_preferred' => 'N',
+                'sms_send_language' => 'en',
+            ])
+            ->assertRedirect();
+
+        $app = Application::create([
+            'application_no' => 'ALF-2026-000107',
+            'scheme_id' => $this->scheme->id,
+            'applicant_id' => $this->applicant->id,
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'status' => 'pending',
+            'current_stage' => Application::STAGE_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        app(ApplicationLifecycleService::class)->onSubmission($app);
+
+        $submissionLogs = SmsLog::where('application_id', $app->id)
+            ->where('event_key', SmsTemplate::EVENT_SUBMITTED)
+            ->get();
+
+        $this->assertCount(1, $submissionLogs);
+        $this->assertSame('en', $submissionLogs->first()->language);
+        $this->assertFalse($submissionLogs->first()->is_unicode);
+
+        // Manual send from application dossier can still explicitly send Urdu Only
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.applications.send-sms', $app), [
+                'event_key' => SmsTemplate::EVENT_SUBMITTED,
+                'language' => 'ur',
+            ])
+            ->assertRedirect();
+
+        $allLogs = SmsLog::where('application_id', $app->id)
+            ->where('event_key', SmsTemplate::EVENT_SUBMITTED)
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(2, $allLogs);
+        $this->assertSame('ur', $allLogs->last()->language);
+        $this->assertTrue($allLogs->last()->is_unicode);
+    }
+
+    public function test_admin_can_bar_mobile_network_from_receiving_automated_sms(): void
+    {
+        Http::fake([
+            'cbs.zong.com.pk/reachrestapi/home/SendQuickSMS*' => Http::response('0|success|5220980888', 200),
+        ]);
+
+        // Bar SCOM network (0355)
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.sms-templates.gateway.update'), [
+                'sms_enabled' => '1',
+                'zong_cbs_api_mode' => 'rest',
+                'zong_cbs_base_url' => 'https://cbs.zong.com.pk/reachrestapi/home',
+                'zong_cbs_login_id' => '923149059535',
+                'zong_cbs_mask' => 'ALFFD-GB',
+                'zong_cbs_shortcode_preferred' => 'N',
+                'sms_barring_submitted' => '1',
+                'sms_barred_operators' => ['SCOM'],
+                'sms_barred_network_codes' => '',
+            ])
+            ->assertRedirect();
+
+        $scomApplicant = Applicant::create([
+            'full_name' => 'SCOM Farmer',
+            'father_name' => 'Ali',
+            'cnic' => '7110112345999',
+            'phone' => '03554232566',
+            'district_id' => $this->gilgit->id,
+        ]);
+
+        $scomApp = Application::create([
+            'application_no' => 'ALF-2026-000108',
+            'scheme_id' => $this->scheme->id,
+            'applicant_id' => $scomApplicant->id,
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'status' => Application::STAGE_UNDER_REVIEW,
+            'current_stage' => Application::STAGE_UNDER_REVIEW,
+            'submitted_at' => now(),
+        ]);
+
+        app(ApplicationLifecycleService::class)->onSubmission($scomApp);
+        app(ApplicationLifecycleService::class)->transition($scomApp, Application::STAGE_APPROVED, $this->ddGilgit, [
+            'approved_quantity' => 2,
+        ]);
+
+        // No automated SMS logs or Zong HTTP calls should occur for barred SCOM number
+        $this->assertSame(0, SmsLog::where('application_id', $scomApp->id)->count());
+        Http::assertNothingSent();
+
+        // Non-barred Telenor applicant still receives automated SMS normally
+        $telenorApp = Application::create([
+            'application_no' => 'ALF-2026-000109',
+            'scheme_id' => $this->scheme->id,
+            'applicant_id' => $this->applicant->id, // 03455123456
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'status' => 'pending',
+            'current_stage' => Application::STAGE_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        app(ApplicationLifecycleService::class)->onSubmission($telenorApp);
+        $this->assertSame(2, SmsLog::where('application_id', $telenorApp->id)->count());
+    }
+
+    public function test_admin_can_bar_specific_4_digit_network_code_without_blocking_other_codes(): void
+    {
+        Http::fake([
+            'cbs.zong.com.pk/reachrestapi/home/SendQuickSMS*' => Http::response('0|success|5220980999', 200),
+        ]);
+
+        // Invalid code returns validation error
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.sms-templates.gateway.update'), [
+                'sms_enabled' => '1',
+                'zong_cbs_api_mode' => 'rest',
+                'zong_cbs_base_url' => 'https://cbs.zong.com.pk/reachrestapi/home',
+                'zong_cbs_login_id' => '923149059535',
+                'zong_cbs_mask' => 'ALFFD-GB',
+                'zong_cbs_shortcode_preferred' => 'N',
+                'sms_barring_submitted' => '1',
+                'sms_barred_network_codes' => '12',
+            ])
+            ->assertSessionHasErrors('sms_barred_network_codes');
+
+        // Bar only 0345 (Telenor prefix 0345) and 0355 (SCOM 0355), leaving 0346 (Telenor) allowed
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.sms-templates.gateway.update'), [
+                'sms_enabled' => '1',
+                'zong_cbs_api_mode' => 'rest',
+                'zong_cbs_base_url' => 'https://cbs.zong.com.pk/reachrestapi/home',
+                'zong_cbs_login_id' => '923149059535',
+                'zong_cbs_mask' => 'ALFFD-GB',
+                'zong_cbs_shortcode_preferred' => 'N',
+                'sms_barring_submitted' => '1',
+                'sms_barred_network_codes' => '0355, 0345',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $appBarred0345 = Application::create([
+            'application_no' => 'ALF-2026-000110',
+            'scheme_id' => $this->scheme->id,
+            'applicant_id' => $this->applicant->id, // 03455123456 -> code 0345
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'status' => 'pending',
+            'current_stage' => Application::STAGE_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        app(ApplicationLifecycleService::class)->onSubmission($appBarred0345);
+        $this->assertSame(0, SmsLog::where('application_id', $appBarred0345->id)->count());
+
+        $otherTelenorApplicant = Applicant::create([
+            'full_name' => 'Allowed 0346 Farmer',
+            'father_name' => 'Karim',
+            'cnic' => '7110112345888',
+            'phone' => '03465123456',
+            'district_id' => $this->gilgit->id,
+        ]);
+
+        $appAllowed0346 = Application::create([
+            'application_no' => 'ALF-2026-000111',
+            'scheme_id' => $this->scheme->id,
+            'applicant_id' => $otherTelenorApplicant->id,
+            'district_id' => $this->gilgit->id,
+            'department_id' => 1,
+            'status' => 'pending',
+            'current_stage' => Application::STAGE_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        app(ApplicationLifecycleService::class)->onSubmission($appAllowed0346);
+        $this->assertSame(2, SmsLog::where('application_id', $appAllowed0346->id)->count());
+
+        // Clearing barring rules re-enables automated SMS for 0345
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.sms-templates.gateway.update'), [
+                'sms_enabled' => '1',
+                'zong_cbs_api_mode' => 'rest',
+                'zong_cbs_base_url' => 'https://cbs.zong.com.pk/reachrestapi/home',
+                'zong_cbs_login_id' => '923149059535',
+                'zong_cbs_mask' => 'ALFFD-GB',
+                'zong_cbs_shortcode_preferred' => 'N',
+                'sms_barring_submitted' => '1',
+                'sms_barred_network_codes' => '',
+            ])
+            ->assertRedirect();
+
+        app(ApplicationLifecycleService::class)->onSubmission($appBarred0345);
+        $this->assertSame(2, SmsLog::where('application_id', $appBarred0345->id)->count());
+    }
 }
 

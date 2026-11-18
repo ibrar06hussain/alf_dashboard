@@ -568,6 +568,7 @@
         });
     });
 </script>
+@include('partials.ajax-pagination')
 @stack('scripts')
 </body>
 </html>

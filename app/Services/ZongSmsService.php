@@ -28,6 +28,14 @@ class ZongSmsService
             $rawBaseUrl = self::DEFAULT_REST_BASE_URL;
         }
 
+        $sendLanguage = strtolower(trim((string) SiteSetting::getValue('sms_send_language', 'template')));
+        if (! in_array($sendLanguage, ['template', 'en', 'ur', 'both'], true)) {
+            $sendLanguage = 'template';
+        }
+
+        $barredOperators = self::parseOperatorList(SiteSetting::getValue('sms_barred_operators', ''));
+        $barredNetworkCodes = self::parseNetworkCodes(SiteSetting::getValue('sms_barred_network_codes', ''));
+
         return [
             'enabled' => $isEnabled,
             'api_mode' => SiteSetting::getValue('zong_cbs_api_mode', env('ZONG_CBS_API_MODE', 'rest')) ?: 'rest',
@@ -37,6 +45,9 @@ class ZongSmsService
             'login_password' => (string) (SiteSetting::getValue('zong_cbs_login_password') ?: env('ZONG_CBS_LOGIN_PASSWORD', '')),
             'mask' => trim((string) (SiteSetting::getValue('zong_cbs_mask') ?: env('ZONG_CBS_MASK', 'ALF-GB'))),
             'shortcode_preferred' => trim((string) (SiteSetting::getValue('zong_cbs_shortcode_preferred') ?: env('ZONG_CBS_SHORTCODE_PREFERRED', 'N'))) ?: 'N',
+            'send_language' => $sendLanguage,
+            'barred_operators' => $barredOperators,
+            'barred_network_codes' => $barredNetworkCodes,
         ];
     }
 
@@ -108,6 +119,144 @@ class ZongSmsService
     }
 
     /**
+     * Common 4-digit cellular network codes grouped by mobile network.
+     *
+     * @return array<string, string[]>
+     */
+    public static function networkCodePresets(): array
+    {
+        return [
+            'SCOM' => ['0355'],
+            'Zong' => ['0310', '0311', '0312', '0313', '0314', '0315', '0316', '0317', '0318', '0319', '0370'],
+            'Jazz' => ['0300', '0301', '0302', '0303', '0304', '0305', '0306', '0307', '0308', '0309', '0320', '0321', '0322', '0323', '0324', '0325', '0326', '0327', '0328', '0329'],
+            'Telenor' => ['0340', '0341', '0342', '0343', '0344', '0345', '0346', '0347', '0348', '0349'],
+            'Ufone' => ['0330', '0331', '0332', '0333', '0334', '0335', '0336', '0337', '0338', '0339'],
+        ];
+    }
+
+    /**
+     * Extract canonical 4-digit local cellular network code (e.g. "0355" from "03554232566" or "923554232566").
+     */
+    public static function extractNetworkCode(?string $phone): string
+    {
+        $normalized = self::normalizePhone($phone);
+        if (str_starts_with($normalized, '92') && strlen($normalized) >= 5) {
+            return '0' . substr($normalized, 2, 3);
+        }
+
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        if (str_starts_with($digits, '0') && strlen($digits) >= 4) {
+            return substr($digits, 0, 4);
+        }
+
+        return '';
+    }
+
+    /**
+     * Normalize a single network code token (accepts 0355, 355, or 92355) into canonical 4-digit form (e.g. "0355").
+     */
+    public static function normalizeSingleNetworkCode(string $token): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $token);
+        if ($digits === '') {
+            return null;
+        }
+
+        if (preg_match('/^92(\d{3})$/', $digits, $m)) {
+            return '0' . $m[1];
+        }
+
+        if (preg_match('/^3(\d{2})$/', $digits, $m)) {
+            return '03' . $m[1];
+        }
+
+        if (preg_match('/^0\d{3}$/', $digits)) {
+            return $digits;
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse stored/input barred network codes (JSON or comma/space/newline-separated) into unique 4-digit codes.
+     *
+     * @return string[]
+     */
+    public static function parseNetworkCodes(?string $raw): array
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return [];
+        }
+
+        $tokens = str_starts_with($raw, '[')
+            ? (json_decode($raw, true) ?: [])
+            : (preg_split('/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+
+        $codes = [];
+        foreach ($tokens as $token) {
+            $normalized = self::normalizeSingleNetworkCode((string) $token);
+            if ($normalized !== null && ! in_array($normalized, $codes, true)) {
+                $codes[] = $normalized;
+            }
+        }
+
+        return $codes;
+    }
+
+    /**
+     * Parse stored mobile operator list into valid operator keys.
+     *
+     * @return string[]
+     */
+    public static function parseOperatorList(?string $raw): array
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return [];
+        }
+
+        $tokens = str_starts_with($raw, '[')
+            ? (json_decode($raw, true) ?: [])
+            : (preg_split('/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+
+        $allowed = array_keys(self::supportedOperators());
+        $result = [];
+        foreach ($tokens as $token) {
+            $op = trim((string) $token);
+            if (in_array($op, $allowed, true) && ! in_array($op, $result, true)) {
+                $result[] = $op;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Return a human-readable block reason if automated SMS is barred for this phone's network or 4-digit network code.
+     */
+    public function getAutomatedSmsBlockReason(?string $phone, ?array $config = null): ?string
+    {
+        if (empty(trim((string) $phone))) {
+            return null;
+        }
+
+        $config ??= $this->getConfig();
+        $operator = self::detectOperator($phone);
+        $networkCode = self::extractNetworkCode($phone);
+
+        if ($operator !== '' && in_array($operator, $config['barred_operators'] ?? [], true)) {
+            return "Automated SMS barred for mobile network: {$operator}";
+        }
+
+        if ($networkCode !== '' && in_array($networkCode, $config['barred_network_codes'] ?? [], true)) {
+            return "Automated SMS barred for network code: {$networkCode}";
+        }
+
+        return null;
+    }
+
+    /**
      * Detect if a message requires UniCode=1 (Urdu / non-ASCII / extended GSM_7 characters).
      */
     public static function requiresUnicode(string $message, string $language = 'en'): bool
@@ -131,7 +280,9 @@ class ZongSmsService
         string $eventKey,
         array $extraVars = [],
         ?int $sentBy = null,
-        bool $alsoTriggerWhatsapp = true
+        bool $alsoTriggerWhatsapp = true,
+        ?string $languageOverride = null,
+        bool $bypassNetworkBarring = false
     ): array {
         if ($alsoTriggerWhatsapp) {
             try {
@@ -154,6 +305,19 @@ class ZongSmsService
 
         $phone = $application->applicant?->phone;
         if (empty($phone)) {
+            return [];
+        }
+
+        if (! $bypassNetworkBarring && ($blockReason = $this->getAutomatedSmsBlockReason($phone, $config)) !== null) {
+            Log::info('Automated SMS skipped due to barred mobile network/code', [
+                'application_id' => $application->id,
+                'event_key' => $eventKey,
+                'phone' => self::normalizePhone($phone) ?: $phone,
+                'operator' => self::detectOperator($phone),
+                'network_code' => self::extractNetworkCode($phone),
+                'reason' => $blockReason,
+            ]);
+
             return [];
         }
 
@@ -190,7 +354,14 @@ class ZongSmsService
         $varsUr = $this->buildTemplateVariables($application, 'ur', $extraVars);
 
         $logs = [];
-        $langMode = $template->send_language ?: 'both';
+        $globalLang = $config['send_language'] ?? 'template';
+        if (in_array($languageOverride, ['en', 'ur', 'both'], true)) {
+            $langMode = $languageOverride;
+        } elseif (in_array($globalLang, ['en', 'ur', 'both'], true)) {
+            $langMode = $globalLang;
+        } else {
+            $langMode = $template->send_language ?: 'both';
+        }
 
         if (in_array($langMode, ['en', 'both'], true) && ! empty(trim((string) $template->message_en))) {
             $msgEn = $this->interpolate((string) $template->message_en, $varsEn);

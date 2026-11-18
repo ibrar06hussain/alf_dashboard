@@ -332,6 +332,7 @@
     setTimeout(hidePreloader, 2500);
 })();
 </script>
+@include('partials.ajax-pagination')
 @stack('scripts')
 </body>
 </html>

@@ -75,12 +75,94 @@
                                 <option value="Y" @selected(strtoupper($gatewayConfig['shortcode_preferred']) === 'Y')>Y (ShortCode)</option>
                             </select>
                         </div>
-                        <div class="col-md-12">
+                        <div class="col-md-7">
                             <label class="form-label fw-bold small">REST Base URL</label>
                             <input type="url" name="zong_cbs_base_url" class="form-control form-control-sm"
                                 value="{{ old('zong_cbs_base_url', $gatewayConfig['base_url']) }}" required>
                             <input type="hidden" name="zong_cbs_soap_url" value="{{ $gatewayConfig['soap_url'] }}">
                         </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small">Status Change SMS Language</label>
+                            <select name="sms_send_language" class="form-select form-select-sm">
+                                <option value="en" @selected(old('sms_send_language', $gatewayConfig['send_language'] ?? 'template') === 'en')>
+                                    English Only (UniCode=0)
+                                </option>
+                                <option value="ur" @selected(old('sms_send_language', $gatewayConfig['send_language'] ?? 'template') === 'ur')>
+                                    Urdu Only (UniCode=1)
+                                </option>
+                                <option value="both" @selected(old('sms_send_language', $gatewayConfig['send_language'] ?? 'template') === 'both')>
+                                    Both English &amp; Urdu
+                                </option>
+                                <option value="template" @selected(old('sms_send_language', $gatewayConfig['send_language'] ?? 'template') === 'template')>
+                                    Use Per-Template Setting
+                                </option>
+                            </select>
+                            <div class="form-text" style="font-size: 11px;">Applies to all automated status &amp; payment SMS.</div>
+                        </div>
+
+                        <div class="col-12">
+                            <input type="hidden" name="sms_barring_submitted" value="1">
+                            @php
+                                $selectedBarredOperators = old('sms_barred_operators', $gatewayConfig['barred_operators'] ?? []);
+                                $barredNetworkCodesValue = old('sms_barred_network_codes', implode(', ', $gatewayConfig['barred_network_codes'] ?? []));
+                            @endphp
+                            <div class="p-2 rounded bg-light border">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-2">
+                                    <label class="form-label fw-bold small mb-0 text-dark">
+                                        <i class="fa-solid fa-ban text-danger me-1"></i> Barred Mobile Networks &amp; Network Codes (Automated SMS Only)
+                                    </label>
+                                    @if(!empty($gatewayConfig['barred_operators']) || !empty($gatewayConfig['barred_network_codes']))
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 11px;">
+                                            Barred:
+                                            {{ implode(', ', array_merge($gatewayConfig['barred_operators'] ?? [], $gatewayConfig['barred_network_codes'] ?? [])) }}
+                                        </span>
+                                    @endif
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-3 mb-2">
+                                    @foreach($operators ?? [] as $opKey => $opLabel)
+                                        <div class="form-check form-check-inline m-0">
+                                            <input class="form-check-input" type="checkbox"
+                                                name="sms_barred_operators[]"
+                                                value="{{ $opKey }}"
+                                                id="bar-op-{{ strtolower($opKey) }}"
+                                                @checked(in_array($opKey, (array) $selectedBarredOperators, true))>
+                                            <label class="form-check-label small" for="bar-op-{{ strtolower($opKey) }}">
+                                                {{ $opLabel }}
+                                            </label>
+                                        </div>
+                                    @endforeach
+                                </div>
+
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-sm-7">
+                                        <label class="form-label fw-semibold mb-1" style="font-size: 11.5px;">Barred 4-Digit Cellular Network Codes</label>
+                                        <input type="text" name="sms_barred_network_codes" id="sms-barred-network-codes"
+                                            class="form-control form-control-sm @error('sms_barred_network_codes') is-invalid @enderror"
+                                            value="{{ $barredNetworkCodesValue }}"
+                                            placeholder="e.g. 0355, 0345, 0314">
+                                        @error('sms_barred_network_codes')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-sm-5">
+                                        <label class="form-label fw-semibold mb-1" style="font-size: 11.5px;">Quick Add Code</label>
+                                        <select id="barred-code-quick-add" class="form-select form-select-sm">
+                                            <option value="">+ Select 4-digit code to bar...</option>
+                                            @foreach($networkCodePresets ?? [] as $netName => $netCodes)
+                                                <optgroup label="{{ $netName }}">
+                                                    @foreach($netCodes as $netCode)
+                                                        <option value="{{ $netCode }}">{{ $netCode }} ({{ $netName }})</option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-1" style="font-size: 11px;">
+                                    First 4 digits identify the cellular network code (e.g. <code>0355</code> in <code>03554232566</code>). Checked networks or entered codes will be skipped on automated status &amp; payment SMS.
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="col-12 d-flex justify-content-between align-items-center pt-1">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" name="sms_enabled" value="1" id="sms_enabled"
@@ -456,6 +538,13 @@
         <div>
             <h5 class="mb-0 fw-bold text-dark">
                 <i class="fa-solid fa-language text-primary me-2"></i> Configured SMS Templates (English &amp; Urdu)
+                @if(($gatewayConfig['send_language'] ?? 'template') === 'en')
+                    <span class="badge bg-primary ms-2">Global Mode: English Only</span>
+                @elseif(($gatewayConfig['send_language'] ?? 'template') === 'ur')
+                    <span class="badge bg-success ms-2">Global Mode: Urdu Only</span>
+                @elseif(($gatewayConfig['send_language'] ?? 'template') === 'both')
+                    <span class="badge bg-info text-dark ms-2">Global Mode: Both English &amp; Urdu</span>
+                @endif
             </h5>
             <small class="text-muted">Templates automatically trigger on registration, approval, rejection, GBPay payment success, or any configured application status.</small>
         </div>
@@ -798,6 +887,24 @@ document.addEventListener('DOMContentLoaded', function () {
     filterRows();
     updateCounts();
     updateCharCounter();
+
+    const barredCodeSelect = document.getElementById('barred-code-quick-add');
+    const barredCodeInput = document.getElementById('sms-barred-network-codes');
+    if (barredCodeSelect && barredCodeInput) {
+        barredCodeSelect.addEventListener('change', function () {
+            const code = (this.value || '').trim();
+            if (!code) return;
+            const existing = barredCodeInput.value
+                .split(/[\s,;]+/)
+                .map(c => c.trim())
+                .filter(Boolean);
+            if (!existing.includes(code)) {
+                existing.push(code);
+                barredCodeInput.value = existing.join(', ');
+            }
+            this.value = '';
+        });
+    }
 });
 </script>
 @endsection

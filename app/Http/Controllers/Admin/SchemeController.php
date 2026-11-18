@@ -26,25 +26,25 @@ class SchemeController extends Controller
         $query = Scheme::with(['department', 'challanTemplate'])->withCount(['applications', 'interests'])->latest();
 
         // Scope by authorized departments and districts if user is not global
-        if ($user && ! $user->isGlobalScope()) {
+        if ($user && !$user->isGlobalScope()) {
             $userDepts = $user->authorizedDepartmentIds();
             $userDistricts = $user->authorizedDistrictIds();
 
-            if (! empty($userDepts)) {
+            if (!empty($userDepts)) {
                 $query->whereIn('department_id', $userDepts);
             }
 
-            if (! empty($userDistricts)) {
+            if (!empty($userDistricts)) {
                 $query->where(function ($sq) use ($userDistricts) {
                     $sq->whereIn('scope', ['gb', 'province_wide'])
-                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $userDistricts));
+                        ->orWhereHas('districts', fn($dq) => $dq->whereIn('districts.id', $userDistricts));
                 });
             }
         }
 
         if ($request->filled('department_id')) {
             $deptId = $request->integer('department_id');
-            if (! $user || $user->isGlobalScope() || in_array($deptId, $user->authorizedDepartmentIds(), true)) {
+            if (!$user || $user->isGlobalScope() || in_array($deptId, $user->authorizedDepartmentIds(), true)) {
                 $query->where('department_id', $deptId);
             }
         }
@@ -64,30 +64,30 @@ class SchemeController extends Controller
         }
 
         $schemes = $query->paginate(20)->withQueryString();
-        $departments = Department::when($user && ! $user->isGlobalScope() && ! empty($user->authorizedDepartmentIds()), function ($q) use ($user) {
+        $departments = Department::when($user && !$user->isGlobalScope() && !empty($user->authorizedDepartmentIds()), function ($q) use ($user) {
             $q->whereIn('id', $user->authorizedDepartmentIds());
         })->orderBy('display_order')->get();
 
         $base = Scheme::query();
-        if ($user && ! $user->isGlobalScope()) {
+        if ($user && !$user->isGlobalScope()) {
             $userDepts = $user->authorizedDepartmentIds();
             $userDistricts = $user->authorizedDistrictIds();
 
-            if (! empty($userDepts)) {
+            if (!empty($userDepts)) {
                 $base->whereIn('department_id', $userDepts);
             }
 
-            if (! empty($userDistricts)) {
+            if (!empty($userDistricts)) {
                 $base->where(function ($sq) use ($userDistricts) {
                     $sq->whereIn('scope', ['gb', 'province_wide'])
-                        ->orWhereHas('districts', fn ($dq) => $dq->whereIn('districts.id', $userDistricts));
+                        ->orWhereHas('districts', fn($dq) => $dq->whereIn('districts.id', $userDistricts));
                 });
             }
         }
 
         if ($request->filled('department_id')) {
             $deptId = $request->integer('department_id');
-            if (! $user || $user->isGlobalScope() || in_array($deptId, $user->authorizedDepartmentIds(), true)) {
+            if (!$user || $user->isGlobalScope() || in_array($deptId, $user->authorizedDepartmentIds(), true)) {
                 $base->where('department_id', $deptId);
             }
         }
@@ -98,14 +98,21 @@ class SchemeController extends Controller
             $base->where('status', $request->string('status'));
         }
         if ($request->filled('q')) {
-            $base->where('title', 'like', '%'.$request->string('q').'%');
+            $base->where('title', 'like', '%' . $request->string('q') . '%');
         }
 
+        $statsAgg = (clone $base)->reorder()->toBase()->selectRaw("
+            COUNT(*) as total_count,
+            COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as active_count,
+            COALESCE(SUM(CASE WHEN type = 'running' THEN 1 ELSE 0 END), 0) as running_count,
+            COALESCE(SUM(CASE WHEN type = 'proposed' THEN 1 ELSE 0 END), 0) as proposed_count
+        ")->first();
+
         $pageStats = [
-            ['label' => 'Total', 'value' => (clone $base)->count(), 'icon' => 'fa-solid fa-layer-group', 'tone' => 'green'],
-            ['label' => 'Active', 'value' => (clone $base)->where('status', 'active')->count(), 'icon' => 'fa-solid fa-circle-check', 'tone' => 'teal'],
-            ['label' => 'On Going', 'value' => (clone $base)->where('type', 'running')->count(), 'icon' => 'fa-solid fa-play', 'tone' => 'blue'],
-            ['label' => 'Proposed / CM', 'value' => (clone $base)->where('type', 'proposed')->count(), 'icon' => 'fa-solid fa-flag', 'tone' => 'amber'],
+            ['label' => 'Total', 'value' => (int) ($statsAgg->total_count ?? 0), 'icon' => 'fa-solid fa-layer-group', 'tone' => 'green'],
+            ['label' => 'Active', 'value' => (int) ($statsAgg->active_count ?? 0), 'icon' => 'fa-solid fa-circle-check', 'tone' => 'teal'],
+            ['label' => 'On Going', 'value' => (int) ($statsAgg->running_count ?? 0), 'icon' => 'fa-solid fa-play', 'tone' => 'blue'],
+            ['label' => 'Proposed / CM', 'value' => (int) ($statsAgg->proposed_count ?? 0), 'icon' => 'fa-solid fa-flag', 'tone' => 'amber'],
         ];
 
         return view('admin.schemes.index', compact('schemes', 'departments', 'pageStats'));
@@ -127,14 +134,19 @@ class SchemeController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
-        $data['slug'] = ! empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
+        $data['slug'] = !empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['requires_challan'] = $request->boolean('requires_challan');
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
         $schemePayload = collect($data)->except([
-            'use_custom_psid', 'psid_one_link_prefix', 'psid_department_code',
-            'psid_department_service_no', 'psid_district_code', 'psid_rco', 'psid_head',
+            'use_custom_psid',
+            'psid_one_link_prefix',
+            'psid_department_code',
+            'psid_department_service_no',
+            'psid_district_code',
+            'psid_rco',
+            'psid_head',
         ])->all();
 
         if ($request->hasFile('featured_image')) {
@@ -150,7 +162,7 @@ class SchemeController extends Controller
             if ($scheme->type === 'running') {
                 $form = Form::create([
                     'scheme_id' => $scheme->id,
-                    'title' => $scheme->title.' Application',
+                    'title' => $scheme->title . ' Application',
                     'version' => 1,
                     'is_published' => false,
                 ]);
@@ -202,14 +214,19 @@ class SchemeController extends Controller
     public function update(Request $request, Scheme $scheme): RedirectResponse
     {
         $data = $this->validated($request, $scheme->id);
-        $data['slug'] = ! empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
+        $data['slug'] = !empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['requires_challan'] = $request->boolean('requires_challan');
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
         $schemePayload = collect($data)->except([
-            'use_custom_psid', 'psid_one_link_prefix', 'psid_department_code',
-            'psid_department_service_no', 'psid_district_code', 'psid_rco', 'psid_head',
+            'use_custom_psid',
+            'psid_one_link_prefix',
+            'psid_department_code',
+            'psid_department_service_no',
+            'psid_district_code',
+            'psid_rco',
+            'psid_head',
         ])->all();
 
         if ($request->hasFile('featured_image')) {
@@ -271,7 +288,7 @@ class SchemeController extends Controller
             'department_id' => ['required', 'exists:departments,id'],
             'title' => ['required', 'string', 'max:255'],
             'title_ur' => ['nullable', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255', 'unique:schemes,slug,'.($ignoreId ?? 'NULL')],
+            'slug' => ['nullable', 'string', 'max:255', 'unique:schemes,slug,' . ($ignoreId ?? 'NULL')],
             'type' => ['required', 'in:running,proposed'],
             'scope' => ['required', 'in:gb,district'],
             'budget' => ['nullable', 'numeric', 'min:0'],
@@ -304,7 +321,7 @@ class SchemeController extends Controller
 
     private function syncPsidConfig(Scheme $scheme, Request $request): void
     {
-        if (! $request->boolean('use_custom_psid')) {
+        if (!$request->boolean('use_custom_psid')) {
             if ($request->has('psid_settings_present')) {
                 PsidConfig::where('scheme_id', $scheme->id)->delete();
             }

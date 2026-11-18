@@ -24,13 +24,18 @@ class UserController extends Controller
 {
     public function index(): View
     {
-        $users = User::with(['roles', 'permissions', 'department', 'district', 'activeOfficeAssignments.office', 'activeOfficeAssignments.role'])
+        $users = User::with(['roles', 'permissions', 'department:id,name', 'district:id,name', 'activeOfficeAssignments.office', 'activeOfficeAssignments.role'])
             ->latest()
             ->paginate(25);
 
+        $userAgg = User::toBase()->selectRaw("
+            COUNT(*) as total_users,
+            COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) as active_users
+        ")->first();
+
         $pageStats = [
-            ['label' => 'Users', 'value' => User::count(), 'icon' => 'fa-solid fa-users', 'tone' => 'green'],
-            ['label' => 'Active', 'value' => User::where('is_active', true)->count(), 'icon' => 'fa-solid fa-user-check', 'tone' => 'teal'],
+            ['label' => 'Users', 'value' => (int) ($userAgg->total_users ?? 0), 'icon' => 'fa-solid fa-users', 'tone' => 'green'],
+            ['label' => 'Active', 'value' => (int) ($userAgg->active_users ?? 0), 'icon' => 'fa-solid fa-user-check', 'tone' => 'teal'],
             ['label' => 'Assignments', 'value' => UserOfficeAssignment::where('is_active', true)->count(), 'icon' => 'fa-solid fa-building-user', 'tone' => 'amber'],
             ['label' => 'Roles', 'value' => Role::count(), 'icon' => 'fa-solid fa-user-shield', 'tone' => 'blue'],
         ];
@@ -544,7 +549,8 @@ class UserController extends Controller
 
     public function auditLogs(Request $request): View
     {
-        $query = AccessAuditLog::with('user')->latest('id');
+        $isAjaxPagination = (bool) $request->header('X-Alf-Ajax-Pagination');
+        $query = AccessAuditLog::with('user:id,name,email')->latest('id');
 
         if ($request->filled('action')) {
             $query->where('action', $request->string('action'));
@@ -554,8 +560,8 @@ class UserController extends Controller
         }
 
         $logs = $query->paginate(30)->withQueryString();
-        $actions = AccessAuditLog::select('action')->distinct()->pluck('action');
-        $users = User::orderBy('name')->get(['id', 'name', 'email']);
+        $actions = $isAjaxPagination ? collect() : AccessAuditLog::select('action')->distinct()->pluck('action');
+        $users = $isAjaxPagination ? collect() : User::orderBy('name')->get(['id', 'name', 'email']);
 
         return view('admin.audit-logs.index', compact('logs', 'actions', 'users'));
     }

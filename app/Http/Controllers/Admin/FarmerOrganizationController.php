@@ -9,6 +9,7 @@ use App\Models\FarmerOrganization;
 use App\Support\GbGeoCoordinates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class FarmerOrganizationController extends Controller
@@ -25,8 +26,17 @@ class FarmerOrganizationController extends Controller
             'q'         => $request->string('q')->trim()->toString(),
         ];
 
-        $allRecords = FarmerOrganization::query()->orderBy('id')->get();
-        $analytics = GbGeoCoordinates::buildPageAnalyticsAndFilters($allRecords, $filters);
+        $meta = FarmerOrganization::toBase()->selectRaw('COUNT(*) as cnt, MAX(updated_at) as max_upd')->first();
+        $cacheKey = 'fo_admin_analytics_' . ($meta->cnt ?? 0) . '_' . md5((string) ($meta->max_upd ?? '')) . '_' . md5(json_encode($filters));
+
+        $analytics = Cache::remember($cacheKey, 300, function () use ($filters) {
+            $allRecords = FarmerOrganization::query()
+                ->select(['id', 'district_id', 'sheet_code', 'division_name', 'district_name', 'sub_division', 'uc_mc', 'village_name', 'organization_name', 'is_vo_formed', 'focal_person_name', 'focal_person_phone', 'focal_person_raw', 'is_active'])
+                ->orderBy('id')
+                ->get();
+
+            return GbGeoCoordinates::buildPageAnalyticsAndFilters($allRecords, $filters);
+        });
 
         $summaryRows     = $analytics['summaryRows'];
         $chartRows       = $analytics['chartRows'];

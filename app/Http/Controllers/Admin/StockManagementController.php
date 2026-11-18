@@ -495,7 +495,7 @@ class StockManagementController extends Controller
             $eligibleQuery->where('scheme_id', $schemeId);
         }
         $eligibleApplications = $eligibleQuery->paginate(15, ['*'], 'eligible_page')->withQueryString();
-        $eligibleCount = (clone $eligibleQuery)->count();
+        $eligibleCount = $eligibleApplications->total();
 
         // 2. Historical Disbursements ledger
         $historyQuery = StockDisbursement::with([
@@ -529,7 +529,7 @@ class StockManagementController extends Controller
         }
 
         $disbursements = $historyQuery->paginate(15, ['*'], 'history_page')->withQueryString();
-        $historyCount = (clone $historyQuery)->count();
+        $historyCount = $disbursements->total();
 
         // 3. Collection Centers scoped to the user's district with live inventory balances
         $centersQuery = CollectionCenter::with(['inventories.item'])->where('is_active', true);

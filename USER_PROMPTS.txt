@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 170
+Total Prompts Logged: 173
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-17T11:36:28+05:00 (UTC: 2026-11-17T06:36:28Z)
-File Last Updated  : 2026-11-17 07:36:28 (PKT)
+Latest Prompt Date : 2026-11-18T13:43:45+05:00 (UTC: 2026-11-18T08:43:45Z)
+File Last Updated  : 2026-11-18 09:43:45 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -2009,6 +2009,32 @@ Date & Time (UTC)   : 2026-11-17T06:36:28Z
 Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
 --------------------------------------------------------------------------------
 I want to generate 5 PSIDs against each test schemes created yesterday using  gbpay:generate-head-test-psids the payments would be between 5 rs to 25 Rs
+
+--------------------------------------------------------------------------------
+PROMPT #171
+Date & Time (Local) : 2026-11-18T13:30:48+05:00
+Date & Time (UTC)   : 2026-11-18T08:30:48Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+In the sms sending option allow admin either to send urdu version only or english version of the sms, currently for each status change both english and urdu version of sms are sent
+
+--------------------------------------------------------------------------------
+PROMPT #172
+Date & Time (Local) : 2026-11-18T13:36:45+05:00
+Date & Time (UTC)   : 2026-11-18T08:36:45Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Allow admin to choose mobile network and network code which can be barred from sending automated sms
+
+e.g 03554232566 in this no the first 4 digit are the code of cellular network
+
+--------------------------------------------------------------------------------
+PROMPT #173
+Date & Time (Local) : 2026-11-18T13:43:45+05:00
+Date & Time (UTC)   : 2026-11-18T08:43:45Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+All the tables showing pagination in the application should not reload whole page on selecting a page no improve speed of all page as they are getting slow
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             
