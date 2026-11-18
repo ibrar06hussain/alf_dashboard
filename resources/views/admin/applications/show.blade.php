@@ -933,7 +933,8 @@
                         @if($diff != 0)
                             <div class="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-1">
                                 <i class="fa-solid fa-triangle-exclamation"></i>
-                                <span>Adjusted by Officer: <strong>{{ $diff > 0 ? '+' . $diff : $diff }} {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong> vs
+                                <span>Adjusted by Officer: <strong>{{ $diff > 0 ? '+' . $diff : $diff }}
+                                        {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong> vs
                                     demand.</span>
                             </div>
                         @endif
@@ -1601,218 +1602,218 @@
                             const tr = document.createElement('tr');
                             tr.className = 'gps-point-row';
                             tr.innerHTML = `
-                                            <td class="text-center"><span class="badge bg-secondary">Point ${idx + 1}</span></td>
-                                            <td><strong>${escapeHtml(pt.label || 'Point ' + (idx + 1))}</strong></td>
-                                            <td><code>${Number(pt.lat).toFixed(7)}</code></td>
-                                            <td><code>${Number(pt.lng).toFixed(7)}</code></td>
-                                            <td>${pt.accuracy ? `<span class="badge bg-info-subtle text-info">± ${pt.accuracy} m</span>` : '<span class="text-muted">—</span>'}</td>
-                                            <td class="text-center">
-                                                <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1 remove-point-btn" data-index="${idx}" title="Remove Point">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            <                                     /td>
-                                        `;
-                                tbody.appendChild(tr);
-                            });
+                                                        <td class="text-center"><span class="badge bg-secondary">Point ${idx + 1}</span></td>
+                                                        <td><strong>${escapeHtml(pt.label || 'Point ' + (idx + 1))}</strong></td>
+                                                        <td><code>${Number(pt.lat).toFixed(7)}</code></td>
+                                                        <td><code>${Number(pt.lng).toFixed(7)}</code></td>
+                                                        <td>${pt.accuracy ? `<span class="badge bg-info-subtle text-info">± ${pt.accuracy} m</span>` : '<span class="text-muted">—</span>'}</td>
+                                                        <td class="text-center">
+                                                            <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1 remove-point-btn" data-index="${idx}" title="Remove Point">
+                                                                <i class="fa-solid fa-trash"></i>
+                                                               </button>
+                                                    <                                 /t                                   d>
+                                                        `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+
+                    // update status box (Optional)
+                    const count = currentPoints.length;
+                    if (counterText) {
+                        counterText.textContent = `${count} GPS point${count === 1 ? '' : 's'} recorded`;
+                    }
+                    if (count > 0) {
+                        if (statusBox) {
+                            statusBox.className = 'alert alert-success-subtle border border-success-subtle py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
                         }
-
-                        // update status box (Optional)
-                        const count = currentPoints.length;
-                        if (counterText) {
-                            counterText.textContent = `${count} GPS point${count === 1 ? '' : 's'} recorded`;
+                        if (statusIcon) {
+                            statusIcon.className = 'fa-solid fa-circle-check me-1 text-success';
                         }
-                        if (count > 0) {
-                            if (statusBox) {
-                                statusBox.className = 'alert alert-success-subtle border border-success-subtle py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
-                            }
-                            if (statusIcon) {
-                                statusIcon.className = 'fa-solid fa-circle-check me-1 text-success';
-                            }
-                            if (statusBadge) {
-                                statusBadge.className = 'badge bg-success';
-                                statusBadge.textContent = `${count} Point${count === 1 ? '' : 's'} Recorded`;
-                            }
-                        } else {
-                            if (statusBox) {
-                                statusBox.className = 'alert alert-light border py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
-                            }
-                            if (statusIcon) {
-                                statusIcon.className = 'fa-solid fa-location-crosshairs me-1 text-muted';
-                            }
-                            if (statusBadge) {
-                                statusBadge.className = 'badge bg-secondary';
-                                statusBadge.textContent = 'Optional';
-                            }
+                        if (statusBadge) {
+                            statusBadge.className = 'badge bg-success';
+                            statusBadge.textContent = `${count} Point${count === 1 ? '' : 's'} Recorded`;
                         }
-
-                        hiddenGpsInput.value = JSON.stringify(currentPoints);
-
-                        // attach remove listeners
-                        tbody.querySelectorAll('.remove-point-btn').forEach(function (btn) {
-                            btn.addEventListener('click', function () {
-                                const idx = parseInt(this.getAttribute('data-index'), 10);
-                                currentPoints.splice(idx, 1);
-                                renderPoints();
-                            });
-                        });
+                    } else {
+                        if (statusBox) {
+                            statusBox.className = 'alert alert-light border py-2 px-3 mb-2 d-flex justify-content-between align-items-center';
+                        }
+                        if (statusIcon) {
+                            statusIcon.className = 'fa-solid fa-location-crosshairs me-1 text-muted';
+                        }
+                        if (statusBadge) {
+                            statusBadge.className = 'badge bg-secondary';
+                            statusBadge.textContent = 'Optional';
+                        }
                     }
 
-                    function escapeHtml(str) {
-                        return String(str).replace(/[&<>"']/g, function (m) {
-                            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-                        });
-                    }
+                    hiddenGpsInput.value = JSON.stringify(currentPoints);
 
-                    function addPoint(pt) {
-                        currentPoints.push(pt);
-                        renderPoints();
-                    }
-
-                    // Capture from mobile device GPS
-                    const btnMobile = document.getElementById('btn-capture-mobile-gps');
-                    if (btnMobile) {
-                        btnMobile.addEventListener('click', function () {
-                            if (!navigator.geolocation) {
-                                alert('Geolocation is not supported by your browser. Please enter coordinates manually.');
-                                return;
-                            }
-
-                            const origHtml = btnMobile.innerHTML;
-                            btnMobile.disabled = true;
-                            btnMobile.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Getting GPS fix...';
-
-                            navigator.geolocation.getCurrentPosition(
-                                function (pos) {
-                                    btnMobile.disabled = false;
-                                    btnMobile.innerHTML = origHtml;
-
-                                    const ptNum = currentPoints.length + 1;
-                                    const lat = parseFloat(pos.coords.latitude.toFixed(7));
-                                    const lng = parseFloat(pos.coords.longitude.toFixed(7));
-                                    const acc = pos.coords.accuracy ? parseFloat(pos.coords.accuracy.toFixed(1)) : null;
-                                    const label = 'Corner ' + ptNum + (acc ? ' (±' + acc + 'm)' : '');
-
-                                    addPoint({
-                                        point_number: ptNum,
-                                        lat: lat,
-                                        lng: lng,
-                                        accuracy: acc,
-                                        label: label,
-                                        timestamp: new Date().toISOString()
-                                    });
-                                },
-                                function (err) {
-                                    btnMobile.disabled = false;
-                                    btnMobile.innerHTML = origHtml;
-                                    let msg = 'Could not acquire GPS position.';
-                                    if (err.code === err.PERMISSION_DENIED) {
-                                        msg = 'Location access was denied. Please enable location permissions in your browser or device settings.';
-                                    } else if (err.code === err.TIMEOUT) {
-                                        msg = 'GPS request timed out. Please try again outside under open sky or enter coordinates manually.';
-                                    } else if (err.code === err.POSITION_UNAVAILABLE) {
-                                        msg = 'Location information is unavailable on this device. Please enter coordinates manually.';
-                                    }
-                                    alert(msg);
-                                },
-                                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-                            );
-                        });
-                    }
-
-                    // Manual point entry
-                    const btnManual = document.getElementById('btn-add-manual-gps');
-                    if (btnManual) {
-                        btnManual.addEventListener('click', function () {
-                            const latInput = document.getElementById('manual-lat');
-                            const lngInput = document.getElementById('manual-lng');
-                            const accInput = document.getElementById('manual-acc');
-                            const labelInput = document.getElementById('manual-label');
-
-                            const lat = parseFloat(latInput.value);
-                            const lng = parseFloat(lngInput.value);
-                            const acc = accInput.value ? parseFloat(accInput.value) : null;
-                            const ptNum = currentPoints.length + 1;
-                            const label = labelInput.value.trim() || ('Boundary Corner ' + ptNum);
-
-                            if (isNaN(lat) || lat < -90 || lat > 90) {
-                                alert('Please enter a valid Latitude between -90 and 90.');
-                                latInput.focus();
-                                return;
-                            }
-                            if (isNaN(lng) || lng < -180 || lng > 180) {
-                                alert('Please enter a valid Longitude between -180 and 180.');
-                                lngInput.focus();
-                                return;
-                            }
-
-                            addPoint({
-                                point_number: ptNum,
-                                lat: parseFloat(lat.toFixed(7)),
-                                lng: parseFloat(lng.toFixed(7)),
-                                accuracy: acc ? parseFloat(acc.toFixed(1)) : null,
-                                label: label,
-                                timestamp: new Date().toISOString()
-                            });
-
-                            latInput.value = '';
-                            lngInput.value = '';
-                            accInput.value = '';
-                            labelInput.value = '';
-                        });
-                    }
-
-                    // Photo inputs validation & preview (Max 5 MB each)
-                    const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
-                    document.querySelectorAll('.survey-photo-input').forEach(function (input) {
-                        input.addEventListener('change', function () {
-                            const previewId = this.getAttribute('data-preview');
-                            const infoId = this.getAttribute('data-info');
-                            const previewEl = document.getElementById(previewId);
-                            const infoEl = document.getElementById(infoId);
-
-                            if (!this.files || !this.files[0]) {
-                                if (previewEl) previewEl.classList.add('d-none');
-                                if (infoEl) infoEl.textContent = '';
-                                return;
-                            }
-
-                            const file = this.files[0];
-                            const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-
-                            if (file.size > MAX_PHOTO_BYTES) {
-                                alert(`File "${file.name}" is ${sizeMb} MB, which exceeds the 5 MB limit. Please select or capture a photo under 5 MB.`);
-                                this.value = '';
-                                if (previewEl) previewEl.classList.add('d-none');
-                                if (infoEl) {
-                                    infoEl.innerHTML = `<span class="text-danger fw-bold"><i class="fa-solid fa-circle-xmark me-1"></i> Exceeds 5 MB limit (${sizeMb} MB)</span>`;
-                                }
-                                return;
-                            }
-
-                            if (infoEl) {
-                                infoEl.innerHTML = `<span class="text-success"><i class="fa-solid fa-check me-1"></i> ${escapeHtml(file.name)} (${sizeMb} MB)</span>`;
-                            }
-
-                            if (previewEl) {
-                                const img = previewEl.querySelector('img');
-                                if (img) {
-                                    img.src = URL.createObjectURL(file);
-                                }
-                                previewEl.classList.remove('d-none');
-                            }
+                    // attach remove listeners
+                    tbody.querySelectorAll('.remove-point-btn').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            const idx = parseInt(this.getAttribute('data-index'), 10);
+                            currentPoints.splice(idx, 1);
+                            renderPoints();
                         });
                     });
+                }
 
-                    // Form submit handling (GPS coordinates are optional)
-                    const form = document.getElementById('survey-findings-form');
-                    if (form) {
-                        form.addEventListener('submit', function (e) {
-                            hiddenGpsInput.value = JSON.stringify(currentPoints);
-                        });
-                    }
+                function escapeHtml(str) {
+                    return String(str).replace(/[&<>"']/g, function (m) {
+                        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+                    });
+                }
 
+                function addPoint(pt) {
+                    currentPoints.push(pt);
                     renderPoints();
-                })();
-            });
-        </script>
+                }
+
+                // Capture from mobile device GPS
+                const btnMobile = document.getElementById('btn-capture-mobile-gps');
+                if (btnMobile) {
+                    btnMobile.addEventListener('click', function () {
+                        if (!navigator.geolocation) {
+                            alert('Geolocation is not supported by your browser. Please enter coordinates manually.');
+                            return;
+                        }
+
+                        const origHtml = btnMobile.innerHTML;
+                        btnMobile.disabled = true;
+                        btnMobile.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Getting GPS fix...';
+
+                        navigator.geolocation.getCurrentPosition(
+                            function (pos) {
+                                btnMobile.disabled = false;
+                                btnMobile.innerHTML = origHtml;
+
+                                const ptNum = currentPoints.length + 1;
+                                const lat = parseFloat(pos.coords.latitude.toFixed(7));
+                                const lng = parseFloat(pos.coords.longitude.toFixed(7));
+                                const acc = pos.coords.accuracy ? parseFloat(pos.coords.accuracy.toFixed(1)) : null;
+                                const label = 'Corner ' + ptNum + (acc ? ' (±' + acc + 'm)' : '');
+
+                                addPoint({
+                                    point_number: ptNum,
+                                    lat: lat,
+                                    lng: lng,
+                                    accuracy: acc,
+                                    label: label,
+                                    timestamp: new Date().toISOString()
+                                });
+                            },
+                            function (err) {
+                                btnMobile.disabled = false;
+                                btnMobile.innerHTML = origHtml;
+                                let msg = 'Could not acquire GPS position.';
+                                if (err.code === err.PERMISSION_DENIED) {
+                                    msg = 'Location access was denied. Please enable location permissions in your browser or device settings.';
+                                } else if (err.code === err.TIMEOUT) {
+                                    msg = 'GPS request timed out. Please try again outside under open sky or enter coordinates manually.';
+                                } else if (err.code === err.POSITION_UNAVAILABLE) {
+                                    msg = 'Location information is unavailable on this device. Please enter coordinates manually.';
+                                }
+                                alert(msg);
+                            },
+                            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+                        );
+                    });
+                }
+
+                // Manual point entry
+                const btnManual = document.getElementById('btn-add-manual-gps');
+                if (btnManual) {
+                    btnManual.addEventListener('click', function () {
+                        const latInput = document.getElementById('manual-lat');
+                        const lngInput = document.getElementById('manual-lng');
+                        const accInput = document.getElementById('manual-acc');
+                        const labelInput = document.getElementById('manual-label');
+
+                        const lat = parseFloat(latInput.value);
+                        const lng = parseFloat(lngInput.value);
+                        const acc = accInput.value ? parseFloat(accInput.value) : null;
+                        const ptNum = currentPoints.length + 1;
+                        const label = labelInput.value.trim() || ('Boundary Corner ' + ptNum);
+
+                        if (isNaN(lat) || lat < -90 || lat > 90) {
+                            alert('Please enter a valid Latitude between -90 and 90.');
+                            latInput.focus();
+                            return;
+                        }
+                        if (isNaN(lng) || lng < -180 || lng > 180) {
+                            alert('Please enter a valid Longitude between -180 and 180.');
+                            lngInput.focus();
+                            return;
+                        }
+
+                        addPoint({
+                            point_number: ptNum,
+                            lat: parseFloat(lat.toFixed(7)),
+                            lng: parseFloat(lng.toFixed(7)),
+                            accuracy: acc ? parseFloat(acc.toFixed(1)) : null,
+                            label: label,
+                            timestamp: new Date().toISOString()
+                        });
+
+                        latInput.value = '';
+                        lngInput.value = '';
+                        accInput.value = '';
+                        labelInput.value = '';
+                    });
+                }
+
+                // Photo inputs validation & preview (Max 5 MB each)
+                const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+                document.querySelectorAll('.survey-photo-input').forEach(function (input) {
+                    input.addEventListener('change', function () {
+                        const previewId = this.getAttribute('data-preview');
+                        const infoId = this.getAttribute('data-info');
+                        const previewEl = document.getElementById(previewId);
+                        const infoEl = document.getElementById(infoId);
+
+                        if (!this.files || !this.files[0]) {
+                            if (previewEl) previewEl.classList.add('d-none');
+                            if (infoEl) infoEl.textContent = '';
+                            return;
+                        }
+
+                        const file = this.files[0];
+                        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+
+                        if (file.size > MAX_PHOTO_BYTES) {
+                            alert(`File "${file.name}" is ${sizeMb} MB, which exceeds the 5 MB limit. Please select or capture a photo under 5 MB.`);
+                            this.value = '';
+                            if (previewEl) previewEl.classList.add('d-none');
+                            if (infoEl) {
+                                infoEl.innerHTML = `<span class="text-danger fw-bold"><i class="fa-solid fa-circle-xmark me-1"></i> Exceeds 5 MB limit (${sizeMb} MB)</span>`;
+                            }
+                            return;
+                        }
+
+                        if (infoEl) {
+                            infoEl.innerHTML = `<span class="text-success"><i class="fa-solid fa-check me-1"></i> ${escapeHtml(file.name)} (${sizeMb} MB)</span>`;
+                        }
+
+                        if (previewEl) {
+                            const img = previewEl.querySelector('img');
+                            if (img) {
+                                img.src = URL.createObjectURL(file);
+                            }
+                            previewEl.classList.remove('d-none');
+                        }
+                    });
+                });
+
+                // Form submit handling (GPS coordinates are optional)
+                const form = document.getElementById('survey-findings-form');
+                if (form) {
+                    form.addEventListener('submit', function (e) {
+                        hiddenGpsInput.value = JSON.stringify(currentPoints);
+                    });
+                }
+
+                renderPoints();
+            })();
+        });
+    </script>
 @endpush
