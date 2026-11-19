@@ -338,5 +338,75 @@ class WhatsappNotificationAndFilteringTest extends TestCase
         $this->assertSame('wamid.LIFECYCLE123', $waLog->provider_message_id);
         $this->assertStringContainsString('ALF-WA-0001', $waLog->message);
     }
+
+    public function test_whatsapp_webhook_verification_and_status_callback_handling(): void
+    {
+        // Admin screen displays the Callback URL
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.whatsapp-templates.index'))
+            ->assertOk()
+            ->assertSee(route('api.whatsapp.webhook'));
+
+        // Save verify token via Gateway Config form
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.whatsapp-templates.gateway.update'), [
+                'whatsapp_enabled' => '1',
+                'whatsapp_provider' => 'meta_cloud',
+                'whatsapp_api_url' => 'https://graph.facebook.com/v20.0',
+                'whatsapp_verify_token' => 'alf-gb-wa-secret-token-2026',
+            ])
+            ->assertRedirect();
+
+        // Wrong token rejected with 403
+        $this->get('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=99887766')
+            ->assertForbidden();
+
+        // Matching token echoes raw hub.challenge with HTTP 200 text/plain
+        $verifyResponse = $this->get('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=alf-gb-wa-secret-token-2026&hub.challenge=99887766');
+        $verifyResponse->assertOk();
+        $this->assertSame('99887766', $verifyResponse->getContent());
+
+        // Seed outbound log and verify Meta POST webhook updates delivery status
+        $log = WhatsappLog::create([
+            'event_key' => 'submitted',
+            'recipient_phone' => '923125551111',
+            'operator' => 'Zong',
+            'language' => 'en',
+            'provider' => 'meta_cloud',
+            'message' => 'Test outbound message',
+            'status' => 'sent',
+            'provider_status_code' => '200',
+            'provider_message_id' => 'wamid.WEBHOOK_TEST_001',
+            'sent_at' => now(),
+        ]);
+
+        $this->postJson('/api/whatsapp/webhook', [
+            'object' => 'whatsapp_business_account',
+            'entry' => [
+                [
+                    'id' => 'WABA_123',
+                    'changes' => [
+                        [
+                            'field' => 'messages',
+                            'value' => [
+                                'statuses' => [
+                                    [
+                                        'id' => 'wamid.WEBHOOK_TEST_001',
+                                        'status' => 'delivered',
+                                        'timestamp' => '1763580000',
+                                        'recipient_id' => '923125551111',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ])->assertOk()->assertSee('EVENT_RECEIVED');
+
+        $log->refresh();
+        $this->assertSame('sent', $log->status);
+        $this->assertSame('DELIVERED', $log->provider_status_code);
+    }
 }
 

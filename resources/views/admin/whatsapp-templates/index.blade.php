@@ -77,16 +77,45 @@
                                 value="{{ old('whatsapp_sender_number', $gatewayConfig['sender_number']) }}"
                                 placeholder="e.g. 923115960959">
                         </div>
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                             <label class="form-label fw-bold small">API Access Token / Bearer Key</label>
                             <input type="password" name="whatsapp_access_token" class="form-control form-control-sm"
                                 placeholder="{{ !empty($gatewayConfig['access_token']) ? '•••••••••••••••• (Configured — leave blank to keep)' : 'Enter Meta Permanent Access Token or Gateway API Key' }}">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold small">Webhook Verify Token</label>
-                            <input type="text" name="whatsapp_verify_token" class="form-control form-control-sm"
-                                value="{{ old('whatsapp_verify_token', $gatewayConfig['verify_token']) }}"
-                                placeholder="Optional verify token">
+                        <div class="col-12">
+                            <div class="p-2 rounded bg-light border">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-7">
+                                        <label class="form-label fw-bold small mb-1">
+                                            <i class="fa-solid fa-link text-success me-1"></i> Meta Webhook Callback URL
+                                        </label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" id="wa-webhook-callback-url" class="form-control font-monospace bg-white"
+                                                value="{{ route('api.whatsapp.webhook') }}" readonly>
+                                            <button type="button" class="btn btn-outline-secondary" id="btn-copy-wa-callback" title="Copy Callback URL">
+                                                <i class="fa-regular fa-copy me-1"></i> Copy
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label fw-bold small mb-1">Webhook Verify Token</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" name="whatsapp_verify_token" id="wa-webhook-verify-token" class="form-control font-monospace"
+                                                value="{{ old('whatsapp_verify_token', $gatewayConfig['verify_token']) }}"
+                                                placeholder="Click Generate or enter token">
+                                            <button type="button" class="btn btn-outline-primary" id="btn-generate-wa-token" title="Generate Random Verify Token">
+                                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" id="btn-copy-wa-token" title="Copy Verify Token">
+                                                <i class="fa-regular fa-copy"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-1" style="font-size: 11px;">
+                                    Enter or generate a Verify Token, click <strong>Save WhatsApp Config</strong>, then paste both the <strong>Callback URL</strong> (must be live HTTPS) and <strong>Verify Token</strong> in Meta Developer Console &rarr; <em>Configure Webhooks</em>.
+                                </div>
+                            </div>
                         </div>
                         <div class="col-12 d-flex justify-content-between align-items-center pt-1">
                             <div class="form-check form-switch">
@@ -802,6 +831,42 @@ document.addEventListener('DOMContentLoaded', function () {
     filterRows();
     updateCounts();
     updateCharCounter();
+
+    const callbackUrlInput = document.getElementById('wa-webhook-callback-url');
+    const verifyTokenInput = document.getElementById('wa-webhook-verify-token');
+    const btnCopyCallback = document.getElementById('btn-copy-wa-callback');
+    const btnGenerateToken = document.getElementById('btn-generate-wa-token');
+    const btnCopyToken = document.getElementById('btn-copy-wa-token');
+
+    function copyInputValue(inputEl, btnEl) {
+        if (!inputEl || !inputEl.value) return;
+        const originalHtml = btnEl ? btnEl.innerHTML : '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(inputEl.value);
+        } else {
+            inputEl.select();
+            document.execCommand('copy');
+        }
+        if (btnEl) {
+            btnEl.innerHTML = '<i class="fa-solid fa-check text-success"></i>';
+            setTimeout(() => { btnEl.innerHTML = originalHtml; }, 1500);
+        }
+    }
+
+    if (btnCopyCallback && callbackUrlInput) {
+        btnCopyCallback.addEventListener('click', () => copyInputValue(callbackUrlInput, btnCopyCallback));
+    }
+    if (btnCopyToken && verifyTokenInput) {
+        btnCopyToken.addEventListener('click', () => copyInputValue(verifyTokenInput, btnCopyToken));
+    }
+    if (btnGenerateToken && verifyTokenInput) {
+        btnGenerateToken.addEventListener('click', function () {
+            const bytes = new Uint8Array(12);
+            (window.crypto || window.msCrypto).getRandomValues(bytes);
+            const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+            verifyTokenInput.value = 'alf-gb-wa-' + hex;
+        });
+    }
 });
 </script>
 @endsection

@@ -54,6 +54,9 @@ class WhatsappLog extends Model
     {
         return match ((string) $code) {
             '200', '201', 'OK', '0' => '200 OK: WhatsApp message accepted by gateway',
+            'SENT' => 'SENT: Dispatched to WhatsApp recipient',
+            'DELIVERED' => 'DELIVERED: Message delivered to recipient WhatsApp',
+            'READ' => 'READ: Message read by recipient',
             '400' => '400 Bad Request: Invalid parameter or phone number format',
             '401' => '401 Unauthorized: Invalid or expired WhatsApp Access Token / API Key',
             '403' => '403 Forbidden: WhatsApp Business Account permission denied',

@@ -238,6 +238,7 @@ class WhatsappTemplateController extends Controller
             ['key' => 'whatsapp_verify_token'],
             ['value' => trim((string) ($data['whatsapp_verify_token'] ?? '')), 'label' => 'WhatsApp Webhook Verify Token', 'group' => 'whatsapp']
         );
+        SiteSetting::flushCache();
 
         return back()->with('success', 'WhatsApp Business API Gateway configuration updated successfully.');
     }
