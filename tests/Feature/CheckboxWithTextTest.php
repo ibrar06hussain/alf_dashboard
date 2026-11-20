@@ -356,4 +356,66 @@ class CheckboxWithTextTest extends TestCase
         $response->assertSee('80,000 PKR');
         $response->assertSee('Selected');
     }
+
+    public function test_nested_array_field_values_never_throw_array_to_string_conversion(): void
+    {
+        Storage::fake('public');
+
+        $this->form->update([
+            'is_group_application' => true,
+            'min_group_members' => 1,
+            'max_group_members' => 5,
+        ]);
+
+        // Even if a form defines a field whose key collides with 'members' on a group scheme,
+        // or a checkbox receives structured array items, submission succeeds cleanly.
+        FormField::create([
+            'form_id' => $this->form->id,
+            'field_key' => 'members',
+            'field_label' => 'Group Members Field',
+            'field_type' => 'text',
+            'is_mandatory' => false,
+            'display_order' => 15,
+        ]);
+
+        $doc = FormDocument::first();
+
+        $payload = [
+            'full_name' => 'Leader Ali',
+            'father_name' => 'Father Ali',
+            'cnic' => '7110112345688',
+            'phone' => '03451234588',
+            'district_id' => $this->district->id,
+            'tehsil' => 'Gilgit City',
+            'land_location' => 'Jutial, Gilgit',
+            'members' => [
+                [
+                    'full_name' => 'Member One',
+                    'father_name' => 'Father One',
+                    'cnic' => '7110112345689',
+                    'phone' => '03451234589',
+                ],
+            ],
+            'documents' => [
+                $doc->id => UploadedFile::fake()->create('cnic.pdf', 100, 'application/pdf'),
+            ],
+        ];
+
+        $this->post(route('schemes.apply.store', $this->scheme->slug), $payload)
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        // Also directly exercise nested array flattening on formatSubmittedFieldValue
+        $controller = app(\App\Http\Controllers\Public\ApplicationController::class);
+        $method = new \ReflectionMethod($controller, 'formatSubmittedFieldValue');
+        $method->setAccessible(true);
+
+        $checkboxField = new FormField(['field_key' => 'nested_box', 'field_type' => 'checkbox']);
+        $flattened = $method->invoke($controller, $checkboxField, [
+            ['checked' => '1', 'label' => 'Tractor', 'text' => 'Owned'],
+            ['sub' => ['Wheat', 'Maize']],
+        ]);
+
+        $this->assertSame('Tractor: Owned, Wheat, Maize', $flattened);
+    }
 }

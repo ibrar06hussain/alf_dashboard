@@ -6,10 +6,10 @@
 Project Name       : alfgb (ALF Dashboard & Citizen Schemes Portal)
 Local Path         : c:\xampp\htdocs\alfgb
 Repository         : https://github.com/ibrar06hussain/alf_dashboard.git
-Total Prompts Logged: 175
+Total Prompts Logged: 179
 First Prompt Date  : 2026-09-29T17:20:33+05:00 (UTC: 2026-09-29T12:20:33Z)
-Latest Prompt Date : 2026-11-20T02:28:14+05:00 (UTC: 2026-11-19T21:28:14Z)
-File Last Updated  : 2026-11-19 22:28:14 (PKT)
+Latest Prompt Date : 2026-11-20T21:03:19+05:00 (UTC: 2026-11-20T16:03:19Z)
+File Last Updated  : 2026-11-20 17:03:19 (PKT)
 
 NOTE FOR FUTURE PROMPTS:
 This file records every prompt sent by the user in this project.
@@ -2053,6 +2053,52 @@ Date & Time (UTC)   : 2026-11-19T21:28:14Z
 Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
 --------------------------------------------------------------------------------
 generate a callback url for whatsapp business app setting to setup webhooks
+
+--------------------------------------------------------------------------------
+PROMPT #176
+Date & Time (Local) : 2026-11-20T02:51:27+05:00
+Date & Time (UTC)   : 2026-11-19T21:51:27Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Please provide a detailed description of how your app uses the permission or feature requested, how it adds value for a person using your app, and why it's necessary for app functionality
+
+
+
+write response for meta
+
+--------------------------------------------------------------------------------
+PROMPT #177
+Date & Time (Local) : 2026-11-20T03:16:16+05:00
+Date & Time (UTC)   : 2026-11-19T22:16:16Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Who is the person or entity that will be responsible for all Platform Data Meta shares with you?
+
+Please provide the name of the legal entity that will control the data (i.e., determine the purposes and means of processing the data) made available to you by Meta through the requested permissions and/or features. This could be a natural or legal person, a public authority, an agency or other entity. In some regions this is called a data controller.
+
+--------------------------------------------------------------------------------
+PROMPT #178
+Date & Time (Local) : 2026-11-20T03:25:36+05:00
+Date & Time (UTC)   : 2026-11-19T22:25:36Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+Provide instructions for accessing the app so we may complete our review.
+
+Explain how to navigate to the app, and provide instructions for testing.
+
+
+
+In your response, please include confirmation of any use of Meta APIs or integrations pertaining to Facebook Login. If you are no longer using Facebook Login please tell us why and share general instructions for testing. We may reach out to you for more information.
+
+Meta APIs refer to endpoints such as email, public profile, user permissions (user_friends, user_gender, user_birthday etc.). For some apps, this is called advanced access.
+
+--------------------------------------------------------------------------------
+PROMPT #179
+Date & Time (Local) : 2026-11-20T21:03:19+05:00
+Date & Time (UTC)   : 2026-11-20T16:03:19Z
+Session ID          : 2e63d49e-8944-4fa3-9432-67c110c18985
+--------------------------------------------------------------------------------
+ErrorException: Array to string conversion at app/Http/Controllers/Public/ApplicationController.php:475 (implode) in store() DB::transaction line 365 [Full JSON stack trace submitted]
 
 ================================================================================
                          END OF CURRENT PROMPTS LOG                             

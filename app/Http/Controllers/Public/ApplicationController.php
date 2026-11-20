@@ -433,52 +433,16 @@ class ApplicationController extends Controller
                 if ($field->is_core && in_array($field->field_key, self::APPLICANT_KEYS, true)) {
                     continue;
                 }
-
-                $value = $request->input($field->field_key);
-                if ($field->field_type === 'checkbox_with_text') {
-                    if (is_array($value)) {
-                        $selectedParts = [];
-                        foreach ($value as $item) {
-                            if (is_array($item)) {
-                                $isChecked = !empty($item['checked']) && ((string)$item['checked'] === '1' || $item['checked'] === true || $item['checked'] === 'yes');
-                                if ($isChecked) {
-                                    $label = trim((string)($item['label'] ?? ''));
-                                    $text = trim((string)($item['text'] ?? ''));
-                                    if ($label !== '' && $text !== '') {
-                                        $selectedParts[] = $label . ': ' . $text;
-                                    } elseif ($label !== '') {
-                                        $selectedParts[] = $label;
-                                    } elseif ($text !== '') {
-                                        $selectedParts[] = 'Yes: ' . $text;
-                                    } else {
-                                        $selectedParts[] = 'Yes';
-                                    }
-                                }
-                            }
-                        }
-
-                        if (empty($selectedParts) && isset($value['checked'])) {
-                            $isChecked = !empty($value['checked']) && ((string)$value['checked'] === '1' || $value['checked'] === true || $value['checked'] === 'yes');
-                            $text = trim((string)($value['text'] ?? ''));
-                            if ($isChecked) {
-                                $selectedParts[] = $text !== '' ? ('Yes: ' . $text) : 'Yes';
-                            }
-                        }
-
-                        $value = !empty($selectedParts) ? implode('; ', $selectedParts) : null;
-                    } elseif (is_string($value)) {
-                        $value = trim($value) !== '' ? trim($value) : null;
-                    } else {
-                        $value = null;
-                    }
-                } elseif (is_array($value)) {
-                    $value = implode(', ', $value);
+                if ($field->field_key === 'documents' || ($form->is_group_application && $field->field_key === 'members')) {
+                    continue;
                 }
+
+                $value = $this->formatSubmittedFieldValue($field, $request->input($field->field_key));
 
                 ApplicationFieldValue::create([
                     'application_id' => $application->id,
                     'form_field_id' => $field->id,
-                    'value' => $value !== null ? (string) $value : null,
+                    'value' => $value,
                 ]);
             }
 
@@ -747,7 +711,7 @@ class ApplicationController extends Controller
 
         /** @var FormField $field */
         foreach ($fields as $field) {
-            if (in_array($field->field_key, ['cnic', 'phone', 'full_name', 'father_name', 'district_id', 'tehsil', 'union_council', 'village', 'land_location'], true)) {
+            if (in_array($field->field_key, self::APPLICANT_KEYS, true) || in_array($field->field_key, ['members', 'documents'], true)) {
                 continue;
             }
 
@@ -796,5 +760,104 @@ class ApplicationController extends Controller
         }
 
         return $rules;
+    }
+
+    /**
+     * Normalize any submitted form field value (scalar, checkbox_with_text, or nested array) into a string for storage.
+     */
+    private function formatSubmittedFieldValue(FormField $field, mixed $value): ?string
+    {
+        if ($field->field_type === 'checkbox_with_text') {
+            if (is_array($value)) {
+                $selectedParts = [];
+                foreach ($value as $item) {
+                    if (is_array($item)) {
+                        $isChecked = ! empty($item['checked']) && ((string) $item['checked'] === '1' || $item['checked'] === true || $item['checked'] === 'yes');
+                        if ($isChecked) {
+                            $label = trim((string) ($item['label'] ?? ''));
+                            $text = trim((string) ($item['text'] ?? ''));
+                            if ($label !== '' && $text !== '') {
+                                $selectedParts[] = $label . ': ' . $text;
+                            } elseif ($label !== '') {
+                                $selectedParts[] = $label;
+                            } elseif ($text !== '') {
+                                $selectedParts[] = 'Yes: ' . $text;
+                            } else {
+                                $selectedParts[] = 'Yes';
+                            }
+                        }
+                    }
+                }
+
+                if (empty($selectedParts) && isset($value['checked'])) {
+                    $isChecked = ! empty($value['checked']) && ((string) $value['checked'] === '1' || $value['checked'] === true || $value['checked'] === 'yes');
+                    $text = trim((string) ($value['text'] ?? ''));
+                    if ($isChecked) {
+                        $selectedParts[] = $text !== '' ? ('Yes: ' . $text) : 'Yes';
+                    }
+                }
+
+                return ! empty($selectedParts) ? implode('; ', $selectedParts) : null;
+            }
+
+            if (is_string($value)) {
+                return trim($value) !== '' ? trim($value) : null;
+            }
+
+            return null;
+        }
+
+        if (is_array($value)) {
+            $flattened = $this->flattenScalarValues($value);
+            return ! empty($flattened) ? implode(', ', $flattened) : null;
+        }
+
+        if (is_scalar($value)) {
+            $trimmed = trim((string) $value);
+            return $trimmed !== '' ? $trimmed : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Recursively collect non-empty scalar string values from nested arrays without triggering array-to-string errors.
+     *
+     * @return string[]
+     */
+    private function flattenScalarValues(array $items): array
+    {
+        $flat = [];
+
+        foreach ($items as $item) {
+            if (is_array($item)) {
+                if (array_key_exists('checked', $item) || array_key_exists('label', $item)) {
+                    $isChecked = ! empty($item['checked']) && ((string) $item['checked'] === '1' || $item['checked'] === true || $item['checked'] === 'yes');
+                    if ($isChecked) {
+                        $label = trim((string) ($item['label'] ?? ''));
+                        $text = trim((string) ($item['text'] ?? ''));
+                        if ($label !== '' && $text !== '') {
+                            $flat[] = $label . ': ' . $text;
+                        } elseif ($label !== '') {
+                            $flat[] = $label;
+                        } elseif ($text !== '') {
+                            $flat[] = $text;
+                        }
+                    }
+                    continue;
+                }
+
+                foreach ($this->flattenScalarValues($item) as $nested) {
+                    $flat[] = $nested;
+                }
+            } elseif (is_scalar($item)) {
+                $str = trim((string) $item);
+                if ($str !== '') {
+                    $flat[] = $str;
+                }
+            }
+        }
+
+        return $flat;
     }
 }
