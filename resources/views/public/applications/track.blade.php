@@ -176,9 +176,23 @@
                                     <div><strong>RCO Code:</strong> {{ $rcoCode }} | <strong>Head Code:</strong> {{ $headCode }}</div>
                                     <div><strong>Challan No:</strong> #{{ $application->challan_no }} | <strong>Generated Date:</strong> {{ $application->challan_issued_at ? \Carbon\Carbon::parse($application->challan_issued_at)->format('d-M-Y') : date('d-M-Y') }}</div>
                                     <hr class="my-2">
-                                    <div><strong>Cost of 1 Bag (including transport charges):</strong> Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }} | <strong>Approved Bags:</strong> {{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</div>
-                                    <div><strong>Total Bill:</strong> Rs. {{ number_format($challanBreakdown['total_bill']) }} | <strong>Government Share ({{ (int) $challanBreakdown['govt_share_pct'] }}%):</strong> Rs. {{ number_format($challanBreakdown['govt_share']) }}</div>
-                                    <div class="fw-bold text-dark mt-1">Final Payable Bill ({{ (int) $challanBreakdown['farmer_share_pct'] }}% Rounded): Rs. {{ number_format($challanBreakdown['final_bill']) }}/- ({{ $challanBreakdown['amount_words'] }})</div>
+                                    @php
+                                        $trackUnitLabel = $challanBreakdown['unit_label'] ?? $application->resolveUnitLabel();
+                                        $trackSingularUnit = $challanBreakdown['singular_unit_label'] ?? \Illuminate\Support\Str::singular($trackUnitLabel);
+                                        $trackIsWheat = strcasecmp($trackUnitLabel, 'Bags') === 0
+                                            || app(\App\Services\WheatSeedMisService::class)->isWheatSeedScheme($application->scheme_id, $application->scheme?->slug, $application->scheme?->title);
+                                    @endphp
+                                    @if(!empty($challanBreakdown['is_itemized']) && !empty($challanBreakdown['line_items']))
+                                        <div class="mb-1"><strong>Approved Items Breakdown:</strong></div>
+                                        @foreach($challanBreakdown['line_items'] as $li)
+                                            <div>• {{ $li['item_label'] }}: {{ $li['effective_qty'] }} {{ $li['unit_label'] }} — {{ $li['is_free'] ? 'Free (Rs. 0)' : 'Payable Rs. ' . number_format($li['farmer_payable_amount']) }}</div>
+                                        @endforeach
+                                        <div class="mt-1"><strong>Gross Paid Bill:</strong> Rs. {{ number_format($challanBreakdown['total_bill']) }} | <strong>Government Share ({{ round((float) $challanBreakdown['govt_share_pct'], 1) }}%):</strong> Rs. {{ number_format($challanBreakdown['govt_share']) }}</div>
+                                    @else
+                                        <div><strong>{{ $trackIsWheat ? 'Cost of 1 Bag (including transport charges):' : 'Cost of 1 ' . $trackSingularUnit . ':' }}</strong> Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }} | <strong>Approved {{ $trackUnitLabel }}:</strong> {{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</div>
+                                        <div><strong>Total Bill:</strong> Rs. {{ number_format($challanBreakdown['total_bill']) }} | <strong>Government Share ({{ round((float) $challanBreakdown['govt_share_pct'], 1) }}%):</strong> Rs. {{ number_format($challanBreakdown['govt_share']) }}</div>
+                                    @endif
+                                    <div class="fw-bold text-dark mt-1">Final Payable Bill ({{ round((float) $challanBreakdown['farmer_share_pct'], 1) }}% Rounded): Rs. {{ number_format($challanBreakdown['final_bill']) }}/- ({{ $challanBreakdown['amount_words'] }})</div>
                                     <div class="text-muted mt-1"><strong>Directions:</strong> {{ $challanTpl->directions }}</div>
                                     <div class="text-primary fw-semibold mt-1"><i class="fa-solid fa-bolt me-1"></i> Pay online via GBPay / 1Link using the 20-digit PSID above for instant automatic verification, or deposit at the bank and upload your receipt below.</div>
                                 </div>
@@ -197,6 +211,19 @@
                                     </div>
                                     <small class="text-muted">Accepted formats: JPG, PNG, PDF (Max: 5MB)</small>
                                 </form>
+                            </div>
+                        @endif
+
+                        @if($application->current_stage === \App\Models\Application::STAGE_ELIGIBLE_BENEFICIARY && $application->hasItemizedSelections())
+                            <div class="alert alert-success mt-4 p-3 border-success">
+                                <h6 class="fw-bold text-success mb-1"><i class="fa-solid fa-circle-check me-1"></i> Approved Free Items — No Fee Challan or PSID Required</h6>
+                                <p class="small mb-2">All approved items on your application carry Rs. 0 fee. You are directly eligible for stock disbursement at your designated collection center.</p>
+                                <div class="small">
+                                    @foreach($application->items as $it)
+                                        @php $freeItemUnit = ($it->unit_label && strcasecmp(trim((string) $it->unit_label), 'Units') !== 0) ? $it->unit_label : $application->resolveUnitLabel(); @endphp
+                                        <div>• <strong>{{ $it->item_label }}</strong>: {{ rtrim(rtrim(number_format((float) $it->effectiveQty(), 2, '.', ''), '0'), '.') }} {{ $freeItemUnit }} (Free / Subsidized)</div>
+                                    @endforeach
+                                </div>
                             </div>
                         @endif
 

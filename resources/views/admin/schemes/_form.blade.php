@@ -116,10 +116,17 @@
             <label class="form-label">Last date</label>
             <input type="date" name="last_date" class="form-control" value="{{ old('last_date', isset($scheme) && $scheme->last_date ? $scheme->last_date->format('Y-m-d') : '') }}">
         </div>
-        <div class="form-check mb-3">
+        <div class="form-check mb-2">
             <input type="checkbox" class="form-check-input" name="is_featured" value="1" id="is_featured"
                 {{ old('is_featured', $scheme->is_featured ?? (($defaultType ?? 'running') === 'proposed')) ? 'checked' : '' }}>
             <label class="form-check-label" for="is_featured" id="is_featured_label">Featured on home</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+            <input type="hidden" name="auto_dashboard_present" value="1">
+            <input type="checkbox" class="form-check-input" name="has_auto_dashboard" value="1" id="has_auto_dashboard"
+                {{ old('has_auto_dashboard', $scheme->has_auto_dashboard ?? true) ? 'checked' : '' }}>
+            <label class="form-check-label fw-semibold" for="has_auto_dashboard">Enable Auto-Generated Officer MIS Dashboard</label>
+            <div class="form-text small text-muted">Automatically display this scheme's live MIS dashboard to authorized reporting officers on login.</div>
         </div>
 
         <div class="card alf-panel mb-3 border-primary-subtle">
@@ -156,6 +163,14 @@
                     <label class="form-label">Fallback Unit Fee (PKR)</label>
                     <input type="number" step="0.01" min="0" name="challan_fee_per_unit" class="form-control" value="{{ old('challan_fee_per_unit', $scheme->challan_fee_per_unit ?? 3000) }}">
                     <small class="text-muted">Used only if district seed configuration rate is not applicable.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Quantity Unit Label</label>
+                    <input type="text" maxlength="60" name="unit_label" class="form-control"
+                        value="{{ old('unit_label', $scheme->unit_label ?? '') }}"
+                        placeholder="e.g. Trees, Bags, Packs, Animals (auto-detected if blank)">
+                    <small class="text-muted">Displayed across Dossiers, District Quotas, and Challans (automatically falls back to Form Builder item units or Stock Item units if blank).</small>
                 </div>
 
                 @php

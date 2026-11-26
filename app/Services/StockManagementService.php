@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Application;
+use App\Models\ApplicationItem;
 use App\Models\CenterInventory;
 use App\Models\CollectionCenter;
 use App\Models\Scheme;
@@ -340,7 +341,13 @@ class StockManagementService
                 ]);
             }
 
-            // 4. Scheme stock item
+            // 3b. Multi-item itemized disbursement (Single unified voucher covering all approved items)
+            $application->loadMissing('items');
+            if ($application->items->isNotEmpty() || ! empty($data['batch_items'])) {
+                return $this->disburseBatchItems($application, $center, $data, $actor, $proofFile);
+            }
+
+            // 4. Scheme stock item (legacy single-item scheme flow)
             $item = SchemeStockItem::findOrFail($data['scheme_stock_item_id']);
             if ($item->scheme_id !== $application->scheme_id) {
                 throw ValidationException::withMessages([
@@ -462,6 +469,212 @@ class StockManagementService
 
             return $disbursement;
         });
+    }
+
+    /**
+     * Match an ApplicationItem to the best-fitting active SchemeStockItem for a scheme.
+     */
+    public function matchStockItemForApplicationItem(Scheme $scheme, ApplicationItem $appItem): ?SchemeStockItem
+    {
+        if ($appItem->scheme_stock_item_id) {
+            $linked = $scheme->stockItems->firstWhere('id', $appItem->scheme_stock_item_id)
+                ?? SchemeStockItem::where('scheme_id', $scheme->id)->find($appItem->scheme_stock_item_id);
+            if ($linked) {
+                return $linked;
+            }
+        }
+
+        $candidates = $scheme->relationLoaded('stockItems')
+            ? $scheme->stockItems->where('is_active', true)
+            : $scheme->stockItems()->where('is_active', true)->get();
+
+        $appKey = strtolower(trim((string) $appItem->item_key));
+        $appLabel = strtolower(trim((string) $appItem->item_label));
+
+        foreach ($candidates as $candidate) {
+            $candCode = strtolower(trim((string) $candidate->item_code));
+            $candName = strtolower(trim((string) $candidate->item_name));
+            $candNorm = ApplicationItem::normalizeKey((string) $candidate->item_name);
+
+            if (
+                ($candCode !== '' && $candCode === $appKey)
+                || $candNorm === $appKey
+                || $candName === $appLabel
+                || str_contains($candName, $appLabel)
+                || str_contains($appLabel, $candName)
+            ) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Atomically disburse all approved items of an itemized application under one unified voucher at one center.
+     */
+    protected function disburseBatchItems(
+        Application $application,
+        CollectionCenter $center,
+        array $data,
+        User $actor,
+        ?UploadedFile $proofFile = null
+    ): StockDisbursement {
+        $pendingItems = $application->items
+            ->filter(fn (ApplicationItem $item) => $item->remainingDisbursementQty() > 0)
+            ->values();
+
+        if ($pendingItems->isEmpty()) {
+            throw ValidationException::withMessages([
+                'application_id' => 'This application has no remaining approved items pending disbursement.',
+            ]);
+        }
+
+        $submittedByItemId = collect($data['batch_items'] ?? [])
+            ->filter(fn ($row) => is_array($row) && ! empty($row['application_item_id']))
+            ->keyBy(fn ($row) => (int) $row['application_item_id']);
+
+        $resolvedLines = [];
+
+        foreach ($pendingItems as $appItem) {
+            $qty = $appItem->remainingDisbursementQty();
+            $submitted = $submittedByItemId->get($appItem->id);
+
+            $stockItemId = (int) ($submitted['scheme_stock_item_id'] ?? 0);
+            $stockItem = $stockItemId > 0
+                ? SchemeStockItem::find($stockItemId)
+                : $this->matchStockItemForApplicationItem($application->scheme, $appItem);
+
+            if (! $stockItem || (int) $stockItem->scheme_id !== (int) $application->scheme_id) {
+                throw ValidationException::withMessages([
+                    'batch_items' => "Please select a valid active stock item for approved item '{$appItem->item_label}'.",
+                ]);
+            }
+
+            $inventory = $center->getInventoryForItem($stockItem->id);
+            if ((float) $inventory->current_balance < $qty) {
+                throw ValidationException::withMessages([
+                    'batch_items' => "Insufficient stock in {$center->name} for '{$appItem->item_label}' ({$stockItem->item_name}). Available: {$inventory->current_balance}, Required: {$qty}.",
+                ]);
+            }
+
+            $resolvedLines[] = [
+                'app_item' => $appItem,
+                'stock_item' => $stockItem,
+                'inventory' => $inventory,
+                'qty' => $qty,
+            ];
+        }
+
+        $proofPath = $proofFile ? $proofFile->store('stock/disbursements', 'public') : null;
+        $voucherNo = 'DSB-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -5));
+        $isMultiLine = count($resolvedLines) > 1;
+        $createdDisbursements = [];
+        $batchTotalQty = 0.0;
+        $itemSummaryNotes = [];
+
+        foreach ($resolvedLines as $idx => $line) {
+            /** @var ApplicationItem $appItem */
+            $appItem = $line['app_item'];
+            /** @var SchemeStockItem $stockItem */
+            $stockItem = $line['stock_item'];
+            /** @var CenterInventory $inventory */
+            $inventory = $line['inventory'];
+            $qty = (float) $line['qty'];
+
+            $rowDisbNo = $isMultiLine
+                ? $voucherNo . '-' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT)
+                : $voucherNo;
+
+            $disb = StockDisbursement::create([
+                'disbursement_no' => $rowDisbNo,
+                'batch_voucher_no' => $isMultiLine ? $voucherNo : null,
+                'application_id' => $application->id,
+                'application_item_id' => $appItem->id,
+                'collection_center_id' => $center->id,
+                'scheme_stock_item_id' => $stockItem->id,
+                'district_id' => $application->district_id,
+                'quantity_disbursed' => $qty,
+                'recipient_name' => $data['recipient_name'] ?? $application->applicant?->full_name ?? 'Beneficiary',
+                'recipient_cnic' => $data['recipient_cnic'] ?? $application->applicant?->cnic ?? '',
+                'recipient_phone' => $data['recipient_phone'] ?? $application->applicant?->phone ?? null,
+                'is_original_applicant' => filter_var($data['is_original_applicant'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'representative_relationship' => $data['representative_relationship'] ?? null,
+                'challan_no' => $data['challan_no'] ?? $application->challan_no ?? null,
+                'challan_verified' => true,
+                'disbursement_date' => $data['disbursement_date'] ?? now()->toDateString(),
+                'disbursed_by' => $actor->id,
+                'proof_attachment_path' => $proofPath,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            $inventory->quantity_distributed = (float) $inventory->quantity_distributed + $qty;
+            $inventory->recalculate();
+
+            $appItem->update([
+                'disbursed_qty' => (float) $appItem->disbursed_qty + $qty,
+                'scheme_stock_item_id' => $stockItem->id,
+            ]);
+
+            $batchTotalQty += $qty;
+            $itemSummaryNotes[] = "{$appItem->item_label}: {$qty}";
+            $createdDisbursements[] = $disb;
+        }
+
+        $previousDistributed = (float) ($application->distributed_quantity ?? 0);
+        $newDistributedTotal = $previousDistributed + $batchTotalQty;
+        $totalQuota = (float) ($application->getApprovedQuantity() ?: $batchTotalQty);
+        $isFullyDistributed = $newDistributedTotal >= $totalQuota;
+        $targetStage = $isFullyDistributed ? Application::STAGE_FULLY_DISTRIBUTED : Application::STAGE_PARTIALLY_DISTRIBUTED;
+        $targetStatus = $isFullyDistributed ? 'disbursed' : $application->status;
+
+        $oldStage = $application->current_stage;
+        $application->update([
+            'distributed_quantity' => $newDistributedTotal,
+            'distributed_at' => now(),
+            'current_stage' => $targetStage,
+            'status' => $targetStatus,
+        ]);
+
+        $primaryDisb = $createdDisbursements[0];
+        $summaryStr = implode(', ', $itemSummaryNotes);
+
+        ApplicationStatusLog::create([
+            'application_id' => $application->id,
+            'from_status' => $oldStage,
+            'to_status' => $targetStage,
+            'user_id' => $actor->id,
+            'note' => "Disbursed all approved items [{$summaryStr}] at {$center->name} under single voucher #{$voucherNo}." . (! empty($data['notes']) ? " Remarks: {$data['notes']}" : ''),
+        ]);
+
+        AccessAuditLog::log('stock_disbursed', StockDisbursement::class, (string) $primaryDisb->id, [
+            'voucher_no' => $voucherNo,
+            'application_no' => $application->application_no,
+            'collection_center' => $center->name,
+            'items' => $summaryStr,
+            'total_quantity' => $batchTotalQty,
+            'actor_id' => $actor->id,
+            'actor_name' => $actor->name,
+        ]);
+
+        try {
+            app(\App\Services\ZongSmsService::class)->sendForApplicationEvent(
+                $application->fresh(['applicant', 'scheme.department', 'district', 'bills']),
+                $targetStage,
+                [
+                    'disbursed_bags' => $newDistributedTotal,
+                    'distributed_quantity' => $newDistributedTotal,
+                ],
+                $actor->id
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Batch stock disbursement SMS dispatch failed', [
+                'application_id' => $application->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $primaryDisb;
     }
 
     /**
@@ -778,7 +991,7 @@ class StockManagementService
         ];
 
         $query = Application::query()
-            ->with(['applicant', 'scheme.stockItems', 'district', 'division'])
+            ->with(['applicant', 'scheme.stockItems', 'items.stockItem', 'district', 'division'])
             ->where(function ($q) use ($eligibleStages) {
                 $q->whereIn('current_stage', $eligibleStages)
                   ->orWhere(function ($sq) {

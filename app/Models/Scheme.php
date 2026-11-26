@@ -19,7 +19,7 @@ class Scheme extends Model
         'eligibility_criteria', 'eligibility_criteria_ur',
         'terms_conditions', 'terms_conditions_ur',
         'featured_image', 'is_featured', 'display_order',
-        'requires_challan', 'challan_fee_per_unit', 'challan_template_id',
+        'requires_challan', 'challan_fee_per_unit', 'challan_template_id', 'unit_label', 'has_auto_dashboard',
     ];
 
     protected function casts(): array
@@ -33,7 +33,15 @@ class Scheme extends Model
             'requires_challan' => 'boolean',
             'challan_fee_per_unit' => 'decimal:2',
             'challan_template_id' => 'integer',
+            'has_auto_dashboard' => 'boolean',
         ];
+    }
+
+    public function usesAutoDashboard(): bool
+    {
+        return $this->status === 'active'
+            && $this->type !== 'proposed'
+            && ($this->has_auto_dashboard ?? true);
     }
 
     public function imageUrl(?int $fallbackIndex = null): string
@@ -102,6 +110,54 @@ class Scheme extends Model
     public function getChallanTemplate(): ChallanTemplate
     {
         return $this->challanTemplate ?? ChallanTemplate::getDefault();
+    }
+
+    /**
+     * Resolve display unit label (e.g. Trees, Bags, Packs, Units) for this scheme.
+     */
+    public function resolveUnitLabel(): string
+    {
+        $explicit = trim((string) ($this->unit_label ?? ''));
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $forms = $this->relationLoaded('forms')
+            ? $this->forms
+            : $this->forms()->with('fields')->orderByDesc('version')->get();
+
+        foreach ($forms as $form) {
+            $fields = $form->relationLoaded('fields')
+                ? $form->fields
+                : $form->fields()->get();
+            foreach ($fields as $field) {
+                if ($field->field_type === 'checkbox_with_text' && ! empty($field->option_configs_json)) {
+                    $units = collect($field->normalizedOptionConfigs())
+                        ->pluck('unit_label')
+                        ->map(fn ($u) => trim((string) $u))
+                        ->filter(fn ($u) => $u !== '' && strcasecmp($u, 'Units') !== 0)
+                        ->unique()
+                        ->values();
+
+                    if ($units->isNotEmpty()) {
+                        return $units->count() === 1 ? (string) $units->first() : $units->implode(' / ');
+                    }
+                }
+            }
+        }
+
+        $stockItems = $this->relationLoaded('stockItems')
+            ? $this->stockItems
+            : $this->stockItems()->get();
+        $stockUnit = trim((string) ($stockItems->first()?->unit ?? ''));
+        if ($stockUnit !== '') {
+            return $stockUnit;
+        }
+
+        $isWheat = app(\App\Services\WheatSeedMisService::class)
+            ->isWheatSeedScheme($this->id, $this->slug, $this->title);
+
+        return $isWheat ? 'Bags' : 'Units';
     }
 
     public function psidConfig(): HasOne

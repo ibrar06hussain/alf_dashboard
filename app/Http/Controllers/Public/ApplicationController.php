@@ -7,6 +7,7 @@ use App\Models\Applicant;
 use App\Models\Application;
 use App\Models\ApplicationDocument;
 use App\Models\ApplicationFieldValue;
+use App\Models\ApplicationItem;
 use App\Models\ApplicationMember;
 use App\Models\ApplicationStatusLog;
 use App\Models\District;
@@ -160,9 +161,21 @@ class ApplicationController extends Controller
                             $hasChecked = true;
                             $text = trim((string)($item['text'] ?? ''));
                             $optLabel = trim((string)($item['label'] ?? ''));
+                            $optCfg = $field->resolveOptionConfig($optLabel);
+                            $requiresQty = $field->is_billable_items_field
+                                || ($optCfg && ($optCfg['input_mode'] ?? 'text') === 'numeric_qty');
+
                             if ($text === '') {
-                                $rules[$field->field_key.'.'.$idx.'.text'] = ['required', 'string', 'max:2000'];
-                                $customMessages[$field->field_key.'.'.$idx.'.text.required'] = 'Please provide details for ' . ($optLabel ?: $field->field_label) . '.';
+                                $rules[$field->field_key.'.'.$idx.'.text'] = $requiresQty
+                                    ? ['required', 'integer', 'min:1', 'max:1000000']
+                                    : ['required', 'string', 'max:2000'];
+                                $customMessages[$field->field_key.'.'.$idx.'.text.required'] = $requiresQty
+                                    ? 'Please enter quantity for ' . ($optLabel ?: $field->field_label) . '.'
+                                    : 'Please provide details for ' . ($optLabel ?: $field->field_label) . '.';
+                            } elseif ($requiresQty) {
+                                $rules[$field->field_key.'.'.$idx.'.text'] = ['required', 'integer', 'min:1', 'max:1000000'];
+                                $customMessages[$field->field_key.'.'.$idx.'.text.integer'] = 'Quantity for ' . ($optLabel ?: $field->field_label) . ' must be a whole number.';
+                                $customMessages[$field->field_key.'.'.$idx.'.text.min'] = 'Quantity for ' . ($optLabel ?: $field->field_label) . ' must be at least 1.';
                             }
                         }
                     }
@@ -429,6 +442,10 @@ class ApplicationController extends Controller
                 }
             }
 
+            $totalDemandedUnits = 0.0;
+            $hasBillableItemSelections = false;
+            $schemeTemplate = $scheme->getChallanTemplate();
+
             foreach ($form->fields as $field) {
                 if ($field->is_core && in_array($field->field_key, self::APPLICANT_KEYS, true)) {
                     continue;
@@ -437,13 +454,76 @@ class ApplicationController extends Controller
                     continue;
                 }
 
-                $value = $this->formatSubmittedFieldValue($field, $request->input($field->field_key));
+                $rawInput = $request->input($field->field_key);
+                $value = $this->formatSubmittedFieldValue($field, $rawInput);
 
                 ApplicationFieldValue::create([
                     'application_id' => $application->id,
                     'form_field_id' => $field->id,
                     'value' => $value,
                 ]);
+
+                if (
+                    $field->field_type === 'checkbox_with_text'
+                    && ($field->is_billable_items_field || ! empty($field->option_configs_json))
+                    && is_array($rawInput)
+                ) {
+                    foreach ($rawInput as $itemInput) {
+                        if (! is_array($itemInput)) {
+                            continue;
+                        }
+                        $isChecked = ! empty($itemInput['checked']) && ((string) $itemInput['checked'] === '1' || $itemInput['checked'] === true || $itemInput['checked'] === 'yes');
+                        if (! $isChecked) {
+                            continue;
+                        }
+
+                        $itemLabel = trim((string) ($itemInput['label'] ?? ''));
+                        $qtyRaw = trim((string) ($itemInput['text'] ?? ''));
+                        $qty = is_numeric($qtyRaw) ? max(0.0, (float) $qtyRaw) : 0.0;
+                        if ($itemLabel === '' || $qty <= 0) {
+                            continue;
+                        }
+
+                        $cfg = $field->resolveOptionConfig($itemLabel);
+                        $itemKey = $cfg['key'] ?? ApplicationItem::normalizeKey($itemLabel);
+                        $pricingMode = $cfg['pricing_mode'] ?? 'free';
+                        $unitPrice = ($pricingMode === 'paid') ? max(0.0, (float) ($cfg['unit_price'] ?? 0)) : 0.0;
+                        $isFree = ($pricingMode !== 'paid' || $unitPrice <= 0);
+                        $hasExplicitItemGovtShare = isset($cfg['govt_share_pct']) && $cfg['govt_share_pct'] !== null && $cfg['govt_share_pct'] !== '';
+                        $inheritsTemplateShare = ! $isFree && ! $hasExplicitItemGovtShare;
+                        $govtSharePct = $isFree
+                            ? 100.0
+                            : ($hasExplicitItemGovtShare
+                                ? max(0.0, min(100.0, (float) $cfg['govt_share_pct']))
+                                : (float) ($schemeTemplate->govt_share_pct ?? 0));
+
+                        $appItem = ApplicationItem::updateOrCreate(
+                            ['application_id' => $application->id, 'item_key' => $itemKey],
+                            [
+                                'form_field_id' => $field->id,
+                                'item_label' => $cfg['label'] ?? $itemLabel,
+                                'item_label_ur' => $cfg['label_ur'] ?? null,
+                                'unit_label' => $cfg['unit_label'] ?? $scheme->resolveUnitLabel(),
+                                'is_free' => $isFree,
+                                'unit_price' => $unitPrice,
+                                'govt_share_pct' => $govtSharePct,
+                                'inherits_template_share' => $inheritsTemplateShare,
+                                'farmer_share_pct' => $isFree ? 0.0 : max(0.0, min(100.0, round(100.0 - $govtSharePct, 2))),
+                                'demanded_qty' => $qty,
+                                'approved_qty' => null,
+                                'disbursed_qty' => 0,
+                            ]
+                        );
+                        $appItem->recalculateFinancials($schemeTemplate)->save();
+
+                        $totalDemandedUnits += $qty;
+                        $hasBillableItemSelections = true;
+                    }
+                }
+            }
+
+            if ($hasBillableItemSelections && $totalDemandedUnits > 0) {
+                $application->update(['demanded_quantity' => $totalDemandedUnits]);
             }
 
             foreach ($form->documents as $document) {
@@ -562,7 +642,7 @@ class ApplicationController extends Controller
             $dashedCnic = \App\Support\Cnic::dashed($cnic);
 
             $application = Application::query()
-                ->with(['scheme.department', 'applicant', 'district', 'statusLogs', 'bills'])
+                ->with(['scheme.department', 'applicant', 'district', 'statusLogs', 'bills', 'items'])
                 ->where('application_no', trim($data['application_no']))
                 ->whereHas('applicant', fn ($q) => $q->whereIn('cnic', array_unique([$cnic, $dashedCnic])))
                 ->first();
@@ -578,7 +658,7 @@ class ApplicationController extends Controller
                 if ($application->isChallanExpired()) {
                     app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
                     $application->refresh();
-                } elseif (! $application->psid) {
+                } elseif (! $application->psid && $application->requiresPayableChallan()) {
                     app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application);
                     $application->load('bills');
                 }
@@ -593,7 +673,7 @@ class ApplicationController extends Controller
 
     public function downloadChallan(string $application_no)
     {
-        $application = Application::with(['scheme.department', 'scheme.challanTemplate', 'applicant', 'district'])
+        $application = Application::with(['scheme.department', 'scheme.challanTemplate', 'applicant', 'district', 'items'])
             ->where('application_no', $application_no)
             ->firstOrFail();
 
@@ -609,6 +689,22 @@ class ApplicationController extends Controller
         }
 
         $breakdown = $application->getChallanBreakdown();
+        $isPayableZero = (float) ($breakdown['final_bill'] ?? 0) <= 0;
+        $bypassedAsFeeFree = ! $application->scheme?->requires_challan
+            && empty($application->challan_no)
+            && in_array($application->current_stage, [
+                Application::STAGE_ELIGIBLE_BENEFICIARY,
+                Application::STAGE_STOCK_ALLOCATED,
+                Application::STAGE_PARTIALLY_DISTRIBUTED,
+                Application::STAGE_FULLY_DISTRIBUTED,
+                Application::STAGE_COMPLETED,
+            ], true);
+
+        if ($isPayableZero || $bypassedAsFeeFree) {
+            return redirect()->route('applications.track', ['application_no' => $application->application_no])
+                ->with('error', 'No fee challan or PSID applies to this application because all selected or approved items are free (Rs. 0 payable).');
+        }
+
         $template = $breakdown['template'];
         $validityDays = (int) ($template->validity_days ?: 10);
 

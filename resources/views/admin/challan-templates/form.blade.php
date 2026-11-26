@@ -158,6 +158,9 @@
                                 <option value="free" @selected(old('fee_mode', $template->fee_mode) === 'free')>
                                     Fee Free / 100% Subsidized
                                 </option>
+                                <option value="itemized" @selected(old('fee_mode', $template->fee_mode) === 'itemized')>
+                                    Itemized Multi-Item (Paid &amp; Free Checkbox Options — skips challan when all free)
+                                </option>
                             </select>
                             @error('fee_mode')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
@@ -165,7 +168,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Government Subsidy Share (%) <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" step="0.01" min="0" max="100" name="govt_share_pct" class="form-control @error('govt_share_pct') is-invalid @enderror"
+                                <input type="number" step="0.01" min="0" max="100" name="govt_share_pct" id="tpl_govt_share_pct" class="form-control @error('govt_share_pct') is-invalid @enderror"
                                     value="{{ old('govt_share_pct', $template->govt_share_pct ?? 50.00) }}" required>
                                 <span class="input-group-text">%</span>
                             </div>
@@ -175,7 +178,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Farmer / Beneficiary Share (%) <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" step="0.01" min="0" max="100" name="farmer_share_pct" class="form-control @error('farmer_share_pct') is-invalid @enderror"
+                                <input type="number" step="0.01" min="0" max="100" name="farmer_share_pct" id="tpl_farmer_share_pct" class="form-control @error('farmer_share_pct') is-invalid @enderror"
                                     value="{{ old('farmer_share_pct', $template->farmer_share_pct ?? 50.00) }}" required>
                                 <span class="input-group-text">%</span>
                             </div>
@@ -221,7 +224,7 @@
                         <input class="form-check-input" type="checkbox" name="show_breakdown" value="1" id="show_breakdown"
                             @checked(old('show_breakdown', $template->show_breakdown ?? true))>
                         <label class="form-check-label fw-bold" for="show_breakdown">Show Breakdown Table</label>
-                        <div class="form-text small text-muted">Print Cost of 1 bag, Approved bags, Total bill, Govt Share & Final Bill.</div>
+                        <div class="form-text small text-muted">Print Cost per Unit, Approved Quantity, Total Bill, Govt Share &amp; Final Bill.</div>
                     </div>
                 </div>
             </div>
@@ -234,6 +237,7 @@
                     </h6>
                 </div>
                 <div class="card-body">
+                    <input type="hidden" name="schemes_sync" value="1">
                     <p class="small text-muted mb-2">
                         Check the schemes that should print this challan template whenever an applicant challan is generated:
                     </p>
@@ -278,4 +282,26 @@
         </div>
     </div>
 </form>
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const govtInput = document.getElementById('tpl_govt_share_pct');
+    const farmerInput = document.getElementById('tpl_farmer_share_pct');
+    if (govtInput && farmerInput) {
+        govtInput.addEventListener('input', function () {
+            const val = parseFloat(govtInput.value);
+            if (!isNaN(val) && val >= 0 && val <= 100) {
+                farmerInput.value = (Math.round((100 - val) * 100) / 100).toString();
+            }
+        });
+        farmerInput.addEventListener('input', function () {
+            const val = parseFloat(farmerInput.value);
+            if (!isNaN(val) && val >= 0 && val <= 100) {
+                govtInput.value = (Math.round((100 - val) * 100) / 100).toString();
+            }
+        });
+    }
+});
+</script>
+@endpush
 @endsection

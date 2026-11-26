@@ -137,7 +137,7 @@
                             <label class="form-label small fw-bold">Allocated Quantity</label>
                             <input type="number" step="1" min="0" name="allocated_quantity" class="form-control form-control-sm"
                                 value="{{ old('allocated_quantity', $application->allocated_quantity) }}">
-                            <div class="form-text" style="font-size: 11px;">Bags allocated in warehouse</div>
+                            <div class="form-text" style="font-size: 11px;">{{ $application->resolveUnitLabel() }} allocated in warehouse</div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">Distributed Quantity</label>

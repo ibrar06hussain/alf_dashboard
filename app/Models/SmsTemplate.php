@@ -56,7 +56,7 @@ class SmsTemplate extends Model
     {
         return [
             'submitted' => '1. Scheme Registration / Application Submitted (with Application ID & CNIC Password)',
-            'approved' => '2. Application Approved / Challan Issued (Approved Bags & Fee)',
+            'approved' => '2. Application Approved / Challan Issued (Approved Qty & Fee)',
             'rejected' => '3. Application Rejected (with Rejection Reason)',
             'gbpay_payment_success' => '4. Bill Paid / GBPay Payment Success (with Bill Paid Amount & PSID)',
             'payment_verified' => '5. Payment Verified by Accounts Officer',

@@ -526,6 +526,7 @@ class ApplicationReviewController extends Controller
             'responsibleOffice',
             'form',
             'fieldValues.formField',
+            'items.stockItem',
             'documents.formDocument',
             'statusLogs.user',
             'assignments.assignee',
@@ -580,7 +581,9 @@ class ApplicationReviewController extends Controller
 
         $data = $request->validate([
             'status' => ['required', 'string'],
-            'approved_quantity' => ['nullable', 'numeric', 'min:0.01'],
+            'approved_quantity' => ['nullable', 'numeric', 'min:0'],
+            'approved_items' => ['nullable', 'array'],
+            'approved_items.*' => ['nullable', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:2000'],
             'rejection_reason' => ['required_if:status,rejected', 'nullable', 'string', 'max:2000'],
             'verification_note' => ['nullable', 'string', 'max:2000'],
@@ -595,9 +598,13 @@ class ApplicationReviewController extends Controller
             return back()->with('error', 'You are not authorized to transition this application to the requested status.');
         }
 
-        $qtyToApprove = isset($data['approved_quantity']) && is_numeric($data['approved_quantity'])
-            ? (float) $data['approved_quantity']
-            : (float) ($application->approved_quantity ?? $application->getDemandedQuantity());
+        if ($request->has('approved_items') && is_array($data['approved_items'] ?? null)) {
+            $qtyToApprove = array_sum(array_map(fn ($v) => max(0.0, (float) $v), $data['approved_items']));
+        } else {
+            $qtyToApprove = isset($data['approved_quantity']) && is_numeric($data['approved_quantity'])
+                ? (float) $data['approved_quantity']
+                : (float) ($application->approved_quantity ?? $application->getDemandedQuantity());
+        }
 
         if (in_array($targetStatus, ['directorate_approved', 'approved', 'disbursed', 'fully_distributed'], true)
             && ! $this->quotas->canApprove($application->scheme, $application->district_id, $qtyToApprove)
@@ -605,9 +612,10 @@ class ApplicationReviewController extends Controller
             $quota = $this->quotas->status($application->scheme, $application->district_id);
 
             return back()->with('error', sprintf(
-                'District quota reached (%d / %d bags). Cannot approve further applications for this district.',
+                'District quota reached (%d / %d %s). Cannot approve further applications for this district.',
                 $quota['used'] ?? 0,
-                $quota['quota'] ?? 0
+                $quota['quota'] ?? 0,
+                strtolower($application->resolveUnitLabel())
             ));
         }
 
@@ -637,6 +645,7 @@ class ApplicationReviewController extends Controller
                 'rejection_reason' => $data['rejection_reason'] ?? null,
                 'verification_note' => $data['verification_note'] ?? null,
                 'approved_quantity' => $data['approved_quantity'] ?? null,
+                'approved_items' => $data['approved_items'] ?? null,
             ], $expectedLock);
 
             return back()->with('success', 'Application transitioned to ' . Application::translateStatus($targetStatus) . '.');
@@ -1114,6 +1123,9 @@ class ApplicationReviewController extends Controller
                 Application::STAGE_ELIGIBLE_BENEFICIARY,
                 Application::STAGE_STOCK_ALLOCATED,
             ], true)) {
+                if ($currentStage === Application::STAGE_CHALLAN_ISSUED && ! $application->isChallanPaid()) {
+                    $allowed[] = Application::STAGE_APPROVED;
+                }
                 if ($canRejectUnpaid) {
                     $allowed[] = Application::STAGE_REJECTED;
                 }
@@ -1211,11 +1223,14 @@ class ApplicationReviewController extends Controller
             'challan_due_date' => ['nullable', 'date'],
             'verification_note' => ['nullable', 'string', 'max:2000'],
             'modification_reason' => ['required', 'string', 'min:5', 'max:1000'],
+            'approved_items' => ['nullable', 'array'],
+            'approved_items.*' => ['nullable', 'numeric', 'min:0'],
             'fields' => ['nullable', 'array'],
         ]);
 
-        $application->loadMissing(['applicant', 'fieldValues.formField']);
+        $application->loadMissing(['applicant', 'fieldValues.formField', 'items', 'bills', 'scheme.challanTemplate']);
         $applicant = $application->applicant;
+        $isPaidOrDisbursedLocked = $application->isChallanPaid() || (int) ($application->distributed_quantity ?? 0) > 0;
 
         $oldValues = [];
         $newValues = [];
@@ -1245,7 +1260,8 @@ class ApplicationReviewController extends Controller
             }
         }
 
-        $canEditChallanFee = $user->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
+        $canEditChallanFee = ! $isPaidOrDisbursedLocked
+            && $user->hasAnyRole(['Super Admin', 'Director Agriculture', 'Director Livestock', 'Director Fisheries']);
 
         // Track Application core attributes
         $appAttributes = [
@@ -1264,6 +1280,11 @@ class ApplicationReviewController extends Controller
         $appAttributes['verification_note'] = 'Verification Note';
 
         foreach ($appAttributes as $attr => $label) {
+            // If optional numeric/date fields are omitted from request, don't treat omitted inputs as clearing changes
+            if (in_array($attr, ['demanded_quantity', 'approved_quantity', 'allocated_quantity', 'distributed_quantity', 'challan_amount', 'challan_due_date'], true) && ! $request->filled($attr)) {
+                continue;
+            }
+
             $oldRaw = $application->{$attr};
             $oldVal = $oldRaw instanceof \Carbon\Carbon ? $oldRaw->format('Y-m-d') : (string) ($oldRaw ?? '');
             
@@ -1281,6 +1302,54 @@ class ApplicationReviewController extends Controller
             }
         }
 
+        // Enforce Paid/Disbursed immutability on quantities, itemized approvals, and fee modifications
+        if ($isPaidOrDisbursedLocked) {
+            $attemptedFeeEdit = $request->filled('challan_amount')
+                && (int) ceil((float) $request->input('challan_amount')) !== (int) ceil((float) ($application->challan_amount ?? 0));
+            $attemptedQtyEdit = isset($newValues['application.demanded_quantity'])
+                || isset($newValues['application.approved_quantity'])
+                || isset($newValues['application.allocated_quantity'])
+                || isset($newValues['application.distributed_quantity']);
+
+            $attemptedItemEdit = false;
+            $submittedApprovedItemsCheck = (array) $request->input('approved_items', []);
+            if (! empty($submittedApprovedItemsCheck) && $application->items->isNotEmpty()) {
+                foreach ($application->items as $item) {
+                    $key = array_key_exists((string) $item->id, $submittedApprovedItemsCheck) ? (string) $item->id : (array_key_exists($item->id, $submittedApprovedItemsCheck) ? $item->id : null);
+                    if ($key !== null && abs((float) $submittedApprovedItemsCheck[$key] - (float) ($item->approved_qty ?? $item->demanded_qty)) > 0.001) {
+                        $attemptedItemEdit = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($attemptedFeeEdit || $attemptedQtyEdit || $attemptedItemEdit) {
+                return back()->with('error', 'Cannot modify item quantities, allocations, or challan fee because challan payment has already been verified or stock has been disbursed.')->withInput();
+            }
+        }
+
+        // Track Itemized Approved Quantities changes
+        $submittedApprovedItems = (array) $request->input('approved_items', []);
+        $approvedItemsTotal = null;
+        if (! empty($submittedApprovedItems) && $application->items->isNotEmpty()) {
+            $sum = 0.0;
+            foreach ($application->items as $item) {
+                $key = array_key_exists((string) $item->id, $submittedApprovedItems) ? (string) $item->id : (array_key_exists($item->id, $submittedApprovedItems) ? $item->id : null);
+                $oldQty = (float) ($item->approved_qty ?? $item->demanded_qty);
+                $newQty = $key !== null ? max(0.0, (float) $submittedApprovedItems[$key]) : $oldQty;
+                $sum += $newQty;
+                if (abs($newQty - $oldQty) > 0.001) {
+                    $oldValues["application_item.{$item->id}"] = ['label' => "Item: {$item->item_label}", 'value' => (string) $oldQty];
+                    $newValues["application_item.{$item->id}"] = ['label' => "Item: {$item->item_label}", 'value' => (string) $newQty];
+                    $changedFields[] = "application_item.{$item->id}";
+                }
+            }
+            if ($sum <= 0) {
+                return back()->with('error', 'At least one requested item must have an approved quantity greater than 0. To deny all items, please reject the application.')->withInput();
+            }
+            $approvedItemsTotal = $sum;
+        }
+
         // Track Dynamic Form Fields
         $submittedFields = (array) $request->input('fields', []);
         $formFieldsById = $application->form?->fields->keyBy('id') ?? collect();
@@ -1294,6 +1363,9 @@ class ApplicationReviewController extends Controller
             $newVal = is_array($subVal) ? json_encode($subVal) : (string) ($subVal ?? '');
 
             if ($oldVal !== $newVal) {
+                if ($isPaidOrDisbursedLocked && $formField?->field_type === 'checkbox_with_text') {
+                    return back()->with('error', 'Cannot modify selected tree/scheme items after challan payment has been verified or stock has been disbursed.')->withInput();
+                }
                 $oldValues["form_field.{$fieldId}"] = ['label' => $fieldLabel, 'value' => $oldVal];
                 $newValues["form_field.{$fieldId}"] = ['label' => $fieldLabel, 'value' => $newVal];
                 $changedFields[] = "form_field.{$fieldId}";
@@ -1304,7 +1376,9 @@ class ApplicationReviewController extends Controller
             return back()->with('info', 'No modifications were detected. All values remain unchanged.');
         }
 
-        DB::transaction(function () use ($application, $applicant, $request, $submittedFields, $oldValues, $newValues, $changedFields, $user, $canEditChallanFee) {
+        DB::transaction(function () use ($application, $applicant, $request, $submittedFields, $submittedApprovedItems, $approvedItemsTotal, $oldValues, $newValues, $changedFields, $user, $canEditChallanFee, $isPaidOrDisbursedLocked) {
+            $lockedApp = Application::where('id', $application->id)->with(['items', 'bills', 'scheme.challanTemplate', 'district', 'applicant'])->lockForUpdate()->firstOrFail();
+
             // 1. Update Applicant
             if ($applicant) {
                 $applicant->update([
@@ -1321,19 +1395,43 @@ class ApplicationReviewController extends Controller
                 ]);
             }
 
-            // 2. Update Application
+            // 2. Sync itemized approved quantities if provided
+            $hasItemQtyChanges = false;
+            $schemeTemplate = $lockedApp->scheme?->getChallanTemplate();
+            if (! empty($submittedApprovedItems) && $lockedApp->items->isNotEmpty()) {
+                foreach ($lockedApp->items as $item) {
+                    $key = array_key_exists((string) $item->id, $submittedApprovedItems) ? (string) $item->id : (array_key_exists($item->id, $submittedApprovedItems) ? $item->id : null);
+                    if ($key !== null) {
+                        $newQty = max(0.0, (float) $submittedApprovedItems[$key]);
+                        if (abs($newQty - (float) ($item->approved_qty ?? $item->demanded_qty)) > 0.001) {
+                            $hasItemQtyChanges = true;
+                        }
+                        $item->approved_qty = $newQty;
+                        $item->recalculateFinancials($schemeTemplate, $isPaidOrDisbursedLocked)->save();
+                    }
+                }
+                $lockedApp->load('items');
+            }
+
+            // 3. Update Application
             $newDistrictId = (int) $request->input('district_id');
             $divisionId = DB::table('division_districts')->where('district_id', $newDistrictId)->value('division_id');
 
+            $resolvedApprovedQty = $approvedItemsTotal !== null
+                ? $approvedItemsTotal
+                : ($request->filled('approved_quantity') ? (float) $request->input('approved_quantity') : $lockedApp->approved_quantity);
+
             $appUpdates = [
                 'district_id' => $newDistrictId,
-                'division_id' => $divisionId ?: $application->division_id,
-                'demanded_quantity' => $request->filled('demanded_quantity') ? (float) $request->input('demanded_quantity') : $application->demanded_quantity,
-                'approved_quantity' => $request->filled('approved_quantity') ? (float) $request->input('approved_quantity') : $application->approved_quantity,
-                'allocated_quantity' => $request->filled('allocated_quantity') ? (int) $request->input('allocated_quantity') : $application->allocated_quantity,
-                'distributed_quantity' => $request->filled('distributed_quantity') ? (int) $request->input('distributed_quantity') : $application->distributed_quantity,
+                'division_id' => $divisionId ?: $lockedApp->division_id,
+                'demanded_quantity' => $request->filled('demanded_quantity') ? (float) $request->input('demanded_quantity') : $lockedApp->demanded_quantity,
+                'approved_quantity' => $resolvedApprovedQty,
+                'allocated_quantity' => $approvedItemsTotal !== null
+                    ? (int) round($approvedItemsTotal)
+                    : ($request->filled('allocated_quantity') ? (int) $request->input('allocated_quantity') : $lockedApp->allocated_quantity),
+                'distributed_quantity' => $request->filled('distributed_quantity') ? (int) $request->input('distributed_quantity') : $lockedApp->distributed_quantity,
                 'verification_note' => $request->input('verification_note'),
-                'lock_version' => ($application->lock_version ?? 1) + 1,
+                'lock_version' => ($lockedApp->lock_version ?? 1) + 1,
             ];
 
             if ($canEditChallanFee && $request->filled('challan_amount')) {
@@ -1344,14 +1442,62 @@ class ApplicationReviewController extends Controller
                 $appUpdates['challan_due_date'] = $request->input('challan_due_date');
             }
 
-            $application->update($appUpdates);
+            $lockedApp->update($appUpdates);
 
-            // 3. Update Dynamic Form Field Values
+            // Sync pending Bill/PSID or convert to Rs. 0 eligible_beneficiary on unpaid challan_issued edits
+            $qtyOrFeeModified = $hasItemQtyChanges
+                || isset($newValues['application.approved_quantity'])
+                || ($canEditChallanFee && isset($newValues['application.challan_amount']));
+
+            if (
+                ! $isPaidOrDisbursedLocked
+                && $qtyOrFeeModified
+                && in_array($lockedApp->current_stage, [Application::STAGE_CHALLAN_ISSUED, Application::STAGE_APPROVED, 'directorate_approved'], true)
+            ) {
+                $lockedApp->load(['items', 'scheme.challanTemplate', 'district', 'applicant', 'bills']);
+                $breakdown = $lockedApp->getChallanBreakdown();
+                $effectivePayable = ($canEditChallanFee && isset($newValues['application.challan_amount']))
+                    ? (int) ceil((float) $request->input('challan_amount'))
+                    : (int) ceil((float) ($breakdown['final_bill'] ?? 0));
+
+                if ($lockedApp->scheme?->requires_challan && $effectivePayable > 0) {
+                    $lockedApp->challan_amount = $effectivePayable;
+                    if (! $lockedApp->challan_no) {
+                        $lockedApp->challan_no = 'CHL-' . date('Y') . '-' . str_pad((string) $lockedApp->id, 6, '0', STR_PAD_LEFT);
+                    }
+                    $lockedApp->saveQuietly();
+                    app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($lockedApp, (float) $effectivePayable, false);
+                } else {
+                    $lockedApp->bills()->where('status', 'pending')->update(['status' => 'cancelled']);
+                    $fromStage = $lockedApp->current_stage ?: $lockedApp->status;
+                    $lockedApp->update([
+                        'current_stage' => Application::STAGE_ELIGIBLE_BENEFICIARY,
+                        'status' => 'directorate_approved',
+                        'challan_no' => null,
+                        'challan_amount' => null,
+                        'challan_due_date' => null,
+                        'challan_issued_at' => null,
+                        'psid' => null,
+                        'stage_updated_at' => now(),
+                        'lock_version' => ($lockedApp->lock_version ?? 1) + 1,
+                    ]);
+
+                    ApplicationStatusLog::create([
+                        'application_id' => $lockedApp->id,
+                        'from_status' => $fromStage,
+                        'to_status' => Application::STAGE_ELIGIBLE_BENEFICIARY,
+                        'user_id' => $user->id,
+                        'note' => 'Net payable dropped to Rs. 0 after approved item/fee update; pending PSID cancelled and application promoted to Eligible Beneficiary.',
+                    ]);
+                }
+            }
+
+            // 4. Update Dynamic Form Field Values
             foreach ($submittedFields as $fieldId => $val) {
                 $stringVal = is_array($val) ? json_encode($val) : (string) ($val ?? '');
                 \App\Models\ApplicationFieldValue::updateOrCreate(
                     [
-                        'application_id' => $application->id,
+                        'application_id' => $lockedApp->id,
                         'form_field_id' => $fieldId,
                     ],
                     [
@@ -1360,10 +1506,10 @@ class ApplicationReviewController extends Controller
                 );
             }
 
-            // 4. Record Detailed Audit Log in application_edit_audit_logs
+            // 5. Record Detailed Audit Log in application_edit_audit_logs
             \App\Models\ApplicationEditAuditLog::create([
-                'application_id' => $application->id,
-                'application_no' => $application->application_no,
+                'application_id' => $lockedApp->id,
+                'application_no' => $lockedApp->application_no,
                 'user_id' => $user->id,
                 'user_name' => $user->name,
                 'user_email' => $user->email,
@@ -1378,19 +1524,19 @@ class ApplicationReviewController extends Controller
                 'modified_at' => now(),
             ]);
 
-            // 5. Also log into universal AccessAuditLog for cross-system query compliance
-            AccessAuditLog::log('application_modified', Application::class, (string) $application->id, [
-                'application_no' => $application->application_no,
+            // 6. Also log into universal AccessAuditLog for cross-system query compliance
+            AccessAuditLog::log('application_modified', Application::class, (string) $lockedApp->id, [
+                'application_no' => $lockedApp->application_no,
                 'changed_count' => count($changedFields),
                 'changed_fields' => $changedFields,
                 'modification_reason' => $request->input('modification_reason'),
             ]);
 
-            // 6. Record Application Status / Action Log
+            // 7. Record Application Status / Action Log
             ApplicationStatusLog::create([
-                'application_id' => $application->id,
-                'from_status' => $application->current_stage ?: $application->status,
-                'to_status' => $application->current_stage ?: $application->status,
+                'application_id' => $lockedApp->id,
+                'from_status' => $lockedApp->current_stage ?: $lockedApp->status,
+                'to_status' => $lockedApp->current_stage ?: $lockedApp->status,
                 'user_id' => $user->id,
                 'note' => 'Application data modified by ' . $user->name . '. Reason: ' . $request->input('modification_reason') . ' (' . count($changedFields) . ' field(s) updated)',
             ]);

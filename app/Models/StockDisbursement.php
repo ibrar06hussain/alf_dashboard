@@ -12,7 +12,9 @@ class StockDisbursement extends Model
 
     protected $fillable = [
         'disbursement_no',
+        'batch_voucher_no',
         'application_id',
+        'application_item_id',
         'collection_center_id',
         'scheme_stock_item_id',
         'district_id',
@@ -40,6 +42,28 @@ class StockDisbursement extends Model
     public function application(): BelongsTo
     {
         return $this->belongsTo(Application::class, 'application_id');
+    }
+
+    public function applicationItem(): BelongsTo
+    {
+        return $this->belongsTo(ApplicationItem::class, 'application_item_id');
+    }
+
+    public function displayVoucherNo(): string
+    {
+        return $this->batch_voucher_no ?: $this->disbursement_no;
+    }
+
+    public function batchSiblingDisbursements()
+    {
+        if (! $this->batch_voucher_no) {
+            return collect([$this->loadMissing(['item', 'applicationItem'])]);
+        }
+
+        return static::with(['item', 'applicationItem'])
+            ->where('batch_voucher_no', $this->batch_voucher_no)
+            ->orderBy('id')
+            ->get();
     }
 
     public function center(): BelongsTo

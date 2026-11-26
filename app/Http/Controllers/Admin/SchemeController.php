@@ -137,6 +137,9 @@ class SchemeController extends Controller
         $data['slug'] = !empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['requires_challan'] = $request->boolean('requires_challan');
+        $data['has_auto_dashboard'] = $request->has('auto_dashboard_present')
+            ? $request->boolean('has_auto_dashboard')
+            : true;
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
         $schemePayload = collect($data)->except([
@@ -217,6 +220,9 @@ class SchemeController extends Controller
         $data['slug'] = !empty($data['slug']) ? $data['slug'] : Str::slug($data['title']);
         $data['is_featured'] = $request->boolean('is_featured');
         $data['requires_challan'] = $request->boolean('requires_challan');
+        $data['has_auto_dashboard'] = $request->has('auto_dashboard_present')
+            ? $request->boolean('has_auto_dashboard')
+            : ($scheme->has_auto_dashboard ?? true);
         $data['display_order'] = (int) ($data['display_order'] ?? 0);
 
         $schemePayload = collect($data)->except([
@@ -236,11 +242,24 @@ class SchemeController extends Controller
             $schemePayload['featured_image'] = $request->file('featured_image')->store('schemes', 'public');
         }
 
+        $oldTemplateId = $scheme->challan_template_id;
+        $oldRequiresChallan = (bool) $scheme->requires_challan;
+        $oldFee = (float) $scheme->challan_fee_per_unit;
+
         DB::transaction(function () use ($scheme, $schemePayload, $request) {
             $scheme->update($schemePayload);
             $this->syncDistrictQuotas($scheme, $request);
             $this->syncPsidConfig($scheme, $request);
         });
+
+        $scheme->refresh();
+        if (
+            $oldTemplateId !== $scheme->challan_template_id
+            || $oldRequiresChallan !== (bool) $scheme->requires_challan
+            || abs($oldFee - (float) $scheme->challan_fee_per_unit) > 0.001
+        ) {
+            app(\App\Services\GbpayService::class)->syncUnpaidApplicationsForScheme($scheme);
+        }
 
         $redirect = $scheme->type === 'proposed'
             ? route('admin.schemes.index', ['type' => 'proposed'])
@@ -303,8 +322,10 @@ class SchemeController extends Controller
             'terms_conditions_ur' => ['nullable', 'string'],
             'is_featured' => ['nullable'],
             'requires_challan' => ['nullable'],
+            'has_auto_dashboard' => ['nullable'],
             'challan_fee_per_unit' => ['nullable', 'numeric', 'min:0'],
             'challan_template_id' => ['nullable', 'exists:challan_templates,id'],
+            'unit_label' => ['nullable', 'string', 'max:60'],
             'display_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'featured_image' => ['nullable', 'image', 'max:5120'],
             'district_quotas' => ['nullable', 'array'],

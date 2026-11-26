@@ -227,6 +227,10 @@
     $rcoCode = $bill?->challan_data['rco'] ?? \App\Models\PsidConfig::resolveDistrictRco($district, $template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
     $headCode = $bill?->challan_data['head'] ?? (($psidConfig->scheme_id && $psidConfig->head) ? $psidConfig->head : ($template->head_code ?: ($psidConfig->head ?: 'C03870')));
     $qrCodeBase64 = $qrCodeBase64 ?? ($psidNumber ? \App\Support\QrCodeGenerator::toBase64Png($psidNumber, 3, 2) : null);
+    $pdfUnitLabel = $breakdown['unit_label'] ?? $application->resolveUnitLabel();
+    $pdfSingularUnit = $breakdown['singular_unit_label'] ?? \Illuminate\Support\Str::singular($pdfUnitLabel);
+    $pdfIsWheatUnit = strcasecmp($pdfUnitLabel, 'Bags') === 0
+        || app(\App\Services\WheatSeedMisService::class)->isWheatSeedScheme($scheme?->id ?? $application->scheme_id, $scheme?->slug, $scheme?->title);
 @endphp
 
 <div class="challan-container">
@@ -304,25 +308,45 @@
             </thead>
             <tbody>
                 @if($template->show_breakdown ?? true)
-                <tr>
-                    <td>Cost of 1 Bag ( total cost of bag including transport charges )</td>
-                    <td class="amt-td">Rs. {{ number_format((int) ceil($breakdown['cost_of_1_bag'])) }}</td>
-                </tr>
-                <tr>
-                    <td>No of Wheat bags approved</td>
-                    <td class="amt-td">{{ (float) $breakdown['approved_bags'] == (int) $breakdown['approved_bags'] ? (int) $breakdown['approved_bags'] : $breakdown['approved_bags'] }}</td>
-                </tr>
-                <tr>
-                    <td>Total Bill : ( cost of 1 bag * no of bags)</td>
-                    <td class="amt-td">Rs. {{ number_format($breakdown['total_bill']) }}</td>
-                </tr>
-                <tr>
-                    <td>Government Share: {{ (int)$breakdown['govt_share_pct'] }}% of total bill rounded</td>
-                    <td class="amt-td">Rs. {{ number_format($breakdown['govt_share']) }}</td>
-                </tr>
+                    @if(!empty($breakdown['is_itemized']) && !empty($breakdown['line_items']))
+                        @foreach($breakdown['line_items'] as $li)
+                            <tr>
+                                <td>
+                                    {{ $li['item_label'] }} ({{ $li['effective_qty'] }} {{ $li['unit_label'] }}
+                                    @if($li['is_free']) — Free @else @ Rs. {{ number_format((int) ceil($li['unit_price'])) }}/{{ \Illuminate\Support\Str::singular($li['unit_label']) }} @endif)
+                                </td>
+                                <td class="amt-td">{{ $li['is_free'] ? 'Rs. 0 (Free)' : 'Rs. ' . number_format($li['gross_amount']) }}</td>
+                            </tr>
+                        @endforeach
+                        <tr>
+                            <td>Gross Total (Paid Items)</td>
+                            <td class="amt-td">Rs. {{ number_format($breakdown['total_bill']) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Government Subsidy Share ({{ round((float) $breakdown['govt_share_pct'], 1) }}%)</td>
+                            <td class="amt-td">Rs. {{ number_format($breakdown['govt_share']) }}</td>
+                        </tr>
+                    @else
+                        <tr>
+                            <td>{{ $pdfIsWheatUnit ? 'Cost of 1 Bag ( total cost of bag including transport charges )' : 'Cost of 1 ' . $pdfSingularUnit }}</td>
+                            <td class="amt-td">Rs. {{ number_format((int) ceil($breakdown['cost_of_1_bag'])) }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ $pdfIsWheatUnit ? 'No of Wheat bags approved' : 'No of ' . $pdfUnitLabel . ' approved' }}</td>
+                            <td class="amt-td">{{ (float) $breakdown['approved_bags'] == (int) $breakdown['approved_bags'] ? (int) $breakdown['approved_bags'] : $breakdown['approved_bags'] }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ $pdfIsWheatUnit ? 'Total Bill : ( cost of 1 bag * no of bags)' : 'Total Bill : ( cost of 1 ' . strtolower($pdfSingularUnit) . ' * no of ' . strtolower($pdfUnitLabel) . ')' }}</td>
+                            <td class="amt-td">Rs. {{ number_format($breakdown['total_bill']) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Government Share: {{ round((float) $breakdown['govt_share_pct'], 1) }}% of total bill rounded</td>
+                            <td class="amt-td">Rs. {{ number_format($breakdown['govt_share']) }}</td>
+                        </tr>
+                    @endif
                 @endif
                 <tr>
-                    <td>Final Bill : {{ (int)$breakdown['farmer_share_pct'] }}% of total bill rounded</td>
+                    <td>Final Bill : {{ round((float) $breakdown['farmer_share_pct'], 1) }}% of total bill rounded</td>
                     <td class="amt-td">Rs. {{ number_format($breakdown['final_bill']) }}</td>
                 </tr>
                 <tr class="total-row">

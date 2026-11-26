@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ApplicationItem;
 use App\Models\Department;
 use App\Models\Form;
 use App\Models\FormDocument;
@@ -108,6 +109,16 @@ class FormBuilderController extends Controller
             'fields.*.help_text' => ['nullable', 'string', 'max:255'],
             'fields.*.help_text_ur' => ['nullable', 'string', 'max:255'],
             'fields.*.options' => ['nullable', 'string'],
+            'fields.*.is_billable_items_field' => ['nullable'],
+            'fields.*.option_configs' => ['nullable', 'array'],
+            'fields.*.option_configs.*.key' => ['nullable', 'string', 'max:120'],
+            'fields.*.option_configs.*.label' => ['nullable', 'string', 'max:255'],
+            'fields.*.option_configs.*.label_ur' => ['nullable', 'string', 'max:255'],
+            'fields.*.option_configs.*.pricing_mode' => ['nullable', 'in:free,paid'],
+            'fields.*.option_configs.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'fields.*.option_configs.*.govt_share_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'fields.*.option_configs.*.input_mode' => ['nullable', 'in:text,numeric_qty'],
+            'fields.*.option_configs.*.unit_label' => ['nullable', 'string', 'max:60'],
             'fields.*.display_order' => ['nullable', 'integer', 'min:0'],
             'documents' => ['nullable', 'array'],
             'documents.*.id' => ['nullable', 'integer'],
@@ -186,8 +197,57 @@ class FormBuilderController extends Controller
             foreach ($data['fields'] ?? [] as $index => $fieldData) {
                 $isCore = in_array($fieldData['field_key'], $coreKeys, true);
                 $options = null;
+                $optionConfigs = null;
+                $isBillableItems = ! $isCore && ! empty($fieldData['is_billable_items_field']);
 
-                if (! empty($fieldData['options'])) {
+                if (! $isCore && ! empty($fieldData['option_configs']) && is_array($fieldData['option_configs'])) {
+                    $parsedConfigs = [];
+                    $usedKeys = [];
+
+                    foreach ($fieldData['option_configs'] as $optRow) {
+                        $optLabel = trim((string) ($optRow['label'] ?? ''));
+                        if ($optLabel === '') {
+                            continue;
+                        }
+
+                        $baseKey = trim((string) ($optRow['key'] ?? '')) ?: ApplicationItem::normalizeKey($optLabel);
+                        $optKey = $baseKey;
+                        $suffix = 2;
+                        while (in_array($optKey, $usedKeys, true)) {
+                            $optKey = $baseKey . '_' . $suffix++;
+                        }
+                        $usedKeys[] = $optKey;
+
+                        $pricingMode = ($optRow['pricing_mode'] ?? 'free') === 'paid' ? 'paid' : 'free';
+                        $unitPrice = $pricingMode === 'paid' ? max(0.0, (float) ($optRow['unit_price'] ?? 0)) : 0.0;
+                        if ($unitPrice <= 0) {
+                            $pricingMode = 'free';
+                        }
+
+                        $rawGovtShare = $optRow['govt_share_pct'] ?? null;
+                        $govtShare = ($rawGovtShare !== null && $rawGovtShare !== '' && $pricingMode === 'paid')
+                            ? max(0.0, min(100.0, (float) $rawGovtShare))
+                            : null;
+
+                        $parsedConfigs[] = [
+                            'key' => $optKey,
+                            'label' => $optLabel,
+                            'label_ur' => trim((string) ($optRow['label_ur'] ?? '')) ?: null,
+                            'pricing_mode' => $pricingMode,
+                            'unit_price' => $unitPrice,
+                            'govt_share_pct' => $govtShare,
+                            'input_mode' => ($optRow['input_mode'] ?? ($isBillableItems ? 'numeric_qty' : 'text')) === 'numeric_qty' ? 'numeric_qty' : 'text',
+                            'unit_label' => trim((string) ($optRow['unit_label'] ?? '')) ?: 'Units',
+                        ];
+                    }
+
+                    if (! empty($parsedConfigs)) {
+                        $optionConfigs = $parsedConfigs;
+                        $options = array_values(array_map(fn ($cfg) => $cfg['label'], $parsedConfigs));
+                    }
+                }
+
+                if ($options === null && ! empty($fieldData['options'])) {
                     $options = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n|,/', $fieldData['options']))));
                 }
 
@@ -216,6 +276,8 @@ class FormBuilderController extends Controller
                     'help_text' => $fieldData['help_text'] ?? null,
                     'help_text_ur' => $fieldData['help_text_ur'] ?? null,
                     'options_json' => $isCore ? null : $options,
+                    'option_configs_json' => $isCore ? null : $optionConfigs,
+                    'is_billable_items_field' => $isBillableItems,
                     'display_order' => $fieldData['display_order'] ?? ($index + 1),
                 ];
 

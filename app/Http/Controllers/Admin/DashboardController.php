@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\District;
 use App\Models\Scheme;
 use App\Models\User;
+use App\Services\SchemeAnalyticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -212,6 +213,7 @@ class DashboardController extends Controller
 
         $isSecretary = $user->hasRole('Secretary');
         $isSuperAdmin = $user->hasRole('Super Admin');
+        $schemeDashboardCards = app(SchemeAnalyticsService::class)->getOfficerDashboardCards($user);
 
         return view('admin.dashboard.index', compact(
             'kpis',
@@ -219,6 +221,7 @@ class DashboardController extends Controller
             'scopedDistrict',
             'departmentsPerformance',
             'allSchemes',
+            'schemeDashboardCards',
             'isSecretary',
             'isSuperAdmin'
         ));

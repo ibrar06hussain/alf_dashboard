@@ -2,13 +2,16 @@
 
 namespace App\Services;
 
+use App\Exceptions\GbpayPaymentException;
 use App\Models\AccessAuditLog;
 use App\Models\Application;
 use App\Models\ApplicationStatusLog;
 use App\Models\Bill;
+use App\Models\ChallanTemplate;
 use App\Models\District;
 use App\Models\GbpayResponse;
 use App\Models\PsidConfig;
+use App\Models\Scheme;
 use App\Models\VoucherSerial;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -64,109 +67,132 @@ class GbpayService
         ?float $amount = null,
         bool $forceNew = false
     ): Bill {
-        if ($application->isRejected()) {
-            throw new \RuntimeException('Cannot create or sync a GBPay bill/PSID for a rejected application.');
-        }
+        [$bill, $wasNewlyCreated] = DB::transaction(function () use ($application, $amount, $forceNew) {
+            $lockedApp = Application::where('id', $application->id)
+                ->with(['applicant', 'scheme.challanTemplate', 'district', 'items'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $application->loadMissing(['applicant', 'scheme.challanTemplate', 'district']);
+            if ($lockedApp->isRejected()) {
+                throw new \RuntimeException('Cannot create or sync a GBPay bill/PSID for a rejected application.');
+            }
 
-        $breakdown = $application->getChallanBreakdown();
-        $template = $breakdown['template'];
-        $psidConfig = PsidConfig::getActive($application->scheme_id);
+            $breakdown = $lockedApp->getChallanBreakdown();
+            $template = $breakdown['template'];
+            $psidConfig = PsidConfig::getActive($lockedApp->scheme_id);
 
-        $rawBillAmount = $amount !== null && $amount > 0
-            ? (float) $amount
-            : (float) ($application->challan_amount > 0 ? $application->challan_amount : $breakdown['final_bill']);
-        $billAmount = (int) ceil($rawBillAmount);
+            $rawBillAmount = $amount !== null
+                ? (float) $amount
+                : (float) ($lockedApp->challan_amount > 0 ? $lockedApp->challan_amount : $breakdown['final_bill']);
+            $billAmount = (int) ceil($rawBillAmount);
 
-        $validityDays = (int) ($template->validity_days ?: 10);
-        $dueDate = $application->challan_due_date
-            ? $application->challan_due_date->toDateString()
-            : now()->addDays($validityDays)->toDateString();
+            if ($billAmount <= 0) {
+                throw new \RuntimeException('Cannot create or sync a GBPay bill/PSID for an application with Rs. 0 payable (all items free or 100% subsidized).');
+            }
 
-        $district = $application->district
-            ?? $application->applicant?->district
-            ?? ($application->district_id ? District::find($application->district_id) : null);
-        $districtCode = $district?->code ?? PsidConfig::getDistrictAbbreviation(district: $district) ?? 'GL';
-
-        $fallbackRco = ($psidConfig->scheme_id && $psidConfig->rco)
-            ? $psidConfig->rco
-            : ($template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
-        $rcoCode = PsidConfig::resolveDistrictRco($district, $fallbackRco);
-        $headCode = ($psidConfig->scheme_id && $psidConfig->head)
-            ? $psidConfig->head
-            : ($template->head_code ?: ($psidConfig->head ?: 'C03870'));
-
-        $challanData = [
-            'applicant_name' => $application->applicant?->full_name ?? 'Applicant',
-            'applicant_cnic' => $application->applicant?->cnic ?? '',
-            'applicant_phone' => $application->applicant?->phone ?? '',
-            'applicant_email' => $application->applicant?->email ?? '',
-            'application_id' => $application->id,
-            'application_no' => $application->application_no,
-            'challan_no' => $application->challan_no,
-            'scheme_title' => $application->scheme?->title ?? 'ALF Scheme',
-            'district_name' => $districtCode,
-            'approved_bags' => $breakdown['approved_bags'] ?? 1,
-            'rco' => $rcoCode,
-            'head' => $headCode,
-        ];
-
-        if (!$forceNew) {
-            // 1. Return existing paid bill if already paid
-            $paidBill = $application->bills()->where('status', 'paid')->first();
+            // Lock existing bills inside transaction to prevent concurrent PSID minting
+            $paidBill = $lockedApp->bills()->where('status', 'paid')->orderByDesc('bill_id')->lockForUpdate()->first();
             if ($paidBill) {
-                if ($application->psid !== $paidBill->psid) {
-                    $application->psid = $paidBill->psid;
-                    $application->saveQuietly();
+                if ($forceNew) {
+                    throw new \RuntimeException("Cannot force a new PSID because application {$lockedApp->application_no} already has a PAID bill (PSID: {$paidBill->psid}).");
                 }
-                return $paidBill;
+
+                if ($lockedApp->psid !== $paidBill->psid) {
+                    $lockedApp->psid = $paidBill->psid;
+                    $lockedApp->saveQuietly();
+                }
+
+                return [$paidBill, false];
             }
 
-            // 2. Reuse and sync existing pending bill if available
-            $pendingBill = $application->bills()->where('status', 'pending')->first();
-            if ($pendingBill) {
-                $mergedChallanData = array_merge($challanData, array_filter([
-                    'voucher_serial_no' => $pendingBill->voucher_serial,
-                    'unique_voucher_id' => $pendingBill->formattedVoucherId(),
-                ], fn ($v) => $v !== null));
+            if ($forceNew && $lockedApp->isChallanPaid()) {
+                throw new \RuntimeException("Cannot force a new PSID because application {$lockedApp->application_no} challan payment is already verified.");
+            }
 
-                $pendingBill->update([
-                    'bill_amount' => $billAmount,
-                    'due_date' => $dueDate,
-                    'challan_data' => $mergedChallanData,
+            $validityDays = (int) ($template->validity_days ?: 10);
+            $dueDate = $lockedApp->challan_due_date
+                ? $lockedApp->challan_due_date->toDateString()
+                : now()->addDays($validityDays)->toDateString();
+
+            $district = $lockedApp->district
+                ?? $lockedApp->applicant?->district
+                ?? ($lockedApp->district_id ? District::find($lockedApp->district_id) : null);
+            $districtCode = $district?->code ?? PsidConfig::getDistrictAbbreviation(district: $district) ?? 'GL';
+
+            $fallbackRco = ($psidConfig->scheme_id && $psidConfig->rco)
+                ? $psidConfig->rco
+                : ($template->rco_code ?: ($psidConfig->rco ?: 'GL-1618'));
+            $rcoCode = PsidConfig::resolveDistrictRco($district, $fallbackRco);
+            $headCode = ($psidConfig->scheme_id && $psidConfig->head)
+                ? $psidConfig->head
+                : ($template->head_code ?: ($psidConfig->head ?: 'C03870'));
+
+            $challanData = [
+                'applicant_name' => $lockedApp->applicant?->full_name ?? 'Applicant',
+                'applicant_cnic' => $lockedApp->applicant?->cnic ?? '',
+                'applicant_phone' => $lockedApp->applicant?->phone ?? '',
+                'applicant_email' => $lockedApp->applicant?->email ?? '',
+                'application_id' => $lockedApp->id,
+                'application_no' => $lockedApp->application_no,
+                'challan_no' => $lockedApp->challan_no,
+                'scheme_title' => $lockedApp->scheme?->title ?? 'ALF Scheme',
+                'district_name' => $districtCode,
+                'approved_bags' => $breakdown['approved_bags'] ?? 1,
+                'rco' => $rcoCode,
+                'head' => $headCode,
+            ];
+
+            if (! $forceNew) {
+                $pendingBill = $lockedApp->bills()->where('status', 'pending')->orderByDesc('bill_id')->lockForUpdate()->first();
+                if ($pendingBill) {
+                    $mergedChallanData = array_merge($challanData, array_filter([
+                        'voucher_serial_no' => $pendingBill->voucher_serial,
+                        'unique_voucher_id' => $pendingBill->formattedVoucherId(),
+                    ], fn ($v) => $v !== null));
+
+                    $pendingBill->update([
+                        'bill_amount' => $billAmount,
+                        'due_date' => $dueDate,
+                        'challan_data' => $mergedChallanData,
+                    ]);
+
+                    $appDirty = false;
+                    if ($lockedApp->psid !== $pendingBill->psid) {
+                        $lockedApp->psid = $pendingBill->psid;
+                        $appDirty = true;
+                    }
+                    if (! $lockedApp->isChallanPaid() && ($amount !== null || ! $lockedApp->challan_amount) && (int) ceil((float) ($lockedApp->challan_amount ?? 0)) !== $billAmount) {
+                        $lockedApp->challan_amount = $billAmount;
+                        $appDirty = true;
+                    }
+                    if ($appDirty) {
+                        $lockedApp->saveQuietly();
+                    }
+
+                    return [$pendingBill, false];
+                }
+            } else {
+                // Cancel previous pending bills when forcing a new PSID
+                $lockedApp->bills()->where('status', 'pending')->update([
+                    'status' => 'cancelled',
                 ]);
-
-                if ($application->psid !== $pendingBill->psid) {
-                    $application->psid = $pendingBill->psid;
-                    $application->saveQuietly();
-                }
-
-                return $pendingBill;
             }
-        } else {
-            // Cancel previous pending bills when forcing a new PSID
-            $application->bills()->where('status', 'pending')->update([
-                'status' => 'cancelled',
-            ]);
-        }
 
-        $bill = DB::transaction(function () use ($application, $billAmount, $dueDate, $challanData) {
-            if (!$application->challan_no) {
-                $application->challan_no = 'CHL-' . now()->format('Y') . '-' . str_pad((string) $application->id, 6, '0', STR_PAD_LEFT);
+            if (! $lockedApp->challan_no) {
+                $lockedApp->challan_no = 'CHL-' . now()->format('Y') . '-' . str_pad((string) $lockedApp->id, 6, '0', STR_PAD_LEFT);
             }
 
             $allocatedSerial = null;
-            $psid = $this->generatePsid($application, $allocatedSerial);
+            $psid = $this->generatePsid($lockedApp, $allocatedSerial);
 
-            $challanData['challan_no'] = $application->challan_no;
+            $challanData['challan_no'] = $lockedApp->challan_no;
             if ($allocatedSerial) {
                 $challanData['voucher_serial_no'] = $allocatedSerial->serial_no;
                 $challanData['unique_voucher_id'] = $allocatedSerial->voucher_code;
             }
 
             $bill = Bill::create([
-                'application_id' => $application->id,
+                'application_id' => $lockedApp->id,
                 'psid' => $psid,
                 'voucher_serial' => $allocatedSerial?->serial_no,
                 'bill_amount' => $billAmount,
@@ -180,27 +206,31 @@ class GbpayService
                 $allocatedSerial->update([
                     'bill_id' => $bill->bill_id,
                     'psid' => $psid,
-                    'challan_no' => $application->challan_no,
+                    'challan_no' => $lockedApp->challan_no,
                 ]);
             }
 
-            $application->psid = $psid;
-            if (!$application->challan_amount) {
-                $application->challan_amount = $billAmount;
+            $lockedApp->psid = $psid;
+            if (! $lockedApp->challan_amount) {
+                $lockedApp->challan_amount = $billAmount;
             }
-            if (!$application->challan_issued_at) {
-                $application->challan_issued_at = now();
+            if (! $lockedApp->challan_issued_at) {
+                $lockedApp->challan_issued_at = now();
             }
-            if (!$application->challan_due_date) {
-                $application->challan_due_date = $dueDate;
+            if (! $lockedApp->challan_due_date) {
+                $lockedApp->challan_due_date = $dueDate;
             }
-            $application->saveQuietly();
+            $lockedApp->saveQuietly();
 
-            return $bill;
+            return [$bill, true];
         });
 
-        // Register/log bill generation with GBPay
-        $this->generateBill($bill);
+        $application->refresh();
+
+        if ($wasNewlyCreated) {
+            // Register/log bill generation with GBPay
+            $this->generateBill($bill);
+        }
 
         return $bill;
     }
@@ -336,10 +366,10 @@ class GbpayService
                 'status_message' => $responseData['message'] ?? null,
             ]);
 
-            if ($response->successful() && ($responseData['status'] ?? null) === 'paid') {
+            if ($bill->status === 'pending' && $response->successful() && ($responseData['status'] ?? null) === 'paid') {
                 $this->markBillAsPaid(
                     $bill,
-                    (string) ($responseData['transaction_id'] ?? $bill->transaction_id ?? ('GBPAY-' . time())),
+                    (string) ($responseData['transaction_id'] ?? ('GBPAY-' . time())),
                     (float) ($responseData['amount'] ?? $bill->bill_amount),
                     (string) ($responseData['bank_mnemonic'] ?? 'GBPay'),
                     $responseData
@@ -357,25 +387,42 @@ class GbpayService
      */
     public function handleWebhook(array $webhookData): bool
     {
-        $psid = $webhookData['psid'] ?? $webhookData['voucher_number'] ?? null;
+        $psid = trim((string) ($webhookData['psid'] ?? $webhookData['voucher_number'] ?? ''));
 
-        if (!$psid) {
+        if ($psid === '') {
             throw new \InvalidArgumentException('PSID not found in webhook data');
         }
 
-        $bill = Bill::with('application')->where('psid', $psid)->first();
+        $bill = Bill::with('application')
+            ->where(function ($q) use ($psid) {
+                $q->where('psid', $psid);
+                if (strlen($psid) === 14) {
+                    $q->orWhereRaw('LENGTH(psid) >= 14 AND SUBSTR(psid, -14) = ?', [$psid]);
+                } elseif (strlen($psid) === 10) {
+                    $q->orWhereRaw('LENGTH(psid) >= 10 AND SUBSTR(psid, -10) = ?', [$psid]);
+                }
+            })
+            ->orderByDesc('bill_id')
+            ->first();
 
         if (!$bill) {
             throw new \RuntimeException('Bill not found for PSID: ' . $psid);
         }
 
         $application = $bill->application;
+
+        if ($application && $application->current_stage === Application::STAGE_CHALLAN_ISSUED && $application->isChallanExpired()) {
+            app(\App\Services\ApplicationLifecycleService::class)->expireApplicationChallan($application);
+            $application->refresh();
+            $bill->refresh();
+        }
+
         $isBlocked = $bill->status === 'cancelled'
             || ($application && ($application->isRejected() || $application->current_stage === Application::STAGE_DORMANT));
 
         GbpayResponse::create([
             'bill_id' => $bill->bill_id,
-            'psid' => $psid,
+            'psid' => $bill->psid,
             'request_type' => 'webhook',
             'request_data' => [],
             'response_data' => $webhookData,
@@ -385,15 +432,27 @@ class GbpayService
 
         if (($webhookData['status'] ?? null) === 'paid') {
             if ($isBlocked) {
-                throw new \RuntimeException('Bill/Consumer Blocked: Payment is not accepted for cancelled, dormant, or rejected challan PSID.');
+                throw new GbpayPaymentException(
+                    'Bill/Consumer Blocked: Payment is not accepted for cancelled, dormant, or rejected challan PSID.',
+                    '02',
+                    403
+                );
             }
+
+            $rawWebhookAmount = $webhookData['amount'] ?? $webhookData['transaction_amount'] ?? null;
+            if (! is_numeric($rawWebhookAmount) || (float) $rawWebhookAmount <= 0) {
+                throw new GbpayPaymentException('Transaction amount mismatch', '01', 400);
+            }
+
+            $transactionId = trim((string) ($webhookData['transaction_id'] ?? '')) ?: ('WH-' . uniqid());
 
             $this->markBillAsPaid(
                 $bill,
-                (string) ($webhookData['transaction_id'] ?? $bill->transaction_id ?? ('WH-' . time())),
-                (float) ($webhookData['amount'] ?? $bill->bill_amount),
+                $transactionId,
+                (float) $rawWebhookAmount,
                 (string) ($webhookData['bank_mnemonic'] ?? 'GBPay'),
-                $webhookData
+                $webhookData,
+                true
             );
         }
 
@@ -408,9 +467,10 @@ class GbpayService
         string $transactionId,
         float $transactionAmount,
         string $bankMnemonic = 'GBPay',
-        array $rawPayload = []
-    ): void {
-        DB::transaction(function () use ($bill, $transactionId, $transactionAmount, $bankMnemonic, $rawPayload) {
+        array $rawPayload = [],
+        bool $strictAmountCheck = true
+    ): Bill {
+        return DB::transaction(function () use ($bill, $transactionId, $transactionAmount, $bankMnemonic, $rawPayload, $strictAmountCheck) {
             $lockedBill = Bill::where('bill_id', $bill->bill_id)->lockForUpdate()->firstOrFail();
             $lockedApp = $lockedBill->application_id
                 ? Application::where('id', $lockedBill->application_id)->lockForUpdate()->first()
@@ -420,7 +480,28 @@ class GbpayService
                 $lockedBill->status === 'cancelled'
                 || ($lockedApp && ($lockedApp->isRejected() || $lockedApp->current_stage === Application::STAGE_DORMANT))
             ) {
-                throw new \RuntimeException('Cannot accept payment for a cancelled, dormant, or rejected challan/PSID.');
+                if ($lockedBill->status === 'pending' && $lockedApp?->isRejected()) {
+                    $lockedBill->update(['status' => 'cancelled']);
+                }
+
+                throw new GbpayPaymentException('Bill/Consumer Blocked', '02', 403);
+            }
+
+            // Enforce atomic duplicate-transaction & already-paid idempotency inside lockForUpdate()
+            if ($lockedBill->status === 'paid') {
+                if ($transactionId !== '' && $lockedBill->transaction_id === $transactionId) {
+                    throw new GbpayPaymentException('Duplicate Transaction', '03', 400);
+                }
+
+                throw new GbpayPaymentException('Already Paid', '06', 400);
+            }
+
+            // Enforce strict integer amount match against locked bill_amount
+            $expectedIntAmount = (int) ceil((float) $lockedBill->bill_amount);
+            $paidIntAmount = (int) ceil($transactionAmount);
+
+            if ($strictAmountCheck && ($expectedIntAmount <= 0 || $paidIntAmount <= 0 || $paidIntAmount !== $expectedIntAmount)) {
+                throw new GbpayPaymentException('Transaction amount mismatch', '01', 400);
             }
 
             $paidAt = now();
@@ -441,6 +522,8 @@ class GbpayService
             ]);
 
             $this->updateApplicationPaymentStatus($lockedBill, $transactionId, $bankMnemonic);
+
+            return $lockedBill->fresh();
         });
     }
 
@@ -535,6 +618,166 @@ class GbpayService
                 'error' => $smsException->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Sync unpaid applications and pending GBPay bills when a Scheme's ChallanTemplate changes.
+     */
+    public function syncUnpaidApplicationsForTemplate(ChallanTemplate $template, array $additionalSchemeIds = []): int
+    {
+        $schemeIds = Scheme::query()
+            ->where('challan_template_id', $template->id)
+            ->when($template->is_default, fn ($q) => $q->orWhereNull('challan_template_id'))
+            ->pluck('id')
+            ->merge($additionalSchemeIds)
+            ->unique()
+            ->values();
+
+        $updatedCount = 0;
+        foreach (Scheme::whereIn('id', $schemeIds)->get() as $scheme) {
+            $updatedCount += $this->syncUnpaidApplicationsForScheme($scheme);
+        }
+
+        return $updatedCount;
+    }
+
+    /**
+     * Recalculate unpaid applications & pending PSID bills for a Scheme without touching paid/disbursed bills.
+     */
+    public function syncUnpaidApplicationsForScheme(Scheme $scheme): int
+    {
+        $scheme->load('challanTemplate');
+        $template = $scheme->getChallanTemplate();
+        $synced = 0;
+
+        $appIds = Application::query()
+            ->where('scheme_id', $scheme->id)
+            ->whereNull('payment_verified_at')
+            ->whereNull('gbpay_transaction_id')
+            ->whereNull('challan_paid_at')
+            ->whereNotIn('status', [Application::STATUS_REJECTED, Application::STATUS_DISBURSED])
+            ->where(function ($q) {
+                $q->whereNull('current_stage')
+                    ->orWhereNotIn('current_stage', [
+                        Application::STAGE_REJECTED,
+                        Application::STAGE_DORMANT,
+                        Application::STAGE_PAYMENT_VERIFIED,
+                        Application::STAGE_FULLY_DISTRIBUTED,
+                        Application::STAGE_COMPLETED,
+                        Application::STAGE_DISBURSED,
+                    ]);
+            })
+            ->whereDoesntHave('bills', fn ($bq) => $bq->where('status', 'paid'))
+            ->pluck('id');
+
+        foreach ($appIds as $appId) {
+            $didSync = DB::transaction(function () use ($appId, $scheme, $template) {
+                $lockedApp = Application::where('id', $appId)
+                    ->with(['items', 'bills', 'scheme.challanTemplate', 'district', 'applicant'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $lockedApp || $lockedApp->isChallanPaid() || $lockedApp->isRejected() || $lockedApp->current_stage === Application::STAGE_DORMANT) {
+                    return false;
+                }
+
+                $changed = false;
+
+                if ($lockedApp->items->isNotEmpty()) {
+                    foreach ($lockedApp->items as $item) {
+                        if (! $item->is_free && $item->inherits_template_share) {
+                            $oldPayable = (float) $item->farmer_payable_amount;
+                            $oldGovtPct = (float) $item->govt_share_pct;
+                            $item->recalculateFinancials($template, false)->save();
+                            if (abs($oldPayable - (float) $item->farmer_payable_amount) > 0.001 || abs($oldGovtPct - (float) $item->govt_share_pct) > 0.01) {
+                                $changed = true;
+                            }
+                        }
+                    }
+                    $lockedApp->load('items');
+                }
+
+                $stage = $lockedApp->current_stage ?: $lockedApp->status;
+                $isApprovedUnpaidStage = in_array($stage, [
+                    Application::STAGE_CHALLAN_ISSUED,
+                    Application::STAGE_APPROVED,
+                    Application::STAGE_ELIGIBLE_BENEFICIARY,
+                    'directorate_approved',
+                ], true);
+
+                if ($isApprovedUnpaidStage && (float) ($lockedApp->distributed_quantity ?? 0) <= 0) {
+                    $breakdown = $lockedApp->getChallanBreakdown();
+                    $newPayable = (int) ceil((float) ($breakdown['final_bill'] ?? 0));
+
+                    if ($scheme->requires_challan && $newPayable > 0) {
+                        $oldAmount = (int) ceil((float) ($lockedApp->challan_amount ?? 0));
+                        $pendingBill = $lockedApp->bills->firstWhere('status', 'pending');
+
+                        if ($stage !== Application::STAGE_CHALLAN_ISSUED || $oldAmount !== $newPayable || ! $pendingBill || (int) $pendingBill->bill_amount !== $newPayable) {
+                            $validityDays = (int) (($template?->validity_days) ?: 10);
+                            $lockedApp->challan_amount = $newPayable;
+                            if (! $lockedApp->challan_no) {
+                                $lockedApp->challan_no = 'CHL-' . date('Y') . '-' . str_pad((string) $lockedApp->id, 6, '0', STR_PAD_LEFT);
+                            }
+                            if (! $lockedApp->challan_issued_at) {
+                                $lockedApp->challan_issued_at = now();
+                            }
+                            if (! $lockedApp->challan_due_date) {
+                                $lockedApp->challan_due_date = now()->addDays($validityDays)->toDateString();
+                            }
+                            if ($stage !== Application::STAGE_CHALLAN_ISSUED) {
+                                $lockedApp->current_stage = Application::STAGE_CHALLAN_ISSUED;
+                                $lockedApp->status = 'directorate_approved';
+                                $lockedApp->stage_updated_at = now();
+                                $lockedApp->lock_version = ($lockedApp->lock_version ?? 1) + 1;
+                            }
+                            $lockedApp->saveQuietly();
+                            $this->createOrUpdateBillForApplication($lockedApp, (float) $newPayable, false);
+
+                            if ($stage !== Application::STAGE_CHALLAN_ISSUED) {
+                                ApplicationStatusLog::create([
+                                    'application_id' => $lockedApp->id,
+                                    'from_status' => $stage,
+                                    'to_status' => Application::STAGE_CHALLAN_ISSUED,
+                                    'note' => "Challan generated/regenerated for Rs. {$newPayable} following scheme item pricing or template update.",
+                                ]);
+                            }
+
+                            $changed = true;
+                        }
+                    } elseif ($stage !== Application::STAGE_ELIGIBLE_BENEFICIARY || $lockedApp->bills()->where('status', 'pending')->exists() || $lockedApp->psid || $lockedApp->challan_no) {
+                        $lockedApp->bills()->where('status', 'pending')->update(['status' => 'cancelled']);
+                        $lockedApp->update([
+                            'current_stage' => Application::STAGE_ELIGIBLE_BENEFICIARY,
+                            'status' => 'directorate_approved',
+                            'challan_no' => null,
+                            'challan_amount' => null,
+                            'challan_due_date' => null,
+                            'challan_issued_at' => null,
+                            'psid' => null,
+                            'stage_updated_at' => now(),
+                            'lock_version' => ($lockedApp->lock_version ?? 1) + 1,
+                        ]);
+
+                        ApplicationStatusLog::create([
+                            'application_id' => $lockedApp->id,
+                            'from_status' => $stage,
+                            'to_status' => Application::STAGE_ELIGIBLE_BENEFICIARY,
+                            'note' => 'Challan updated to Rs. 0 payable (all approved items free or 100% subsidized); pending challan/PSID cancelled and beneficiary promoted to Eligible Beneficiary.',
+                        ]);
+                        $changed = true;
+                    }
+                }
+
+                return $changed;
+            });
+
+            if ($didSync) {
+                $synced++;
+            }
+        }
+
+        return $synced;
     }
 }
 

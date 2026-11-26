@@ -885,6 +885,12 @@
         </div>
 
         <div class="col-lg-4">
+            @php
+                $resolvedUnitLabel = $application->resolveUnitLabel();
+                $resolvedSingularUnit = \Illuminate\Support\Str::singular($resolvedUnitLabel);
+                $isWheatUnit = strcasecmp($resolvedUnitLabel, 'Bags') === 0
+                    || app(\App\Services\WheatSeedMisService::class)->isWheatSeedScheme($application->scheme_id, $application->scheme?->slug, $application->scheme?->title);
+            @endphp
             {{-- Demanded vs Approved Quantity Overview Card --}}
             <div class="card alf-panel mb-3 border-primary-subtle">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -905,7 +911,7 @@
                                 <div class="h5 mb-0 text-dark fw-bold">
                                     {{ $application->getDemandedQuantity() }}
                                     <small
-                                        class="text-muted fs-6">{{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</small>
+                                        class="text-muted fs-6">{{ $resolvedUnitLabel }}</small>
                                 </div>
                             </div>
                         </div>
@@ -918,7 +924,7 @@
                                     class="h5 mb-0 fw-bold {{ $application->approved_quantity !== null ? 'text-success' : 'text-muted' }}">
                                     {{ $application->getApprovedQuantity() ?? '—' }}
                                     <small
-                                        class="fs-6">{{ $application->approved_quantity !== null ? ($application->scheme?->stockItems?->first()?->unit ?? 'Bags') : '' }}</small>
+                                        class="fs-6">{{ $application->approved_quantity !== null ? $resolvedUnitLabel : '' }}</small>
                                 </div>
                             </div>
                         </div>
@@ -933,20 +939,53 @@
                         @if($diff != 0)
                             <div class="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-1">
                                 <i class="fa-solid fa-triangle-exclamation"></i>
-                                <span>Adjusted by Officer: <strong>{{ ($diff > 0 ? '+' . $diff : $diff) . ' ' . ($application->scheme?->stockItems?->first()?->unit ?? 'Bags') }}</strong> vs demand.</span>
+                                <span>Adjusted by Officer: <strong>{{ ($diff > 0 ? '+' . $diff : $diff) . ' ' . $resolvedUnitLabel }}</strong> vs demand.</span>
                             </div>
                         @endif
+                    @endif
+
+                    @if($application->items->isNotEmpty())
+                        <div class="table-responsive mt-2 mb-2">
+                            <table class="table table-sm table-bordered mb-0" style="font-size: 11.5px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Item</th>
+                                        <th class="text-center">Type</th>
+                                        <th class="text-end">Req</th>
+                                        <th class="text-end">Appr</th>
+                                        <th class="text-end">Payable</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($application->items as $appItem)
+                                        <tr>
+                                            <td>{{ $appItem->item_label }}</td>
+                                            <td class="text-center">
+                                                @if($appItem->is_free || (float) $appItem->unit_price <= 0)
+                                                    <span class="badge bg-success-subtle text-success">Free</span>
+                                                @else
+                                                    <span class="badge bg-primary-subtle text-primary">Paid</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-end">{{ rtrim(rtrim(number_format((float) $appItem->demanded_qty, 2, '.', ''), '0'), '.') }}</td>
+                                            <td class="text-end">{{ $appItem->approved_qty !== null ? rtrim(rtrim(number_format((float) $appItem->approved_qty, 2, '.', ''), '0'), '.') : '—' }}</td>
+                                            <td class="text-end">Rs. {{ number_format((int) ceil((float) $appItem->farmer_payable_amount)) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
                     @endif
 
                     <div class="small text-muted mt-2 d-flex justify-content-between">
                         <span>Disbursed so far:</span>
                         <strong class="text-dark">{{ (float) ($application->distributed_quantity ?: 0) }}
-                            {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong>
+                            {{ $resolvedUnitLabel }}</strong>
                     </div>
                     <div class="small text-muted d-flex justify-content-between">
                         <span>Remaining to disburse:</span>
                         <strong class="text-primary">{{ $application->getRemainingDisbursementQuantity() }}
-                            {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong>
+                            {{ $resolvedUnitLabel }}</strong>
                     </div>
                 </div>
             </div>
@@ -956,7 +995,7 @@
                     <div class="card-header">District Quota</div>
                     <div class="card-body">
                         <div class="h4 mb-1">{{ number_format($quotaStatus['used']) }} /
-                            {{ number_format($quotaStatus['quota']) }} <span class="small text-muted fs-6">Bags</span>
+                            {{ number_format($quotaStatus['quota']) }} <span class="small text-muted fs-6">{{ $resolvedUnitLabel }}</span>
                         </div>
                         <div class="small text-muted mb-2">Approved / Disbursed vs quota for {{ $application->district?->name }}
                         </div>
@@ -1087,24 +1126,40 @@
                             <div><strong>Account Title:</strong> {{ $challanTpl->account_title }}</div>
                             <div><strong>Account Head:</strong> {{ $challanTpl->account_head }}</div>
                             <hr class="my-2">
-                            <div class="d-flex justify-content-between">
-                                <span>Cost of 1 Bag (incl. transport):</span>
-                                <strong>Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }}</strong>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span>No of Wheat bags approved:</span>
-                                <strong>{{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</strong>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span>Total Bill:</span>
-                                <strong>Rs. {{ number_format($challanBreakdown['total_bill']) }}</strong>
-                            </div>
+                            @if(!empty($challanBreakdown['is_itemized']) && !empty($challanBreakdown['line_items']))
+                                @foreach($challanBreakdown['line_items'] as $li)
+                                    <div class="d-flex justify-content-between">
+                                        <span>
+                                            {{ $li['item_label'] }} ({{ $li['effective_qty'] }} {{ $li['unit_label'] }}
+                                            @if($li['is_free']) · <span class="text-success">Free</span>@else @ Rs. {{ number_format((int) ceil($li['unit_price'])) }}@endif)
+                                        </span>
+                                        <strong>{{ $li['is_free'] ? 'Rs. 0' : 'Rs. ' . number_format($li['farmer_payable_amount']) }}</strong>
+                                    </div>
+                                @endforeach
+                                <div class="d-flex justify-content-between border-top pt-1 mt-1">
+                                    <span>Gross Paid Total:</span>
+                                    <strong>Rs. {{ number_format($challanBreakdown['total_bill']) }}</strong>
+                                </div>
+                            @else
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ $isWheatUnit ? 'Cost of 1 Bag (incl. transport):' : 'Cost of 1 ' . $resolvedSingularUnit . ':' }}</span>
+                                    <strong>Rs. {{ number_format((int) ceil($challanBreakdown['cost_of_1_bag'])) }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ $isWheatUnit ? 'No of Wheat bags approved:' : 'No of ' . $resolvedUnitLabel . ' approved:' }}</span>
+                                    <strong>{{ (float) $challanBreakdown['approved_bags'] == (int) $challanBreakdown['approved_bags'] ? (int) $challanBreakdown['approved_bags'] : $challanBreakdown['approved_bags'] }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Total Bill:</span>
+                                    <strong>Rs. {{ number_format($challanBreakdown['total_bill']) }}</strong>
+                                </div>
+                            @endif
                             <div class="d-flex justify-content-between text-muted">
-                                <span>Government Share ({{ (int) $challanBreakdown['govt_share_pct'] }}%):</span>
+                                <span>Government Share ({{ round((float) $challanBreakdown['govt_share_pct'], 1) }}%):</span>
                                 <span>Rs. {{ number_format($challanBreakdown['govt_share']) }}</span>
                             </div>
                             <div class="d-flex justify-content-between text-primary fw-bold border-top pt-1 mt-1">
-                                <span>Final Bill ({{ (int) $challanBreakdown['farmer_share_pct'] }}% Rounded):</span>
+                                <span>Final Bill ({{ round((float) $challanBreakdown['farmer_share_pct'], 1) }}% Rounded):</span>
                                 <span>Rs. {{ number_format($challanBreakdown['final_bill']) }}/-</span>
                             </div>
                             <div class="text-muted fst-italic mt-1" style="font-size: 11px;">
@@ -1235,8 +1290,8 @@
                         <p class="small text-muted mb-2">
                             This applicant has verified payment and is eligible to receive
                             <strong>{{ $application->getRemainingDisbursementQuantity() }}
-                                {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</strong> of
-                            {{ $application->scheme?->stockItems?->first()?->item_name ?? 'Scheme Commodity' }}.
+                                {{ $resolvedUnitLabel }}</strong> of
+                            {{ $application->scheme?->stockItems?->first()?->item_name ?? $application->scheme?->title ?? 'Scheme Commodity' }}.
                         </p>
                         <a href="{{ route('admin.stock.disbursements', ['tab' => 'eligible', 'app_id' => $application->id]) }}"
                             class="btn btn-sm btn-success w-100 font-weight-bold">
@@ -1263,34 +1318,108 @@
                                 </select>
                             </div>
 
-                            {{-- Approved Quantity Option during Approval --}}
+                            {{-- Approved Quantity / Per-Item Quantity Option during Approval --}}
                             <div class="mb-3" id="approved-quantity-box">
-                                <label class="form-label fw-bold d-flex justify-content-between align-items-center">
-                                    <span><i class="fa-solid fa-boxes-stacked me-1 text-success"></i> Approved Quantity</span>
-                                    <span class="badge bg-light text-dark border">
-                                        Demanded: {{ $application->getDemandedQuantity() }}
-                                        {{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}
-                                    </span>
-                                </label>
-                                <div class="input-group">
-                                    <input type="number" step="0.01" min="0.01" name="approved_quantity"
-                                        id="approved-quantity-input" class="form-control"
-                                        value="{{ old('approved_quantity', $application->approved_quantity ?: $application->getDemandedQuantity()) }}"
-                                        placeholder="Enter authorized quantity...">
-                                    <span
-                                        class="input-group-text">{{ $application->scheme?->stockItems?->first()?->unit ?? 'Bags' }}</span>
-                                </div>
-                                <div class="form-text small text-muted">
-                                    Set authorized quantity for this beneficiary.
-                                    @if($application->scheme?->requires_challan)
-                                        @php
-                                            $unitRate = $application->getEffectiveUnitRate();
-                                        @endphp
-                                        Challan billing: <strong>Rs. {{ number_format((int) ceil((float) $unitRate)) }} /
-                                            unit</strong> (based on {{ $application->district?->name ?? 'district' }} delivery bag
-                                        rate with 50% discount) will be calculated on this approved quantity.
-                                    @endif
-                                </div>
+                                @if($application->items->isNotEmpty())
+                                    @php
+                                        $approvalTpl = $application->scheme?->getChallanTemplate();
+                                        $approvalPaidFrozen = $application->isChallanPaid();
+                                    @endphp
+                                    <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                                        <span><i class="fa-solid fa-boxes-stacked me-1 text-success"></i> Approved Item Quantities</span>
+                                        <span class="badge bg-light text-dark border">
+                                            Demanded: {{ $application->getDemandedQuantity() }} {{ $resolvedUnitLabel }}
+                                        </span>
+                                    </label>
+                                    <div class="table-responsive border rounded bg-white">
+                                        <table class="table table-sm align-middle mb-0" style="font-size: 12px;">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Item</th>
+                                                    <th class="text-center">Rate</th>
+                                                    <th class="text-end">Req</th>
+                                                    <th style="width:95px;">Approve Qty</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($application->items as $appItem)
+                                                    @php
+                                                        $defaultItemApproved = old('approved_items.'.$appItem->id, $appItem->approved_qty ?? $appItem->demanded_qty);
+                                                        $sharePct = $appItem->effectiveSharePercentages($approvalTpl, $approvalPaidFrozen);
+                                                        $itemGovtPct = $sharePct['govt_share_pct'];
+                                                        $itemFarmerPct = $sharePct['farmer_share_pct'];
+                                                    @endphp
+                                                    <tr>
+                                                        <td>
+                                                            <div class="fw-semibold">{{ $appItem->item_label }}</div>
+                                                            <div class="text-muted" style="font-size: 10.5px;">
+                                                                @if($appItem->is_free || (float) $appItem->unit_price <= 0)
+                                                                    <span class="text-success fw-semibold">Free Item</span>
+                                                                @else
+                                                                    Govt {{ round($itemGovtPct, 1) }}% · Applicant {{ round($itemFarmerPct, 1) }}%
+                                                                @endif
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            {{ $appItem->is_free ? 'Free' : 'Rs. ' . number_format((float) $appItem->unit_price) }}
+                                                        </td>
+                                                        <td class="text-end fw-semibold">
+                                                            {{ rtrim(rtrim(number_format((float) $appItem->demanded_qty, 2, '.', ''), '0'), '.') }}
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" step="1" min="0"
+                                                                name="approved_items[{{ $appItem->id }}]"
+                                                                class="form-control form-control-sm text-end js-approved-item-qty"
+                                                                data-is-free="{{ $appItem->is_free || (float) $appItem->unit_price <= 0 ? '1' : '0' }}"
+                                                                data-unit-price="{{ (float) $appItem->unit_price }}"
+                                                                data-farmer-share="{{ $itemFarmerPct }}"
+                                                                value="{{ rtrim(rtrim(number_format((float) $defaultItemApproved, 2, '.', ''), '0'), '.') }}">
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="mt-2 p-2 rounded border bg-light small" id="js-dd-approval-summary">
+                                        <div class="d-flex justify-content-between">
+                                            <span>Total Approved {{ $resolvedUnitLabel }}:</span>
+                                            <strong id="js-dd-total-qty">0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span>Estimated Challan Payable:</span>
+                                            <strong id="js-dd-payable" class="text-primary">Rs. 0</strong>
+                                        </div>
+                                        <div class="text-success fw-semibold mt-1 d-none" id="js-dd-free-notice">
+                                            <i class="fa-solid fa-circle-info me-1"></i> Payable is Rs. 0 — Challan &amp; PSID will be skipped automatically.
+                                        </div>
+                                    </div>
+                                @else
+                                    <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                                        <span><i class="fa-solid fa-boxes-stacked me-1 text-success"></i> Approved Quantity</span>
+                                        <span class="badge bg-light text-dark border">
+                                            Demanded: {{ $application->getDemandedQuantity() }}
+                                            {{ $resolvedUnitLabel }}
+                                        </span>
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" min="0.01" name="approved_quantity"
+                                            id="approved-quantity-input" class="form-control"
+                                            value="{{ old('approved_quantity', $application->approved_quantity ?: $application->getDemandedQuantity()) }}"
+                                            placeholder="Enter authorized quantity...">
+                                        <span
+                                            class="input-group-text">{{ $resolvedUnitLabel }}</span>
+                                    </div>
+                                    <div class="form-text small text-muted">
+                                        Set authorized quantity for this beneficiary.
+                                        @if($application->scheme?->requires_challan)
+                                            @php
+                                                $unitRate = $application->getEffectiveUnitRate();
+                                            @endphp
+                                            Challan billing: <strong>Rs. {{ number_format((int) ceil((float) $unitRate)) }} /
+                                                {{ strtolower($resolvedSingularUnit) }}</strong> will be calculated on this approved quantity.
+                                        @endif
+                                    </div>
+                                @endif
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Verification note</label>
@@ -1541,6 +1670,36 @@
                 };
                 select.addEventListener('change', toggle);
                 toggle();
+            }
+
+            // Live DD itemized approval estimator
+            const itemApprovalInputs = document.querySelectorAll('.js-approved-item-qty');
+            if (itemApprovalInputs.length) {
+                const updateItemApprovalTotals = () => {
+                    let totalQty = 0;
+                    let totalPayable = 0;
+                    itemApprovalInputs.forEach(function (el) {
+                        const q = Math.max(0, parseFloat(el.value || '0') || 0);
+                        totalQty += q;
+                        if (el.dataset.isFree !== '1') {
+                            const rate = parseFloat(el.dataset.unitPrice || '0') || 0;
+                            const farmerShare = parseFloat(el.dataset.farmerShare || '0') || 0;
+                            const lineGross = Math.ceil(rate * q);
+                            totalPayable += Math.ceil(lineGross * (farmerShare / 100));
+                        }
+                    });
+                    const totalQtyEl = document.getElementById('js-dd-total-qty');
+                    const payableEl = document.getElementById('js-dd-payable');
+                    const freeNoticeEl = document.getElementById('js-dd-free-notice');
+                    if (totalQtyEl) totalQtyEl.textContent = totalQty;
+                    if (payableEl) payableEl.textContent = 'Rs. ' + totalPayable.toLocaleString();
+                    if (freeNoticeEl) freeNoticeEl.classList.toggle('d-none', totalPayable > 0);
+                };
+                itemApprovalInputs.forEach(el => {
+                    el.addEventListener('input', updateItemApprovalTotals);
+                    el.addEventListener('change', updateItemApprovalTotals);
+                });
+                updateItemApprovalTotals();
             }
 
             // Photo modal opener

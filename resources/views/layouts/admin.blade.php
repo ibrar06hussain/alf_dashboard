@@ -116,7 +116,8 @@
                         $canViewAuditLogs = $isSuperAdmin || (bool) $user?->can('pages.audit_logs');
                         $canViewAdminHeading = $canManageCms || $canManageSms || $canManageUsers || $canViewRoles || $canViewAuditLogs;
 
-                        $isAnalyticsActive = request()->routeIs('admin.cm-dashboard.*', 'admin.wheat-mis.*', 'admin.stats.*');
+                        $canViewOfficerSchemesMenu = isset($officerSchemeDashboards) && $officerSchemeDashboards->isNotEmpty();
+                        $isAnalyticsActive = request()->routeIs('admin.cm-dashboard.*', 'admin.wheat-mis.*', 'admin.scheme-dashboards.*', 'admin.stats.*');
                         $isApplicationsActive = request()->routeIs('admin.applications.*', 'admin.interests.*', 'admin.gbpay.*');
                         $isSchemesActive = request()->routeIs('admin.schemes.*', 'admin.challan-templates.*', 'admin.form-builder.*');
                         $isStockActive = request()->routeIs('admin.stock.*');
@@ -147,7 +148,7 @@
                             </li>
                         @endif
 
-                        @if($canViewCm || $canViewWheatMis || $canManageSchemes)
+                        @if($canViewCm || $canViewWheatMis || $canManageSchemes || $canViewOfficerSchemesMenu)
                             <li class="alf-nav-group {{ $isAnalyticsActive ? 'mm-active' : '' }}">
                                 <a href="#" data-alf-collapse="true" aria-expanded="{{ $isAnalyticsActive ? 'true' : 'false' }}">
                                     <i class="metismenu-icon fa-solid fa-chart-line"></i>
@@ -168,6 +169,19 @@
                                                 <i class="sub-nav-icon fa-solid fa-wheat-awn"></i> Wheat Seed MIS
                                             </a>
                                         </li>
+                                    @endif
+                                    @if($canViewOfficerSchemesMenu)
+                                        @foreach($officerSchemeDashboards as $sd)
+                                            @continue($sd['is_wheat'])
+                                            @php
+                                                $isSdActive = request()->routeIs('admin.scheme-dashboards.*') && (int) (request()->route('scheme')?->id ?? request()->route('scheme')) === (int) $sd['id'];
+                                            @endphp
+                                            <li class="{{ $isSdActive ? 'mm-active' : '' }}">
+                                                <a href="{{ $sd['url'] }}" class="{{ $isSdActive ? 'mm-active' : '' }}">
+                                                    <i class="sub-nav-icon fa-solid fa-chart-pie"></i> {{ \Illuminate\Support\Str::limit($sd['title'], 28) }}
+                                                </a>
+                                            </li>
+                                        @endforeach
                                     @endif
                                     @if($canManageSchemes || $canViewStats)
                                         <li class="{{ request()->routeIs('admin.stats.*') ? 'mm-active' : '' }}">

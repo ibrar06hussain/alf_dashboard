@@ -178,6 +178,18 @@ class Application extends Model
         return $this->hasMany(ApplicationFieldValue::class);
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(ApplicationItem::class)->orderBy('id');
+    }
+
+    public function hasItemizedSelections(): bool
+    {
+        return $this->relationLoaded('items')
+            ? $this->items->isNotEmpty()
+            : $this->items()->exists();
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(ApplicationDocument::class);
@@ -333,7 +345,17 @@ class Application extends Model
      */
     public function getDemandedQuantity(): float
     {
-        return (float) ($this->demanded_quantity ?: ($this->getBagsRequired() ?: 1));
+        if ($this->demanded_quantity !== null) {
+            return (float) $this->demanded_quantity;
+        }
+
+        if ($this->hasItemizedSelections()) {
+            $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+
+            return (float) $items->sum('demanded_qty');
+        }
+
+        return (float) ($this->getBagsRequired() ?: 1);
     }
 
     /**
@@ -382,6 +404,62 @@ class Application extends Model
         return (int) ceil((float) ($scheme?->challan_fee_per_unit ?: 3000));
     }
 
+    public function requiresPayableChallan(): bool
+    {
+        $scheme = $this->scheme ?: ($this->scheme_id ? Scheme::find($this->scheme_id) : null);
+        if (! $scheme?->requires_challan) {
+            return false;
+        }
+
+        return (float) ($this->getChallanBreakdown()['final_bill'] ?? 0) > 0;
+    }
+
+    /**
+     * Resolve display unit label (e.g. Trees, Bags, Animals) from application items,
+     * dynamic form field configs, scheme unit label, or stock items.
+     */
+    public function resolveUnitLabel(): string
+    {
+        $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+        if ($items->isNotEmpty()) {
+            $customUnits = $items->pluck('unit_label')
+                ->map(fn ($u) => trim((string) $u))
+                ->filter(fn ($u) => $u !== '' && strcasecmp($u, 'Units') !== 0)
+                ->unique()
+                ->values();
+
+            if ($customUnits->isNotEmpty()) {
+                return $customUnits->count() === 1 ? (string) $customUnits->first() : $customUnits->implode(' / ');
+            }
+        }
+
+        $form = $this->relationLoaded('form')
+            ? $this->form
+            : ($this->form_id ? Form::with('fields')->find($this->form_id) : null);
+
+        if ($form) {
+            $fields = $form->relationLoaded('fields') ? $form->fields : $form->fields()->get();
+            foreach ($fields as $field) {
+                if ($field->field_type === 'checkbox_with_text' && ! empty($field->option_configs_json)) {
+                    $units = collect($field->normalizedOptionConfigs())
+                        ->pluck('unit_label')
+                        ->map(fn ($u) => trim((string) $u))
+                        ->filter(fn ($u) => $u !== '' && strcasecmp($u, 'Units') !== 0)
+                        ->unique()
+                        ->values();
+
+                    if ($units->isNotEmpty()) {
+                        return $units->count() === 1 ? (string) $units->first() : $units->implode(' / ');
+                    }
+                }
+            }
+        }
+
+        $scheme = $this->scheme ?: ($this->scheme_id ? Scheme::find($this->scheme_id) : null);
+
+        return $scheme ? $scheme->resolveUnitLabel() : 'Units';
+    }
+
     /**
      * Compute comprehensive challan fee breakdown, rounded to nearest upper integer,
      * including digits and English figures/words representation.
@@ -391,6 +469,93 @@ class Application extends Model
         $scheme = $this->scheme ?: ($this->scheme_id ? Scheme::find($this->scheme_id) : null);
         $template = $scheme?->getChallanTemplate() ?? ChallanTemplate::getDefault();
         $misService = app(\App\Services\WheatSeedMisService::class);
+        $resolvedUnitLabel = $this->resolveUnitLabel();
+        $resolvedSingularUnit = \Illuminate\Support\Str::singular($resolvedUnitLabel);
+
+        if ($this->hasItemizedSelections()) {
+            $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+            $isPaidFrozen = $this->isChallanPaid();
+            $totalBill = 0;
+            $govtShare = 0;
+            $finalBill = 0;
+            $paidQty = 0.0;
+            $freeQty = 0.0;
+            $totalUnits = 0.0;
+            $lineItems = [];
+
+            foreach ($items as $item) {
+                $qty = max(0.0, $item->effectiveQty());
+                $totalUnits += $qty;
+
+                $isFree = $item->is_free || (float) $item->unit_price <= 0;
+                $unitPrice = $isFree ? 0.0 : (float) $item->unit_price;
+                $shares = $item->effectiveSharePercentages($template, $isPaidFrozen);
+                $govtPct = $shares['govt_share_pct'];
+                $farmerPct = $shares['farmer_share_pct'];
+
+                $lineGross = ($isFree || $qty <= 0) ? 0 : (int) ceil($unitPrice * $qty);
+                $lineGovt = ($isFree || $qty <= 0) ? 0 : (int) ceil($lineGross * ($govtPct / 100));
+                $lineFarmer = ($isFree || $qty <= 0) ? 0 : (int) ceil($lineGross * ($farmerPct / 100));
+
+                if ($lineFarmer > 0) {
+                    $paidQty += $qty;
+                } else {
+                    $freeQty += $qty;
+                }
+
+                $totalBill += $lineGross;
+                $govtShare += $lineGovt;
+                $finalBill += $lineFarmer;
+
+                $rawItemUnit = trim((string) ($item->unit_label ?? ''));
+                $effectiveItemUnit = ($rawItemUnit !== '' && strcasecmp($rawItemUnit, 'Units') !== 0)
+                    ? $rawItemUnit
+                    : $resolvedUnitLabel;
+
+                $lineItems[] = [
+                    'id' => $item->id,
+                    'item_key' => $item->item_key,
+                    'item_label' => $item->item_label,
+                    'item_label_ur' => $item->item_label_ur,
+                    'unit_label' => $effectiveItemUnit,
+                    'is_free' => $isFree,
+                    'unit_price' => $unitPrice,
+                    'demanded_qty' => (float) $item->demanded_qty,
+                    'approved_qty' => $item->approved_qty !== null ? (float) $item->approved_qty : null,
+                    'effective_qty' => $qty,
+                    'govt_share_pct' => $govtPct,
+                    'farmer_share_pct' => $farmerPct,
+                    'gross_amount' => $lineGross,
+                    'govt_share_amount' => $lineGovt,
+                    'farmer_payable_amount' => $lineFarmer,
+                ];
+            }
+
+            $govtSharePct = $totalBill > 0 ? round(($govtShare / $totalBill) * 100, 2) : 100.0;
+            $farmerSharePct = $totalBill > 0 ? round(($finalBill / $totalBill) * 100, 2) : 0.0;
+            $avgUnitCost = $paidQty > 0 ? (int) ceil($totalBill / $paidQty) : 0;
+
+            return [
+                'template' => $template,
+                'fee_mode' => 'itemized',
+                'is_itemized' => true,
+                'is_all_free' => $finalBill <= 0,
+                'unit_label' => $resolvedUnitLabel,
+                'singular_unit_label' => $resolvedSingularUnit,
+                'line_items' => $lineItems,
+                'paid_qty' => $paidQty,
+                'free_qty' => $freeQty,
+                'cost_of_1_bag' => $avgUnitCost,
+                'approved_bags' => $totalUnits > 0 ? $totalUnits : (float) ($this->getApprovedQuantity() ?? $this->getDemandedQuantity()),
+                'total_bill' => $totalBill,
+                'govt_share_pct' => $govtSharePct,
+                'farmer_share_pct' => $farmerSharePct,
+                'govt_share' => $govtShare,
+                'final_bill' => $finalBill,
+                'amount_digits' => 'Rs. ' . number_format($finalBill),
+                'amount_words' => $finalBill > 0 ? \App\Support\NumberToWords::toCurrencyWords($finalBill) : 'Zero Rupees Only',
+            ];
+        }
 
         $isWheat = $misService->isWheatSeedScheme($scheme?->id ?? $this->scheme_id, $scheme?->slug, $scheme?->title);
 
@@ -411,7 +576,8 @@ class Application extends Model
         }
 
         if ($costOfOneBag === null || ($feeMode !== 'free' && $costOfOneBag <= 0)) {
-            $costOfOneBag = (float) ($scheme?->challan_fee_per_unit ? $scheme->challan_fee_per_unit * 2 : 6000.00);
+            $fallbackFee = (float) ($scheme?->challan_fee_per_unit ?? 0);
+            $costOfOneBag = $fallbackFee > 0 ? ($fallbackFee * 2) : 6000.00;
         }
 
         $rawTotal = ($feeMode === 'fixed_total') ? $costOfOneBag : ($costOfOneBag * $approvedBags);
@@ -428,10 +594,18 @@ class Application extends Model
         $govtShare = (int) ceil($totalBill * ($govtSharePct / 100));
         $finalBill = (int) ceil($totalBill * ($farmerSharePct / 100));
 
-        $words = \App\Support\NumberToWords::toCurrencyWords($finalBill);
+        $words = $finalBill > 0 ? \App\Support\NumberToWords::toCurrencyWords($finalBill) : 'Zero Rupees Only';
 
         return [
             'template' => $template,
+            'fee_mode' => $feeMode,
+            'is_itemized' => false,
+            'is_all_free' => $finalBill <= 0,
+            'unit_label' => $resolvedUnitLabel,
+            'singular_unit_label' => $resolvedSingularUnit,
+            'line_items' => [],
+            'paid_qty' => $finalBill > 0 ? $approvedBags : 0.0,
+            'free_qty' => $finalBill <= 0 ? $approvedBags : 0.0,
             'cost_of_1_bag' => (int) ceil((float) $costOfOneBag),
             'approved_bags' => $approvedBags,
             'total_bill' => $totalBill,

@@ -50,6 +50,69 @@
     ['label' => 'Completed / Disbursed', 'value' => number_format($kpis['disbursed']), 'icon' => 'fa-solid fa-hand-holding-dollar', 'tone' => 'green'],
 ]])
 
+{{-- Auto-Generated Scheme MIS Dashboards for Logged-In Officer --}}
+@if(!empty($schemeDashboardCards) && $schemeDashboardCards->isNotEmpty())
+    <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="fa-solid fa-chart-pie text-success me-2"></i>Active Scheme MIS Dashboards
+                </h5>
+                <small class="text-muted">Auto-generated scheme analytics scoped to your department and district jurisdiction.</small>
+            </div>
+            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1">
+                {{ $schemeDashboardCards->count() }} Active Schemes
+            </span>
+        </div>
+        <div class="row g-3">
+            @foreach($schemeDashboardCards as $card)
+                <div class="col-md-6 col-xl-4">
+                    <div class="card h-100 shadow-sm border-0" style="border-left: 4px solid #16a34a !important;">
+                        <div class="card-body d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <span class="badge bg-light text-dark border">{{ $card['department_name'] }}</span>
+                                    <span class="badge bg-success-subtle text-success">{{ strtoupper($card['scope'] ?: 'GB') }}</span>
+                                </div>
+                                <h6 class="fw-bold text-dark mb-2">{{ $card['title'] }}</h6>
+                                <div class="row g-2 text-center small mb-3">
+                                    <div class="col-4">
+                                        <div class="p-2 rounded bg-light border">
+                                            <div class="text-muted" style="font-size: 10px;">Applications</div>
+                                            <div class="fw-bold text-dark">{{ number_format($card['total_applications']) }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="p-2 rounded bg-light border">
+                                            <div class="text-muted" style="font-size: 10px;">Approved</div>
+                                            <div class="fw-bold text-primary">{{ number_format($card['approved_count']) }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="p-2 rounded bg-light border">
+                                            <div class="text-muted" style="font-size: 10px;">Disbursed</div>
+                                            <div class="fw-bold text-success">{{ number_format($card['disbursed_count']) }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                @if($card['has_items'])
+                                    <div class="small text-muted mb-2">
+                                        Paid Units: <strong class="text-primary">{{ number_format($card['paid_units']) }}</strong>
+                                        · Free Units: <strong class="text-success">{{ number_format($card['free_units']) }}</strong>
+                                    </div>
+                                @endif
+                            </div>
+                            <a href="{{ $card['url'] }}" class="btn btn-sm btn-outline-success w-100 fw-semibold">
+                                <i class="fa-solid fa-chart-line me-1"></i> Open Scheme MIS Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+@endif
+
 {{-- Department-wise Performance Cards (Secretary & Global Executive View) --}}
 @if(!empty($departmentsPerformance) && $departmentsPerformance->isNotEmpty())
     <div class="mb-4">
@@ -242,7 +305,10 @@
                                     <small class="text-muted fw-bold" style="font-size: 10px;">{{ $scheme['completion_rate'] }}%</small>
                                 </div>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center text-nowrap">
+                                <a href="{{ app(\App\Services\WheatSeedMisService::class)->isWheatSeedScheme($scheme['id'], $scheme['slug'], $scheme['title']) ? route('admin.wheat-mis.index') : route('admin.scheme-dashboards.show', $scheme['id']) }}" class="btn btn-sm btn-outline-success px-2 py-1 me-1" title="Open MIS Dashboard">
+                                    <i class="fa-solid fa-chart-pie"></i>
+                                </a>
                                 <a href="{{ route('admin.applications.index', ['scheme_id' => $scheme['id']]) }}" class="btn btn-sm btn-light border px-2 py-1" title="Filter applications for this scheme">
                                     <i class="fa-solid fa-arrow-right me-1"></i> Applications
                                 </a>

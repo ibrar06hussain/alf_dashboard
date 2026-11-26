@@ -350,13 +350,101 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (optionsLabel && optionsInput) {
                 if (isCbText) {
-                    optionsLabel.textContent = 'Checkbox Options (comma or newline separated — each option gets a dynamic text field)';
+                    optionsLabel.textContent = 'Plain Checkbox Options (comma or newline separated — overridden if Item Matrix rows are defined above)';
                     optionsInput.placeholder = 'Commercial Bank, ZTBL, Microfinance, Informal / Other';
                 } else {
                     optionsLabel.textContent = 'Options (comma or newline separated)';
                     optionsInput.placeholder = 'Yes, No';
                 }
             }
+        }
+
+        if (e.target && e.target.classList.contains('js-opt-pricing-mode')) {
+            const tr = e.target.closest('.js-option-config-row');
+            if (!tr) return;
+            const isPaid = e.target.value === 'paid';
+            const priceInput = tr.querySelector('.js-opt-unit-price');
+            const govtInput = tr.querySelector('.js-opt-govt-share');
+            if (priceInput) {
+                priceInput.readOnly = !isPaid;
+                if (!isPaid) priceInput.value = '0';
+            }
+            if (govtInput) {
+                govtInput.disabled = !isPaid;
+                if (!isPaid) govtInput.value = '';
+            }
+        }
+    });
+
+    function reindexOptionRows(fieldRow) {
+        const nameEl = fieldRow.querySelector('[name^="fields["]');
+        const match = nameEl ? nameEl.name.match(/fields\[([^\]]+)\]/) : null;
+        const fIdx = match ? match[1] : '0';
+        const tbody = fieldRow.querySelector('.js-option-configs-body');
+        if (!tbody) return;
+        [...tbody.querySelectorAll('.js-option-config-row')].forEach((tr, oIdx) => {
+            tr.querySelectorAll('[name]').forEach(el => {
+                el.name = el.name.replace(/fields\[[^\]]+\]\[option_configs\]\[\d+\]/, 'fields[' + fIdx + '][option_configs][' + oIdx + ']');
+            });
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        const addOptBtn = e.target.closest('.js-add-option-config');
+        if (addOptBtn) {
+            const fieldRow = addOptBtn.closest('.field-row');
+            const tbody = fieldRow?.querySelector('.js-option-configs-body');
+            if (!fieldRow || !tbody) return;
+            const nameEl = fieldRow.querySelector('[name^="fields["]');
+            const match = nameEl ? nameEl.name.match(/fields\[([^\]]+)\]/) : null;
+            const fIdx = match ? match[1] : '0';
+            const oIdx = tbody.querySelectorAll('.js-option-config-row').length;
+
+            tbody.insertAdjacentHTML('beforeend', `
+                <tr class="js-option-config-row">
+                    <td>
+                        <input type="hidden" name="fields[${fIdx}][option_configs][${oIdx}][key]" value="">
+                        <input type="text" name="fields[${fIdx}][option_configs][${oIdx}][label]" class="form-control form-control-sm" placeholder="e.g. Olive Trees">
+                    </td>
+                    <td>
+                        <input type="text" name="fields[${fIdx}][option_configs][${oIdx}][label_ur]" class="form-control form-control-sm urdu-font" dir="rtl" placeholder="مثلاً زیتون">
+                    </td>
+                    <td>
+                        <select name="fields[${fIdx}][option_configs][${oIdx}][pricing_mode]" class="form-select form-select-sm js-opt-pricing-mode">
+                            <option value="free" selected>Free</option>
+                            <option value="paid">Paid</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" min="0" name="fields[${fIdx}][option_configs][${oIdx}][unit_price]" class="form-control form-control-sm js-opt-unit-price" value="0" readonly>
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" min="0" max="100" name="fields[${fIdx}][option_configs][${oIdx}][govt_share_pct]" class="form-control form-control-sm js-opt-govt-share" placeholder="Template %" disabled>
+                    </td>
+                    <td>
+                        <select name="fields[${fIdx}][option_configs][${oIdx}][input_mode]" class="form-select form-select-sm">
+                            <option value="numeric_qty" selected>Numeric Qty</option>
+                            <option value="text">Text Note</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" name="fields[${fIdx}][option_configs][${oIdx}][unit_label]" class="form-control form-control-sm" value="Trees" placeholder="Trees">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 js-remove-option-config" title="Remove Option">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        const rmOptBtn = e.target.closest('.js-remove-option-config');
+        if (rmOptBtn) {
+            const fieldRow = rmOptBtn.closest('.field-row');
+            rmOptBtn.closest('.js-option-config-row')?.remove();
+            if (fieldRow) reindexOptionRows(fieldRow);
         }
     });
 });

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\GbpayPaymentException;
 use App\Http\Controllers\Controller;
 use App\Services\GbpayService;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,18 @@ class GbpayWebhookController extends Controller
                 'status' => 'success',
                 'message' => 'Webhook processed successfully',
             ], 200);
+        } catch (GbpayPaymentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'response_code' => $e->responseCode,
+                'message' => $e->getMessage(),
+            ], $e->httpStatus);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'response_code' => '05',
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (\Throwable $e) {
             Log::error('GBPay Webhook Error', [
                 'error' => $e->getMessage(),

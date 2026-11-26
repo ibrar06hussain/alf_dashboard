@@ -270,6 +270,12 @@ class GbpayController extends Controller
             return back()->with('error', 'Cannot generate or sync a GBPay bill/PSID for a rejected application.');
         }
 
+        $overrideAmount = $request->filled('bill_amount') ? (float) ceil((float) $request->input('bill_amount')) : null;
+        $effectiveAmount = $overrideAmount ?? (float) ($application->getChallanBreakdown()['final_bill'] ?? 0);
+        if (! $application->scheme?->requires_challan || $effectiveAmount <= 0) {
+            return back()->with('error', 'No fee challan or GBPay PSID can be generated because payable amount is Rs. 0 (all selected or approved items are free).');
+        }
+
         $paidBill = $application->bills()->where('status', 'paid')->first();
         if ($paidBill) {
             return back()->with('error', "This application already has a PAID GBPay bill (PSID: {$paidBill->psid}).");
@@ -412,9 +418,11 @@ class GbpayController extends Controller
         $billSummary = null;
         if ($psidLookUp) {
             $matchedBill = Bill::with(['application.applicant', 'application.district'])
-                ->where('psid', $psidLookUp)
-                ->orWhereRaw('RIGHT(psid, 14) = ?', [$psidLookUp])
-                ->orWhereRaw('RIGHT(psid, 10) = ?', [$psidLookUp])
+                ->where(function ($q) use ($psidLookUp) {
+                    $q->where('psid', $psidLookUp)
+                        ->orWhereRaw('LENGTH(psid) >= 14 AND SUBSTR(psid, -14) = ?', [$psidLookUp])
+                        ->orWhereRaw('LENGTH(psid) >= 10 AND SUBSTR(psid, -10) = ?', [$psidLookUp]);
+                })
                 ->orderByDesc('bill_id')
                 ->first();
 

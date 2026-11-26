@@ -70,6 +70,8 @@ class ChallanTemplateController extends Controller
         $assignedSchemes = $request->input('schemes', []);
         Scheme::whereIn('id', $assignedSchemes)->update(['challan_template_id' => $template->id]);
 
+        app(\App\Services\GbpayService::class)->syncUnpaidApplicationsForTemplate($template, $assignedSchemes);
+
         return redirect()->route('admin.challan-templates.index')
             ->with('success', "Challan template '{$template->name}' created and assigned successfully.");
     }
@@ -97,20 +99,31 @@ class ChallanTemplateController extends Controller
         $data['show_breakdown'] = $request->boolean('show_breakdown', true);
         $data['is_active'] = $request->boolean('is_active', true);
 
+        $previouslyAssignedSchemeIds = Scheme::where('challan_template_id', $challan_template->id)->pluck('id')->all();
+
         $challan_template->update($data);
 
-        // Sync assigned schemes: unlink deselected ones, link newly selected ones
-        $selectedSchemes = $request->input('schemes', []);
-        Scheme::where('challan_template_id', $challan_template->id)
-            ->whereNotIn('id', $selectedSchemes)
-            ->update(['challan_template_id' => null]);
+        // Sync assigned schemes when the form section (schemes_sync) or schemes list is submitted
+        if ($request->has('schemes') || $request->boolean('schemes_sync')) {
+            $selectedSchemes = $request->input('schemes', []);
+            Scheme::where('challan_template_id', $challan_template->id)
+                ->whereNotIn('id', $selectedSchemes)
+                ->update(['challan_template_id' => null]);
 
-        if (! empty($selectedSchemes)) {
-            Scheme::whereIn('id', $selectedSchemes)->update(['challan_template_id' => $challan_template->id]);
+            if (! empty($selectedSchemes)) {
+                Scheme::whereIn('id', $selectedSchemes)->update(['challan_template_id' => $challan_template->id]);
+            }
         }
 
+        $syncedApps = app(\App\Services\GbpayService::class)->syncUnpaidApplicationsForTemplate(
+            $challan_template->fresh(),
+            $previouslyAssignedSchemeIds
+        );
+
+        $syncNote = $syncedApps > 0 ? " Recalculated {$syncedApps} unpaid application(s)/PSID(s)." : '';
+
         return redirect()->route('admin.challan-templates.index')
-            ->with('success', "Challan template '{$challan_template->name}' updated successfully.");
+            ->with('success', "Challan template '{$challan_template->name}' updated successfully.{$syncNote}");
     }
 
     public function destroy(ChallanTemplate $challan_template): RedirectResponse
@@ -167,8 +180,12 @@ class ChallanTemplateController extends Controller
         $psidConfig = \App\Models\PsidConfig::getActive();
         $qrCodeBase64 = \App\Support\QrCodeGenerator::toBase64Png('10153015011000000087', 3, 2);
 
+        $previewUnitLabel = $scheme instanceof Scheme ? $scheme->resolveUnitLabel() : 'Units';
         $breakdown = [
             'template' => $challan_template,
+            'is_itemized' => false,
+            'unit_label' => $previewUnitLabel,
+            'singular_unit_label' => \Illuminate\Support\Str::singular($previewUnitLabel),
             'cost_of_1_bag' => 6500.0,
             'approved_bags' => 4.0,
             'total_bill' => 26000,
@@ -216,7 +233,7 @@ class ChallanTemplateController extends Controller
             'head_code' => ['nullable', 'string', 'max:20'],
             'validity_days' => ['required', 'integer', 'min:1', 'max:365'],
             'directions' => ['required', 'string', 'max:2000'],
-            'fee_mode' => ['required', 'in:seed_configured,fixed_unit,fixed_total,free'],
+            'fee_mode' => ['required', 'in:seed_configured,fixed_unit,fixed_total,free,itemized'],
             'govt_share_pct' => ['required', 'numeric', 'min:0', 'max:100'],
             'farmer_share_pct' => ['required', 'numeric', 'min:0', 'max:100'],
             'schemes' => ['nullable', 'array'],

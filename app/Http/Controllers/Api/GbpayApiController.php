@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\GbpayPaymentException;
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
 use App\Models\Application;
@@ -70,9 +71,9 @@ class GbpayApiController extends Controller
                 if (strlen($psid) === 20) {
                     $q->where('psid', $psid);
                 } elseif (strlen($psid) === 14) {
-                    $q->whereRaw('RIGHT(psid, 14) = ?', [$psid]);
+                    $q->whereRaw('LENGTH(psid) >= 14 AND SUBSTR(psid, -14) = ?', [$psid]);
                 } elseif (strlen($psid) === 10) {
-                    $q->whereRaw('RIGHT(psid, 10) = ?', [$psid]);
+                    $q->whereRaw('LENGTH(psid) >= 10 AND SUBSTR(psid, -10) = ?', [$psid]);
                 } else {
                     $q->where('psid', $psid);
                 }
@@ -90,16 +91,21 @@ class GbpayApiController extends Controller
                 if (strlen($psid) === 20) {
                     $q->where('psid', $psid);
                 } elseif (strlen($psid) === 14) {
-                    $q->whereRaw('RIGHT(psid, 14) = ?', [$psid]);
+                    $q->whereRaw('LENGTH(psid) >= 14 AND SUBSTR(psid, -14) = ?', [$psid]);
                 } elseif (strlen($psid) === 10) {
-                    $q->whereRaw('RIGHT(psid, 10) = ?', [$psid]);
+                    $q->whereRaw('LENGTH(psid) >= 10 AND SUBSTR(psid, -10) = ?', [$psid]);
                 } else {
                     $q->where('psid', $psid);
                 }
             })
             ->first();
 
-        if ($application && ! $application->isRejected() && $application->current_stage !== Application::STAGE_DORMANT) {
+        if (
+            $application
+            && ! $application->isRejected()
+            && $application->current_stage !== Application::STAGE_DORMANT
+            && $application->requiresPayableChallan()
+        ) {
             return $this->gbpayService->createOrUpdateBillForApplication($application);
         }
 
@@ -306,38 +312,14 @@ class GbpayApiController extends Controller
                 ], 403);
             }
 
-            // Check if already paid
-            if ($bill->status === 'paid') {
-                if ($bill->transaction_id === $transactionId) {
-                    return response()->json([
-                        'response_code' => '03',
-                        'message' => 'Duplicate Transaction',
-                    ], 400);
-                }
-
-                return response()->json([
-                    'response_code' => '06',
-                    'message' => 'Already Paid',
-                ], 400);
-            }
-
-            // Verify transaction amount matches bill amount (comparing nearest upper integer values)
-            $expectedBillAmount = (int) ceil((float) $bill->bill_amount);
-            $paidIntAmount = (int) ceil($transactionAmount);
-            if ($paidIntAmount !== $expectedBillAmount) {
-                return response()->json([
-                    'response_code' => '01',
-                    'message' => 'Transaction amount mismatch',
-                ], 400);
-            }
-
-            // Mark bill as paid and auto-verify application
-            $this->gbpayService->markBillAsPaid(
+            // Atomically lock, validate blocked / duplicate / already-paid / strict amount, and mark bill paid
+            $paidBill = $this->gbpayService->markBillAsPaid(
                 $bill,
                 $transactionId,
-                (float) $paidIntAmount,
+                $transactionAmount,
                 $bankMnemonic,
-                $request->except(['password'])
+                $request->except(['password']),
+                true
             );
 
             $consumerName = $application?->applicant?->full_name ?? 'Applicant';
@@ -348,8 +330,8 @@ class GbpayApiController extends Controller
             ];
 
             GbpayResponse::create([
-                'bill_id' => $bill->bill_id,
-                'psid' => $bill->psid,
+                'bill_id' => $paidBill->bill_id,
+                'psid' => $paidBill->psid,
                 'request_type' => 'bill_payment',
                 'request_data' => $request->except(['password']),
                 'response_data' => $responsePayload,
@@ -358,6 +340,11 @@ class GbpayApiController extends Controller
             ]);
 
             return response()->json($responsePayload, 200);
+        } catch (GbpayPaymentException $e) {
+            return response()->json([
+                'response_code' => $e->responseCode,
+                'message' => $e->getMessage(),
+            ], $e->httpStatus);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'response_code' => '05',
@@ -427,7 +414,7 @@ class GbpayApiController extends Controller
                                 ->whereNotNull('challan_no')
                                 ->orderByDesc('id')
                                 ->first();
-                            if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT) {
+                            if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT && $app->requiresPayableChallan()) {
                                 $bill = $this->gbpayService->createOrUpdateBillForApplication($app);
                             }
                         }
@@ -451,7 +438,7 @@ class GbpayApiController extends Controller
                                 ->whereNotNull('challan_no')
                                 ->orderByDesc('id')
                                 ->first();
-                            if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT) {
+                            if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT && $app->requiresPayableChallan()) {
                                 $bill = $this->gbpayService->createOrUpdateBillForApplication($app);
                             }
                         }
@@ -476,7 +463,7 @@ class GbpayApiController extends Controller
                             ->orWhere('challan_no', $searchValue)
                             ->orWhere('psid', $searchValue)
                             ->first();
-                        if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT && ($app->challan_no || $app->current_stage === Application::STAGE_CHALLAN_ISSUED)) {
+                        if ($app && ! $app->isRejected() && $app->current_stage !== Application::STAGE_DORMANT && $app->requiresPayableChallan() && ($app->challan_no || $app->current_stage === Application::STAGE_CHALLAN_ISSUED)) {
                             $bill = $this->gbpayService->createOrUpdateBillForApplication($app);
                         }
                     }

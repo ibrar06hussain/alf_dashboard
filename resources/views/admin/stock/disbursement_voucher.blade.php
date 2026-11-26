@@ -190,6 +190,11 @@
     </button>
 </div>
 
+@php
+    $batchRows = $disbursement->batchSiblingDisbursements();
+    $isBatch = $batchRows->count() > 1 || $disbursement->applicationItem !== null;
+    $voucherCode = $disbursement->displayVoucherNo();
+@endphp
 <div class="voucher-container">
     <div class="header">
         <h1 class="gov-title">Government of Gilgit-Baltistan</h1>
@@ -201,7 +206,7 @@
 
     <div class="voucher-meta">
         <div class="meta-item">
-            <span>Voucher No:</span> <strong>#{{ $disbursement->disbursement_no }}</strong>
+            <span>Voucher No:</span> <strong>#{{ $voucherCode }}</strong>
         </div>
         <div class="meta-item">
             <span>Application No:</span> <strong>#{{ $disbursement->application->application_no ?? $disbursement->application_id }}</strong>
@@ -246,12 +251,14 @@
             <th>Scheme Title</th>
             <td colspan="3"><strong>{{ $disbursement->item->scheme->title ?? 'Government Subsidy Scheme' }}</strong></td>
         </tr>
+        @if(!$isBatch)
         <tr>
             <th>Commodity Item</th>
             <td><strong>{{ $disbursement->item->item_name ?? 'Scheme Commodity' }}</strong></td>
             <th>Packaging Unit</th>
             <td>{{ $disbursement->item->unit ?? 'Units' }}</td>
         </tr>
+        @endif
         <tr>
             <th>Collection Depot</th>
             <td><strong>{{ $disbursement->center->name ?? 'Collection Depot' }}</strong> ({{ ucfirst($disbursement->center->level ?? 'Center') }})</td>
@@ -266,13 +273,36 @@
         </tr>
     </table>
 
+    @if($isBatch)
+        <table class="info-table">
+            <thead>
+                <tr>
+                    <th>Application Item</th>
+                    <th>Depot Inventory Stock</th>
+                    <th>Billing Type</th>
+                    <th style="text-align: right;">Quantity Disbursed</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($batchRows as $bRow)
+                    <tr>
+                        <td><strong>{{ $bRow->applicationItem->item_label ?? ($bRow->item->item_name ?? 'Item') }}</strong></td>
+                        <td>{{ $bRow->item->item_name ?? '—' }}</td>
+                        <td>{{ $bRow->applicationItem?->is_free ? 'Free' : 'Paid / Subsidized' }}</td>
+                        <td style="text-align: right;"><strong>{{ number_format((float) $bRow->quantity_disbursed) }} {{ $bRow->applicationItem->unit_label ?? ($bRow->item->unit ?? 'Units') }}</strong></td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+
     <div class="highlight-box">
         <div>
-            <div class="highlight-label">QUANTITY DISBURSED / RELEASED FROM DEPOT</div>
+            <div class="highlight-label">TOTAL QUANTITY DISBURSED / RELEASED FROM DEPOT</div>
             <small style="color: #555;">Official allocation deducted from active warehouse ledger.</small>
         </div>
         <div class="highlight-value">
-            {{ number_format($disbursement->quantity_disbursed) }} {{ $disbursement->item->unit ?? 'Bags' }}
+            {{ number_format((float) $batchRows->sum('quantity_disbursed')) }} {{ $isBatch ? ($disbursement->applicationItem->unit_label ?? 'Units') : ($disbursement->item->unit ?? 'Bags') }}
         </div>
     </div>
 

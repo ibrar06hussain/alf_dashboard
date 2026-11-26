@@ -102,6 +102,7 @@ class ApplicationLifecycleService
             Application::STAGE_REJECTED,
         ],
         Application::STAGE_CHALLAN_ISSUED => [
+            Application::STAGE_APPROVED,
             Application::STAGE_PAYMENT_PROOF_SUBMITTED,
             Application::STAGE_DORMANT,
             Application::STAGE_REJECTED,
@@ -184,7 +185,7 @@ class ApplicationLifecycleService
                 $responsibleOfficeId = $activeAssignment?->office_id;
             }
 
-            if (! $responsibleOfficeId && $districtId) {
+            if (!$responsibleOfficeId && $districtId) {
                 $office = Office::where('district_id', $districtId)->first();
                 $responsibleOfficeId = $office?->id;
             }
@@ -207,7 +208,7 @@ class ApplicationLifecycleService
             // 3. Complete immutable history recording
             if ($isUnassigned) {
                 AccessAuditLog::log('application_unassigned_queue', Application::class, (string) $application->id, [
-                    'reason' => 'No active Deputy Director assigned for department ID '.$departmentId.' and district ID '.$districtId,
+                    'reason' => 'No active Deputy Director assigned for department ID ' . $departmentId . ' and district ID ' . $districtId,
                     'district_id' => $districtId,
                     'department_id' => $departmentId,
                 ]);
@@ -254,7 +255,7 @@ class ApplicationLifecycleService
      */
     public function findActiveDeputyDirector(?int $departmentId, ?int $districtId): ?User
     {
-        if (! $districtId) {
+        if (!$districtId) {
             return null;
         }
 
@@ -324,7 +325,7 @@ class ApplicationLifecycleService
 
             $currentStage = $locked->current_stage ?: $locked->status;
 
-            if (! $this->isTransitionAllowed($currentStage, $targetStage)) {
+            if (!$this->isTransitionAllowed($currentStage, $targetStage)) {
                 throw ValidationException::withMessages([
                     'transition' => "Illegal state transition from '{$currentStage}' to '{$targetStage}'.",
                 ]);
@@ -376,8 +377,16 @@ class ApplicationLifecycleService
 
                 case Application::STAGE_APPROVED:
                 case 'directorate_approved':
+                    if ($locked->isChallanPaid() || (int) ($locked->distributed_quantity ?? 0) > 0) {
+                        throw ValidationException::withMessages([
+                            'status' => 'Cannot modify approval quantities or recalculate challan after payment has been verified or stock has been disbursed.',
+                        ]);
+                    }
+
                     $note = $params['note'] ?? $params['verification_note'] ?? 'Approved by competent authority.';
                     $updates['verification_note'] = $note;
+
+                    $locked->loadMissing('items');
 
                     // Capture demanded and approved quantities
                     $demandedQty = $locked->getDemandedQuantity();
@@ -385,35 +394,74 @@ class ApplicationLifecycleService
                         $updates['demanded_quantity'] = $demandedQty;
                     }
 
-                    $approvedQty = isset($params['approved_quantity']) && is_numeric($params['approved_quantity']) && (float) $params['approved_quantity'] > 0
-                        ? (float) $params['approved_quantity']
-                        : (float) ($locked->approved_quantity ?: $demandedQty);
+                    if ($locked->items->isNotEmpty()) {
+                        $approvedItemsInput = is_array($params['approved_items'] ?? null) ? $params['approved_items'] : null;
+                        $approvedTotal = 0.0;
+                        $schemeTemplate = $locked->scheme?->getChallanTemplate();
+
+                        foreach ($locked->items as $item) {
+                            if ($approvedItemsInput !== null && array_key_exists((string) $item->id, $approvedItemsInput)) {
+                                $itemApprovedQty = max(0.0, (float) $approvedItemsInput[(string) $item->id]);
+                            } elseif ($approvedItemsInput !== null && array_key_exists($item->id, $approvedItemsInput)) {
+                                $itemApprovedQty = max(0.0, (float) $approvedItemsInput[$item->id]);
+                            } else {
+                                $itemApprovedQty = $item->approved_qty !== null
+                                    ? (float) $item->approved_qty
+                                    : (float) $item->demanded_qty;
+                            }
+
+                            $item->approved_qty = $itemApprovedQty;
+                            $item->recalculateFinancials($schemeTemplate, false)->save();
+                            $approvedTotal += $itemApprovedQty;
+                        }
+
+                        if ($approvedTotal <= 0) {
+                            throw ValidationException::withMessages([
+                                'approved_items' => 'At least one requested item must have an approved quantity greater than 0. To deny all items, please reject the application.',
+                            ]);
+                        }
+
+                        $approvedQty = $approvedTotal;
+                        $locked->load('items');
+                    } else {
+                        $approvedQty = isset($params['approved_quantity']) && is_numeric($params['approved_quantity']) && (float) $params['approved_quantity'] > 0
+                            ? (float) $params['approved_quantity']
+                            : (float) ($locked->approved_quantity ?: $demandedQty);
+                    }
 
                     $updates['approved_quantity'] = $approvedQty;
                     $updates['allocated_quantity'] = (int) round($approvedQty);
                     $locked->approved_quantity = $approvedQty;
                     $locked->allocated_quantity = (int) round($approvedQty);
 
-                    // Check if scheme requires challan or is fee-free
+                    // Check if scheme requires challan AND computed net farmer payable > 0
                     $scheme = $locked->scheme;
-                    if ($scheme?->requires_challan) {
+                    $breakdown = $locked->getChallanBreakdown();
+                    $amount = isset($params['challan_amount']) && is_numeric($params['challan_amount'])
+                        ? (float) ceil((float) $params['challan_amount'])
+                        : (float) ($breakdown['final_bill'] ?? 0);
+
+                    if ($scheme?->requires_challan && $amount > 0) {
                         $template = $scheme->getChallanTemplate();
                         $validityDays = (int) ($template->validity_days ?: 10);
 
-                        // Issue Challan automatically based on APPROVED quantity and district seed rate
-                        $breakdown = $locked->getChallanBreakdown();
-                        $amount = isset($params['challan_amount']) && is_numeric($params['challan_amount'])
-                            ? (float) ceil((float) $params['challan_amount'])
-                            : (float) $breakdown['final_bill'];
-
                         $updates['current_stage'] = Application::STAGE_CHALLAN_ISSUED;
-                        $updates['challan_no'] = 'CHL-'.date('Y').'-'.str_pad((string) $locked->id, 6, '0', STR_PAD_LEFT);
+                        $updates['challan_no'] = $locked->challan_no ?: ('CHL-' . date('Y') . '-' . str_pad((string) $locked->id, 6, '0', STR_PAD_LEFT));
                         $updates['challan_amount'] = $amount;
-                        $updates['challan_due_date'] = now()->addDays($validityDays)->toDateString();
-                        $updates['challan_issued_at'] = now();
+                        $updates['challan_due_date'] = $locked->challan_due_date
+                            ? $locked->challan_due_date->toDateString()
+                            : now()->addDays($validityDays)->toDateString();
+                        $updates['challan_issued_at'] = $locked->challan_issued_at ?: now();
                     } else {
-                        // Fee-free scheme directly advances to eligible beneficiary
+                        // Fee-free scheme OR all selected/approved items are free (Rs. 0 payable):
+                        // Suppress challan & PSID and advance directly to eligible beneficiary.
                         $updates['current_stage'] = Application::STAGE_ELIGIBLE_BENEFICIARY;
+                        $updates['challan_no'] = null;
+                        $updates['challan_amount'] = null;
+                        $updates['challan_due_date'] = null;
+                        $updates['challan_issued_at'] = null;
+                        $updates['psid'] = null;
+                        $locked->bills()->where('status', 'pending')->update(['status' => 'cancelled']);
                     }
                     break;
 
@@ -432,7 +480,7 @@ class ApplicationLifecycleService
                     break;
 
                 case Application::STAGE_PAYMENT_PROOF_SUBMITTED:
-                    if (! empty($params['payment_receipt_path'])) {
+                    if (!empty($params['payment_receipt_path'])) {
                         $updates['payment_receipt_path'] = $params['payment_receipt_path'];
                     }
                     $updates['challan_paid_at'] = now();
@@ -554,9 +602,9 @@ class ApplicationLifecycleService
     private function validateActorAuthority(Application $application, string $targetStage, User $actor): void
     {
         // 1. Cross-district isolation check: Actor must have jurisdiction over the application's district
-        if (! $actor->isGlobalScope() && ! $actor->hasRole('Super Admin')) {
+        if (!$actor->isGlobalScope() && !$actor->hasRole('Super Admin')) {
             $authorizedDistricts = $actor->authorizedDistrictIds();
-            if (! empty($authorizedDistricts) && ! in_array($application->district_id, $authorizedDistricts, true)) {
+            if (!empty($authorizedDistricts) && !in_array($application->district_id, $authorizedDistricts, true)) {
                 throw ValidationException::withMessages([
                     'authorization' => "Access denied: You do not have administrative authority for District ID {$application->district_id}.",
                 ]);
@@ -576,15 +624,17 @@ class ApplicationLifecycleService
 
         if (in_array($targetStage, $ddStages, true)) {
             // Field Officers CANNOT approve or reject cases
-            if ($actor->hasRole('Field Officer') && ! $actor->hasAnyRole(['Super Admin', 'District Deputy Director', 'District Officer'])) {
+            if ($actor->hasRole('Field Officer') && !$actor->hasAnyRole(['Super Admin', 'District Deputy Director', 'District Officer'])) {
                 throw ValidationException::withMessages([
                     'role' => 'Field officers cannot approve, reject, or make final administrative decisions.',
                 ]);
             }
 
             // Secretary, Super Admin, Division Director have zero default approval rights
-            if ($actor->hasAnyRole(['Super Admin', 'Secretary', 'Division Director']) &&
-                ! $actor->hasAnyRole(['District Deputy Director', 'District Officer'])) {
+            if (
+                $actor->hasAnyRole(['Super Admin', 'Secretary', 'Division Director']) &&
+                !$actor->hasAnyRole(['District Deputy Director', 'District Officer'])
+            ) {
                 throw ValidationException::withMessages([
                     'role' => 'Secretariat and Division Directors have observational oversight and cannot make final operational approvals.',
                 ]);
@@ -593,7 +643,7 @@ class ApplicationLifecycleService
 
         // 3. Payment verification: Accounts Officer ALONE
         if ($targetStage === Application::STAGE_PAYMENT_VERIFIED) {
-            if (! $actor->can('payments.verify') && ! $actor->hasAnyRole(['Accounts Officer', 'Super Admin'])) {
+            if (!$actor->can('payments.verify') && !$actor->hasAnyRole(['Accounts Officer', 'Super Admin'])) {
                 throw ValidationException::withMessages([
                     'role' => 'Only Accounts Officers are authorized to verify payments.',
                 ]);
@@ -602,7 +652,7 @@ class ApplicationLifecycleService
 
         // 4. Distribution / delivery confirmation
         if (in_array($targetStage, [Application::STAGE_STOCK_ALLOCATED, Application::STAGE_PARTIALLY_DISTRIBUTED, Application::STAGE_FULLY_DISTRIBUTED], true)) {
-            if (! $actor->can('distribution.confirm_delivery') && ! $actor->hasAnyRole(['Distribution Officer', 'District Deputy Director', 'District Officer', 'Super Admin'])) {
+            if (!$actor->can('distribution.confirm_delivery') && !$actor->hasAnyRole(['Distribution Officer', 'District Deputy Director', 'District Officer', 'Super Admin'])) {
                 throw ValidationException::withMessages([
                     'role' => 'Only Distribution Officers or Deputy Directors are authorized to allocate or disburse stock.',
                 ]);
@@ -617,7 +667,7 @@ class ApplicationLifecycleService
     {
         return DB::transaction(function () use ($application, $dd, $fieldOfficer, $data) {
             // Verify Field Officer belongs to application district
-            if (! in_array($application->district_id, $fieldOfficer->authorizedDistrictIds(), true) && ! $fieldOfficer->hasRole('Super Admin')) {
+            if (!in_array($application->district_id, $fieldOfficer->authorizedDistrictIds(), true) && !$fieldOfficer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages([
                     'field_officer' => 'Selected Field Officer does not have operational jurisdiction in this district.',
                 ]);
@@ -659,7 +709,7 @@ class ApplicationLifecycleService
     public function scheduleVisit(ApplicationSurvey $survey, User $officer, Carbon $date, ?string $notes = null): ApplicationSurvey
     {
         return DB::transaction(function () use ($survey, $officer, $date, $notes) {
-            if ((int) $survey->assigned_to !== (int) $officer->id && ! $officer->hasRole('Super Admin')) {
+            if ((int) $survey->assigned_to !== (int) $officer->id && !$officer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages(['survey' => 'You are not assigned to this field survey.']);
             }
 
@@ -683,7 +733,7 @@ class ApplicationLifecycleService
     public function completeVisit(ApplicationSurvey $survey, User $officer, ?string $notes = null): ApplicationSurvey
     {
         return DB::transaction(function () use ($survey, $officer, $notes) {
-            if ((int) $survey->assigned_to !== (int) $officer->id && ! $officer->hasRole('Super Admin')) {
+            if ((int) $survey->assigned_to !== (int) $officer->id && !$officer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages(['survey' => 'You are not assigned to this field survey.']);
             }
 
@@ -707,7 +757,7 @@ class ApplicationLifecycleService
     public function submitFindings(ApplicationSurvey $survey, User $officer, array $data): ApplicationSurvey
     {
         return DB::transaction(function () use ($survey, $officer, $data) {
-            if ((int) $survey->assigned_to !== (int) $officer->id && ! $officer->hasRole('Super Admin')) {
+            if ((int) $survey->assigned_to !== (int) $officer->id && !$officer->hasRole('Super Admin')) {
                 throw ValidationException::withMessages(['survey' => 'You are not assigned to this field survey.']);
             }
 
@@ -723,7 +773,7 @@ class ApplicationLifecycleService
 
             // Generate representative gps_coordinates string
             $gpsCoordsString = $data['gps_coordinates'] ?? $survey->gps_coordinates ?? null;
-            if (! empty($gpsPoints)) {
+            if (!empty($gpsPoints)) {
                 $p1 = $gpsPoints[0];
                 $lat1 = round($p1['lat'] ?? 0, 6);
                 $lng1 = round($p1['lng'] ?? 0, 6);
@@ -732,7 +782,7 @@ class ApplicationLifecycleService
             }
 
             $evidenceData = $data['evidence_data'] ?? $survey->evidence_data ?? [];
-            if (! is_array($evidenceData)) {
+            if (!is_array($evidenceData)) {
                 $evidenceData = [];
             }
             $evidenceData['gps_points'] = $gpsPoints;
@@ -904,28 +954,44 @@ class ApplicationLifecycleService
                 throw ValidationException::withMessages(['reactivation_reason' => 'Documented administrative decision is required to reactivate a dormant application.']);
             }
 
-            // Generate fresh challan with configured validity expiry
+            // Generate fresh challan with configured validity expiry ONLY when payable > 0
             $scheme = $application->scheme;
             $template = $scheme?->getChallanTemplate() ?? \App\Models\ChallanTemplate::getDefault();
             $validityDays = (int) ($template->validity_days ?: 10);
 
             $breakdown = $application->getChallanBreakdown();
-            $amount = (float) $breakdown['final_bill'];
+            $amount = (float) ($breakdown['final_bill'] ?? 0);
 
-            $application->update([
-                'current_stage' => Application::STAGE_CHALLAN_ISSUED,
-                'challan_due_date' => now()->addDays($validityDays)->toDateString(),
-                'challan_issued_at' => now(),
-                'challan_amount' => $amount,
-                'reactivated_at' => now(),
-                'reactivated_by' => $dd->id,
-                'reactivation_reason' => $documentedReason,
-                'stage_updated_at' => now(),
-                'lock_version' => $application->lock_version + 1,
-            ]);
+            if (!$scheme?->requires_challan || $amount <= 0) {
+                $application->update([
+                    'current_stage' => Application::STAGE_ELIGIBLE_BENEFICIARY,
+                    'challan_no' => null,
+                    'challan_due_date' => null,
+                    'challan_issued_at' => null,
+                    'challan_amount' => null,
+                    'psid' => null,
+                    'reactivated_at' => now(),
+                    'reactivated_by' => $dd->id,
+                    'reactivation_reason' => $documentedReason,
+                    'stage_updated_at' => now(),
+                    'lock_version' => $application->lock_version + 1,
+                ]);
+            } else {
+                $application->update([
+                    'current_stage' => Application::STAGE_CHALLAN_ISSUED,
+                    'challan_due_date' => now()->addDays($validityDays)->toDateString(),
+                    'challan_issued_at' => now(),
+                    'challan_amount' => $amount,
+                    'reactivated_at' => now(),
+                    'reactivated_by' => $dd->id,
+                    'reactivation_reason' => $documentedReason,
+                    'stage_updated_at' => now(),
+                    'lock_version' => $application->lock_version + 1,
+                ]);
 
-            // Issue fresh GBPay Bill & 20-digit PSID upon reactivation
-            app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application, $amount);
+                // Issue fresh GBPay Bill & 20-digit PSID upon reactivation
+                app(\App\Services\GbpayService::class)->createOrUpdateBillForApplication($application, $amount);
+            }
 
             ApplicationStatusLog::create([
                 'application_id' => $application->id,

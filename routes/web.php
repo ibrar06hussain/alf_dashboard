@@ -17,6 +17,7 @@ use App\Http\Controllers\FarmerOrganizationPublicController;
 use App\Http\Controllers\Admin\GbpayController;
 use App\Http\Controllers\Admin\GbpayWebhookController;
 use App\Http\Controllers\Admin\SchemeController as AdminSchemeController;
+use App\Http\Controllers\Admin\SchemeDashboardController;
 use App\Http\Controllers\Admin\SchemeInterestController;
 use App\Http\Controllers\Admin\SiteMediaController;
 use App\Http\Controllers\Admin\SiteInfoController;
@@ -200,6 +201,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('cm-dashboard/analytics', [CmDashboardController::class, 'analytics'])->name('cm-dashboard.analytics');
             Route::get('cm-dashboard/export', [CmDashboardController::class, 'export'])->name('cm-dashboard.export');
         });
+
+        // Auto-Generated Officer-Scoped Scheme MIS Dashboards
+        Route::get('schemes/{scheme}/dashboard', [SchemeDashboardController::class, 'show'])->name('scheme-dashboards.show');
+        Route::get('schemes/{scheme}/dashboard/analytics', [SchemeDashboardController::class, 'analytics'])->name('scheme-dashboards.analytics');
+        Route::get('schemes/{scheme}/dashboard/export', [SchemeDashboardController::class, 'export'])->name('scheme-dashboards.export');
 
         // Scheme & Form Configuration (Super Admin & Directorate Heads ONLY - Secretary is executive oversight, not web modification)
         Route::middleware('role_or_permission:Super Admin|Director Agriculture|Director Livestock|Director Fisheries|pages.schemes|pages.stats|pages.form_builder|pages.challan_templates')->group(function () {

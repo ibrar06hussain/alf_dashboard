@@ -114,7 +114,22 @@
                     $quota = $app->allocated_quantity ?: ($app->getBagsRequired() ?: 1);
                     $remaining = $app->getRemainingDisbursementQuantity();
                     $schemeStockItem = $app->scheme?->stockItems?->first();
-                    $itemUnit = $schemeStockItem?->unit ?? 'Bags (50kg)';
+                    $itemUnit = $schemeStockItem?->unit ?? ($app->items->isNotEmpty() ? ($app->items->first()->unit_label ?: 'Units') : 'Bags (50kg)');
+                    $stockService = app(\App\Services\StockManagementService::class);
+                    $batchItemsPayload = $app->items
+                        ->filter(fn ($it) => $it->remainingDisbursementQty() > 0)
+                        ->values()
+                        ->map(function ($it) use ($app, $stockService) {
+                            $matched = $stockService->matchStockItemForApplicationItem($app->scheme, $it);
+                            return [
+                                'application_item_id' => $it->id,
+                                'label' => $it->item_label,
+                                'unit' => $it->unit_label ?: 'Units',
+                                'qty' => $it->remainingDisbursementQty(),
+                                'is_free' => (bool) $it->is_free,
+                                'matched_stock_item_id' => $matched?->id,
+                            ];
+                        })->all();
                 @endphp
                 <tr>
                     <td>
@@ -137,9 +152,17 @@
                     </td>
                     <td>
                         <div class="font-weight-bold text-dark">{{ $app->scheme->title ?? 'Government Subsidy Scheme' }}</div>
-                        <div class="small text-info">
-                            <i class="fa-solid fa-box mr-1"></i> {{ $schemeStockItem->item_name ?? 'Scheme Subsidy Item' }}
-                        </div>
+                        @if($app->items->isNotEmpty())
+                            <div class="small text-muted">
+                                @foreach($app->items->where('approved_qty', '>', 0) as $ai)
+                                    <span class="badge badge-light border mr-1">{{ $ai->item_label }}: {{ rtrim(rtrim(number_format((float) $ai->remainingDisbursementQty(), 2, '.', ''), '0'), '.') }}</span>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="small text-info">
+                                <i class="fa-solid fa-box mr-1"></i> {{ $schemeStockItem->item_name ?? 'Scheme Subsidy Item' }}
+                            </div>
+                        @endif
                     </td>
                     <td>
                         <div><strong class="text-dark">Approved: {{ $app->getApprovedQuantity() ?? $quota }} {{ $itemUnit }}</strong></div>
@@ -172,23 +195,24 @@
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-success btn-sm font-weight-bold shadow-sm px-3"
-                                onclick="openDisburseModal({
-                                    id: {{ $app->id }},
-                                    app_no: '{{ $app->application_no }}',
-                                    name: '{{ addslashes($app->applicant->name ?? '') }}',
-                                    cnic: '{{ $app->applicant->cnic ?? '' }}',
-                                    phone: '{{ $app->applicant->phone ?? '' }}',
-                                    scheme_id: {{ $app->scheme_id }},
-                                    scheme_title: '{{ addslashes($app->scheme->title ?? '') }}',
-                                    item_id: {{ $schemeStockItem->id ?? 0 }},
-                                    item_name: '{{ addslashes($schemeStockItem->item_name ?? '') }}',
-                                    unit: '{{ addslashes($itemUnit) }}',
-                                    demanded_qty: {{ $app->getDemandedQuantity() }},
-                                    approved_qty: {{ $app->getApprovedQuantity() ?? $quota }},
-                                    remaining: {{ $remaining }},
-                                    challan_no: '{{ $app->challan_no ?? '' }}',
-                                    district_id: {{ $app->district_id }}
-                                })">
+                                onclick='openDisburseModal({!! json_encode([
+                                    "id" => $app->id,
+                                    "app_no" => $app->application_no,
+                                    "name" => $app->applicant->full_name ?? ($app->applicant->name ?? ""),
+                                    "cnic" => $app->applicant->cnic ?? "",
+                                    "phone" => $app->applicant->phone ?? "",
+                                    "scheme_id" => $app->scheme_id,
+                                    "scheme_title" => $app->scheme->title ?? "",
+                                    "item_id" => $schemeStockItem->id ?? 0,
+                                    "item_name" => $schemeStockItem->item_name ?? ($app->items->isNotEmpty() ? "Multiple Approved Items" : ""),
+                                    "unit" => $itemUnit,
+                                    "demanded_qty" => $app->getDemandedQuantity(),
+                                    "approved_qty" => $app->getApprovedQuantity() ?? $quota,
+                                    "remaining" => $remaining,
+                                    "challan_no" => $app->challan_no ?? "",
+                                    "district_id" => $app->district_id,
+                                    "batch_items" => $batchItemsPayload,
+                                ]) !!})'>
                             <i class="fa-solid fa-hand-holding-dollar mr-1"></i> Disburse Stock
                         </button>
                     </td>
@@ -252,7 +276,10 @@
                 @endphp
                 <tr>
                     <td>
-                        <span class="font-weight-bold text-primary">#{{ $d->disbursement_no }}</span>
+                        <span class="font-weight-bold text-primary">#{{ $d->displayVoucherNo() }}</span>
+                        @if($d->batch_voucher_no)
+                            <div class="small text-muted">Item Row: #{{ $d->disbursement_no }}</div>
+                        @endif
                         <div class="small">
                             <a href="{{ route('admin.applications.show', $d->application_id) }}" class="text-muted">
                                 App #{{ $d->application->application_no ?? $d->application_id }}
@@ -455,7 +482,7 @@
                             </select>
                             <small class="form-text text-muted" id="depotStockNotice">Select the depot where physical stock is being handed over.</small>
                         </div>
-                        <div class="col-md-5 form-group">
+                        <div class="col-md-5 form-group" id="single_qty_wrap">
                             <label class="font-weight-bold text-dark">Quantity to Disburse *</label>
                             <div class="input-group">
                                 <input type="number" step="any" min="0.01" name="quantity_disbursed" id="modal_quantity" class="form-control form-control-lg font-weight-bold text-success" required>
@@ -464,6 +491,28 @@
                                 </div>
                             </div>
                             <small class="text-muted">Cannot exceed remaining approved quota.</small>
+                        </div>
+                    </div>
+
+                    {{-- Multi-Item Single Voucher Container (shown automatically when applicant has itemized approved items) --}}
+                    <div id="batch_items_wrap" class="border rounded p-3 mb-3 bg-light" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="text-success small text-uppercase">
+                                <i class="fa-solid fa-layer-group mr-1"></i> Approved Items — Unified Single Voucher Handover
+                            </strong>
+                            <span class="badge badge-info">All approved items disbursed together</span>
+                        </div>
+                        <div class="table-responsive bg-white rounded border">
+                            <table class="table table-sm table-bordered mb-0" style="font-size: 12px;">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Requested Item</th>
+                                        <th class="text-right">Approved Qty</th>
+                                        <th>Inventory Stock Item (Depot Source)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batch_items_tbody"></tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -678,8 +727,17 @@
 @endpush
 
 @push('scripts')
+@php
+    $jsStockItemsPayload = $items->map(fn ($si) => [
+        'id' => $si->id,
+        'scheme_id' => $si->scheme_id,
+        'item_name' => $si->item_name,
+        'unit' => $si->unit,
+    ])->values()->all();
+@endphp
 <script>
 var currentBeneficiary = {};
+var allSchemeStockItems = @json($jsStockItemsPayload);
 
 function openDisburseModal(data) {
     currentBeneficiary = data;
@@ -701,9 +759,54 @@ function openDisburseModal(data) {
         qSummary.innerHTML = '<span class="text-muted">Demanded: <strong>' + (data.demanded_qty || data.remaining) + '</strong> | Approved: <strong>' + (data.approved_qty || data.remaining) + '</strong> ' + (data.unit || '') + '</span>';
     }
 
+    var singleQtyWrap = document.getElementById('single_qty_wrap');
+    var batchWrap = document.getElementById('batch_items_wrap');
+    var batchBody = document.getElementById('batch_items_tbody');
     var qtyInput = document.getElementById('modal_quantity');
-    qtyInput.value = data.remaining;
-    qtyInput.max = data.remaining;
+    var hiddenItemInput = document.getElementById('modal_item_id');
+
+    if (Array.isArray(data.batch_items) && data.batch_items.length > 0 && batchWrap && batchBody) {
+        if (singleQtyWrap) singleQtyWrap.style.display = 'none';
+        if (qtyInput) {
+            qtyInput.required = false;
+            qtyInput.disabled = true;
+        }
+        if (hiddenItemInput) hiddenItemInput.disabled = true;
+
+        var schemeStocks = allSchemeStockItems.filter(function (si) {
+            return parseInt(si.scheme_id, 10) === parseInt(data.scheme_id, 10);
+        });
+
+        batchBody.innerHTML = '';
+        data.batch_items.forEach(function (item, idx) {
+            var optionsHtml = '<option value="">-- Select Stock Item --</option>';
+            schemeStocks.forEach(function (si) {
+                var selected = item.matched_stock_item_id && parseInt(item.matched_stock_item_id, 10) === parseInt(si.id, 10) ? ' selected' : '';
+                optionsHtml += '<option value="' + si.id + '"' + selected + '>' + si.item_name + ' (' + (si.unit || 'Units') + ')</option>';
+            });
+
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><strong>' + item.label + '</strong> ' + (item.is_free ? '<span class="badge badge-success ml-1">Free</span>' : '<span class="badge badge-primary ml-1">Paid</span>') +
+                '<input type="hidden" name="batch_items[' + idx + '][application_item_id]" value="' + item.application_item_id + '"></td>' +
+                '<td class="text-right font-weight-bold">' + item.qty + ' ' + (item.unit || 'Units') + '</td>' +
+                '<td><select name="batch_items[' + idx + '][scheme_stock_item_id]" class="form-control form-control-sm" required>' + optionsHtml + '</select></td>';
+            batchBody.appendChild(tr);
+        });
+
+        batchWrap.style.display = 'block';
+    } else {
+        if (batchWrap) batchWrap.style.display = 'none';
+        if (batchBody) batchBody.innerHTML = '';
+        if (singleQtyWrap) singleQtyWrap.style.display = '';
+        if (hiddenItemInput) hiddenItemInput.disabled = false;
+        if (qtyInput) {
+            qtyInput.disabled = false;
+            qtyInput.required = true;
+            qtyInput.value = data.remaining;
+            qtyInput.max = data.remaining;
+        }
+    }
 
     if (data.challan_no) {
         document.getElementById('disp_challan_no').innerText = data.challan_no;
@@ -906,24 +1009,41 @@ document.addEventListener('DOMContentLoaded', function () {
     @php
         $preQuota = $preselectedApplication->getRemainingDisbursementQuantity();
         $preStockItem = $preselectedApplication->scheme?->stockItems?->first();
+        $preStockSvc = app(\App\Services\StockManagementService::class);
+        $preBatchPayload = $preselectedApplication->items
+            ->filter(fn ($it) => $it->remainingDisbursementQty() > 0)
+            ->values()
+            ->map(function ($it) use ($preselectedApplication, $preStockSvc) {
+                $matched = $preStockSvc->matchStockItemForApplicationItem($preselectedApplication->scheme, $it);
+                return [
+                    'application_item_id' => $it->id,
+                    'label' => $it->item_label,
+                    'unit' => $it->unit_label ?: 'Units',
+                    'qty' => $it->remainingDisbursementQty(),
+                    'is_free' => (bool) $it->is_free,
+                    'matched_stock_item_id' => $matched?->id,
+                ];
+            })->all();
+        $prePayload = [
+            'id' => $preselectedApplication->id,
+            'app_no' => $preselectedApplication->application_no,
+            'name' => $preselectedApplication->applicant->full_name ?? ($preselectedApplication->applicant->name ?? ''),
+            'cnic' => $preselectedApplication->applicant->cnic ?? '',
+            'phone' => $preselectedApplication->applicant->phone ?? '',
+            'scheme_id' => $preselectedApplication->scheme_id,
+            'scheme_title' => $preselectedApplication->scheme->title ?? '',
+            'item_id' => $preStockItem->id ?? 0,
+            'item_name' => $preStockItem->item_name ?? ($preselectedApplication->items->isNotEmpty() ? 'Multiple Approved Items' : ''),
+            'unit' => $preStockItem->unit ?? 'Units',
+            'demanded_qty' => $preselectedApplication->getDemandedQuantity(),
+            'approved_qty' => $preselectedApplication->getApprovedQuantity() ?? $preQuota,
+            'remaining' => $preQuota,
+            'challan_no' => $preselectedApplication->challan_no ?? '',
+            'district_id' => $preselectedApplication->district_id,
+            'batch_items' => $preBatchPayload,
+        ];
     @endphp
-    openDisburseModal({
-        id: {{ $preselectedApplication->id }},
-        app_no: '{{ $preselectedApplication->application_no }}',
-        name: '{{ addslashes($preselectedApplication->applicant->name ?? '') }}',
-        cnic: '{{ $preselectedApplication->applicant->cnic ?? '' }}',
-        phone: '{{ $preselectedApplication->applicant->phone ?? '' }}',
-        scheme_id: {{ $preselectedApplication->scheme_id }},
-        scheme_title: '{{ addslashes($preselectedApplication->scheme->title ?? '') }}',
-        item_id: {{ $preStockItem->id ?? 0 }},
-        item_name: '{{ addslashes($preStockItem->item_name ?? '') }}',
-        unit: '{{ addslashes($preStockItem->unit ?? 'Bags') }}',
-        demanded_qty: {{ $preselectedApplication->getDemandedQuantity() }},
-        approved_qty: {{ $preselectedApplication->getApprovedQuantity() ?? $preQuota }},
-        remaining: {{ $preQuota }},
-        challan_no: '{{ $preselectedApplication->challan_no ?? '' }}',
-        district_id: {{ $preselectedApplication->district_id }}
-    });
+    openDisburseModal(@json($prePayload));
 });
 @endif
 </script>

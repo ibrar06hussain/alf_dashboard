@@ -107,19 +107,102 @@
                    dir="rtl" value="{{ $field?->help_text_ur ?? '' }}" placeholder="اختیاری وضاحت">
         </div>
         @unless($isCore)
+            @php
+                $optionConfigs = $field?->option_configs_json ?? [];
+                $isBillableMatrix = (bool) ($field?->is_billable_items_field ?? false);
+            @endphp
             <div class="col-12 mt-2 js-checkbox-text-info {{ ($field?->field_type ?? '') === 'checkbox_with_text' ? '' : 'd-none' }}">
-                <div class="alert alert-info py-2 px-3 small mb-0 d-flex align-items-center gap-2">
-                    <i class="fa-solid fa-circle-info text-info fs-5"></i>
-                    <div>
-                        <strong>Multiselect Checkbox with Text Field:</strong>
-                        Each option listed below will appear as an independent checkbox. When the citizen checks any option, a text field dynamically expands for that specific selected option so they can enter its details/value.
+                <div class="alert alert-info py-2 px-3 small mb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-circle-info text-info fs-5"></i>
+                        <div>
+                            <strong>Multiselect Checkbox with Text / Item Pricing Matrix:</strong>
+                            Add structured items below to define Paid/Free options, per-unit price, and Govt Subsidy % (0–100%), or type comma-separated plain options below.
+                        </div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input type="checkbox" class="form-check-input js-billable-matrix-toggle"
+                               name="fields[{{ $index }}][is_billable_items_field]" value="1"
+                               @checked($isBillableMatrix)>
+                        <label class="form-check-label small fw-bold text-primary">
+                            Use as Billable / Stock Item Matrix
+                        </label>
+                    </div>
+                </div>
+
+                <div class="border rounded p-2 bg-white mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold text-dark">
+                            <i class="fa-solid fa-tags text-success me-1"></i> Configured Paid &amp; Free Item Options (Optional)
+                        </span>
+                        <button type="button" class="btn btn-xs btn-outline-success btn-sm py-0 px-2 js-add-option-config">
+                            <i class="fa-solid fa-plus me-1"></i> Add Item Option
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0 js-option-configs-table" style="font-size: 12px;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width:140px;">Item Name (EN)</th>
+                                    <th style="min-width:130px;">Urdu Label (اردو)</th>
+                                    <th style="min-width:100px;">Billing</th>
+                                    <th style="min-width:105px;">Unit Rate (PKR)</th>
+                                    <th style="min-width:105px;">Govt Share %</th>
+                                    <th style="min-width:115px;">Input Type</th>
+                                    <th style="min-width:85px;">Unit</th>
+                                    <th style="width:42px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="js-option-configs-body">
+                                @foreach($optionConfigs as $oIdx => $optCfg)
+                                    @php
+                                        $optPricing = ($optCfg['pricing_mode'] ?? 'free') === 'paid' ? 'paid' : 'free';
+                                    @endphp
+                                    <tr class="js-option-config-row">
+                                        <td>
+                                            <input type="hidden" name="fields[{{ $index }}][option_configs][{{ $oIdx }}][key]" value="{{ $optCfg['key'] ?? '' }}">
+                                            <input type="text" name="fields[{{ $index }}][option_configs][{{ $oIdx }}][label]" class="form-control form-control-sm" value="{{ $optCfg['label'] ?? '' }}" placeholder="e.g. Olive Trees">
+                                        </td>
+                                        <td>
+                                            <input type="text" name="fields[{{ $index }}][option_configs][{{ $oIdx }}][label_ur]" class="form-control form-control-sm urdu-font" dir="rtl" value="{{ $optCfg['label_ur'] ?? '' }}" placeholder="مثلاً زیتون">
+                                        </td>
+                                        <td>
+                                            <select name="fields[{{ $index }}][option_configs][{{ $oIdx }}][pricing_mode]" class="form-select form-select-sm js-opt-pricing-mode">
+                                                <option value="free" @selected($optPricing === 'free')>Free</option>
+                                                <option value="paid" @selected($optPricing === 'paid')>Paid</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="number" step="0.01" min="0" name="fields[{{ $index }}][option_configs][{{ $oIdx }}][unit_price]" class="form-control form-control-sm js-opt-unit-price" value="{{ $optPricing === 'paid' ? ($optCfg['unit_price'] ?? 0) : 0 }}" {{ $optPricing === 'free' ? 'readonly' : '' }}>
+                                        </td>
+                                        <td>
+                                            <input type="number" step="0.01" min="0" max="100" name="fields[{{ $index }}][option_configs][{{ $oIdx }}][govt_share_pct]" class="form-control form-control-sm js-opt-govt-share" value="{{ $optCfg['govt_share_pct'] ?? '' }}" placeholder="Template %" {{ $optPricing === 'free' ? 'disabled' : '' }}>
+                                        </td>
+                                        <td>
+                                            <select name="fields[{{ $index }}][option_configs][{{ $oIdx }}][input_mode]" class="form-select form-select-sm">
+                                                <option value="numeric_qty" @selected(($optCfg['input_mode'] ?? 'numeric_qty') === 'numeric_qty')>Numeric Qty</option>
+                                                <option value="text" @selected(($optCfg['input_mode'] ?? 'text') === 'text')>Text Note</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="text" name="fields[{{ $index }}][option_configs][{{ $oIdx }}][unit_label]" class="form-control form-control-sm" value="{{ $optCfg['unit_label'] ?? 'Trees' }}" placeholder="Trees">
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 js-remove-option-config" title="Remove Option">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
             <div class="col-12 mt-2">
                 <label class="form-label small text-muted mb-1 js-options-label">
-                    {{ ($field?->field_type ?? '') === 'checkbox_with_text' ? 'Checkbox Options (comma or newline separated — each option gets a dynamic text field)' : 'Options (comma or newline separated)' }}
+                    {{ ($field?->field_type ?? '') === 'checkbox_with_text' ? 'Plain Checkbox Options (comma or newline separated — overridden if Item Matrix rows are defined above)' : 'Options (comma or newline separated)' }}
                 </label>
                 <textarea name="fields[{{ $index }}][options]" class="form-control form-control-sm js-options-input" rows="2" placeholder="{{ ($field?->field_type ?? '') === 'checkbox_with_text' ? 'Commercial Bank, ZTBL, Microfinance, Informal / Other' : 'Option 1, Option 2' }}">{{ $options }}</textarea>
             </div>

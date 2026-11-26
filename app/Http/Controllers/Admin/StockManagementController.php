@@ -500,6 +500,7 @@ class StockManagementController extends Controller
         // 2. Historical Disbursements ledger
         $historyQuery = StockDisbursement::with([
             'application.applicant',
+            'applicationItem',
             'center.district',
             'item.scheme',
             'district',
@@ -545,7 +546,7 @@ class StockManagementController extends Controller
         // Specific pre-selected application if passed via query (e.g. from review page)
         $preselectedApplication = null;
         if ($request->filled('app_id')) {
-            $preselectedApplication = Application::with(['applicant', 'scheme.stockItems', 'district'])->find($request->app_id);
+            $preselectedApplication = Application::with(['applicant', 'scheme.stockItems', 'items.stockItem', 'district'])->find($request->app_id);
         }
 
         return view('admin.stock.disbursements', compact(
@@ -573,8 +574,11 @@ class StockManagementController extends Controller
         $validated = $request->validate([
             'application_id' => 'required|exists:applications,id',
             'collection_center_id' => 'required|exists:collection_centers,id',
-            'scheme_stock_item_id' => 'required|exists:scheme_stock_items,id',
-            'quantity_disbursed' => 'required|numeric|min:0.01',
+            'scheme_stock_item_id' => 'required_without:batch_items|nullable|exists:scheme_stock_items,id',
+            'quantity_disbursed' => 'required_without:batch_items|nullable|numeric|min:0.01',
+            'batch_items' => 'nullable|array|min:1',
+            'batch_items.*.application_item_id' => 'required_with:batch_items|exists:application_items,id',
+            'batch_items.*.scheme_stock_item_id' => 'required_with:batch_items|exists:scheme_stock_items,id',
             'recipient_name' => 'required|string|max:255',
             'recipient_cnic' => 'required|string|max:20',
             'recipient_phone' => 'nullable|string|max:50',
@@ -603,8 +607,10 @@ class StockManagementController extends Controller
             $request->file('proof_file')
         );
 
+        $voucherDisplay = $disbursement->displayVoucherNo();
+
         return redirect()->route('admin.stock.disbursements', ['tab' => 'history'])
-            ->with('success', "Stock successfully disbursed under Voucher #{$disbursement->disbursement_no}. Inventory updated.")
+            ->with('success', "Stock successfully disbursed under Voucher #{$voucherDisplay}. Inventory updated.")
             ->with('voucher_id', $disbursement->id);
     }
 
@@ -666,6 +672,7 @@ class StockManagementController extends Controller
 
         $disbursement->load([
             'application.applicant',
+            'applicationItem',
             'center.district',
             'center.tehsil',
             'item.scheme',

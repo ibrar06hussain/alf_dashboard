@@ -272,47 +272,108 @@
                                                 }
                                             }
 
-                                            $fieldOptions = !empty($options) ? $options : [$field->field_label ?: __('portal.yes')];
+                                            $optionConfigs = $field->normalizedOptionConfigs();
+                                            $schemeTpl = $scheme->getChallanTemplate();
+                                            $defaultGovtShare = (float) ($schemeTpl->govt_share_pct ?? 0);
+                                            $hasMatrixConfig = (bool) ($field->is_billable_items_field || !empty($field->option_configs_json));
+
+                                            if (empty($optionConfigs)) {
+                                                $fieldOptions = !empty($options) ? $options : [$field->field_label ?: __('portal.yes')];
+                                                $optionConfigs = array_map(fn ($lbl) => [
+                                                    'key' => \App\Models\ApplicationItem::normalizeKey((string) $lbl),
+                                                    'label' => (string) $lbl,
+                                                    'label_ur' => null,
+                                                    'input_mode' => $field->is_billable_items_field ? 'numeric_qty' : 'text',
+                                                    'pricing_mode' => 'free',
+                                                    'unit_price' => 0.0,
+                                                    'govt_share_pct' => null,
+                                                    'unit_label' => 'Units',
+                                                ], $fieldOptions);
+                                            }
                                         @endphp
-                                        <div class="checkbox-with-text-group">
-                                            @foreach($fieldOptions as $opt)
+                                        <div class="checkbox-with-text-group" data-has-matrix="{{ $hasMatrixConfig ? '1' : '0' }}">
+                                            @foreach($optionConfigs as $optCfg)
                                                 @php
+                                                    $opt = $optCfg['label'];
                                                     $itemState = $itemsState[$opt] ?? ($itemsState[$loop->index] ?? ($itemsState['__single__'] ?? ['checked' => false, 'text' => '']));
                                                     $isChecked = !empty($itemState['checked']);
                                                     $textVal = $itemState['text'] ?? '';
                                                     $optId = 'field_' . $name . '_' . $loop->index;
+
+                                                    $isPaidOpt = ($optCfg['pricing_mode'] ?? 'free') === 'paid' && (float) ($optCfg['unit_price'] ?? 0) > 0;
+                                                    $unitPriceOpt = $isPaidOpt ? (float) $optCfg['unit_price'] : 0.0;
+                                                    $govtShareOpt = $isPaidOpt
+                                                        ? (isset($optCfg['govt_share_pct']) && $optCfg['govt_share_pct'] !== null ? (float) $optCfg['govt_share_pct'] : $defaultGovtShare)
+                                                        : 100.0;
+                                                    $farmerShareOpt = max(0.0, min(100.0, 100.0 - $govtShareOpt));
+                                                    $isNumericQty = $field->is_billable_items_field || ($optCfg['input_mode'] ?? 'text') === 'numeric_qty';
+                                                    $unitLabel = $optCfg['unit_label'] ?? 'Units';
                                                 @endphp
                                                 <div class="checkbox-with-text-box border rounded-3 p-3 mb-2 bg-light shadow-xs">
-                                                    <div class="form-check d-flex align-items-center gap-2 mb-0">
-                                                        <input type="hidden" name="{{ $name }}[{{ $loop->index }}][label]" value="{{ $opt }}">
-                                                        <input class="form-check-input js-toggle-text-field"
-                                                               type="checkbox"
-                                                               name="{{ $name }}[{{ $loop->index }}][checked]"
-                                                               id="{{ $optId }}_check"
-                                                               value="1"
-                                                               data-target="#{{ $optId }}_text_wrap"
-                                                               data-input="#{{ $optId }}_text_input"
-                                                               @checked($isChecked)>
-                                                        <label class="form-check-label fw-semibold text-dark mb-0 user-select-none" for="{{ $optId }}_check" style="cursor:pointer;">
-                                                            {{ $opt }}
-                                                        </label>
+                                                    <div class="form-check d-flex align-items-center justify-content-between flex-wrap gap-2 mb-0">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <input type="hidden" name="{{ $name }}[{{ $loop->index }}][label]" value="{{ $opt }}">
+                                                            <input class="form-check-input js-toggle-text-field"
+                                                                   type="checkbox"
+                                                                   name="{{ $name }}[{{ $loop->index }}][checked]"
+                                                                   id="{{ $optId }}_check"
+                                                                   value="1"
+                                                                   data-target="#{{ $optId }}_text_wrap"
+                                                                   data-input="#{{ $optId }}_text_input"
+                                                                   @checked($isChecked)>
+                                                            <label class="form-check-label fw-semibold text-dark mb-0 user-select-none" for="{{ $optId }}_check" style="cursor:pointer;">
+                                                                {{ $opt }}
+                                                                @if(!empty($optCfg['label_ur']))
+                                                                    <span class="small text-success ms-1 urdu-font" dir="rtl">({{ $optCfg['label_ur'] }})</span>
+                                                                @endif
+                                                            </label>
+                                                        </div>
+                                                        @if($hasMatrixConfig)
+                                                            <div class="d-flex align-items-center gap-1">
+                                                                @if(!$isPaidOpt || $farmerShareOpt <= 0)
+                                                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                                                        {{ $isPaidOpt && $govtShareOpt >= 100 ? '100% Govt Subsidized (Free)' : 'Free / مفت' }}
+                                                                    </span>
+                                                                @else
+                                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                                        Rs. {{ number_format((int) ceil($unitPriceOpt * ($farmerShareOpt / 100))) }} / {{ $unitLabel }}
+                                                                    </span>
+                                                                    @if($govtShareOpt > 0)
+                                                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                                                                            Rate Rs. {{ number_format((int) ceil($unitPriceOpt)) }} · Govt {{ round($govtShareOpt, 1) }}%
+                                                                        </span>
+                                                                    @endif
+                                                                @endif
+                                                            </div>
+                                                        @endif
                                                     </div>
 
                                                     <div id="{{ $optId }}_text_wrap" class="conditional-text-container mt-2 pt-2 border-top {{ $isChecked ? '' : 'd-none' }}">
                                                         <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-2">
                                                             <label for="{{ $optId }}_text_input" class="form-label small fw-semibold text-muted mb-0">
-                                                                <span>{{ $englishPlaceholder ?: ('Please provide details for ' . $opt) }}</span>
+                                                                @if($isNumericQty)
+                                                                    <span>Enter required quantity ({{ $unitLabel }}) for {{ $opt }}</span>
+                                                                @else
+                                                                    <span>{{ $englishPlaceholder ?: ('Please provide details for ' . $opt) }}</span>
+                                                                @endif
                                                                 <span class="text-danger">*</span>
                                                             </label>
                                                             @if($urduPlaceholder)
                                                                 <span class="small text-success urdu-font" dir="rtl">{{ $urduPlaceholder }}</span>
                                                             @endif
                                                         </div>
-                                                        <input type="text"
+                                                        <input type="{{ $isNumericQty ? 'number' : 'text' }}"
                                                                id="{{ $optId }}_text_input"
                                                                name="{{ $name }}[{{ $loop->index }}][text]"
-                                                               class="form-control @error($name.'.'.$loop->index.'.text') is-invalid @enderror @error($name) is-invalid @enderror"
-                                                               placeholder="{{ $fieldPlaceholder ?: ('Enter details for ' . $opt . '...') }}"
+                                                               @if($isNumericQty) min="1" step="1" @endif
+                                                               data-is-matrix-input="{{ $hasMatrixConfig ? '1' : '0' }}"
+                                                               data-pricing-mode="{{ $isPaidOpt && $farmerShareOpt > 0 ? 'paid' : 'free' }}"
+                                                               data-unit-price="{{ $unitPriceOpt }}"
+                                                               data-govt-share="{{ $govtShareOpt }}"
+                                                               data-farmer-share="{{ $farmerShareOpt }}"
+                                                               data-unit-label="{{ $unitLabel }}"
+                                                               class="form-control js-matrix-qty-input @error($name.'.'.$loop->index.'.text') is-invalid @enderror @error($name) is-invalid @enderror"
+                                                               placeholder="{{ $isNumericQty ? ('Enter quantity in ' . $unitLabel . ' (min 1)') : ($fieldPlaceholder ?: ('Enter details for ' . $opt . '...')) }}"
                                                                value="{{ $textVal }}"
                                                                {{ $isChecked ? '' : 'disabled' }}>
                                                         @error($name.'.'.$loop->index.'.text')
@@ -321,6 +382,24 @@
                                                     </div>
                                                 </div>
                                             @endforeach
+
+                                            @if($hasMatrixConfig)
+                                                <div class="alert alert-light border rounded-3 p-3 mt-2 mb-0 js-item-matrix-summary d-none" style="font-size: 13px;">
+                                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                        <div>
+                                                            <strong>Requested Summary:</strong>
+                                                            <span class="ms-2">Paid Units: <strong class="js-sum-paid-qty text-primary">0</strong></span>
+                                                            <span class="ms-2">Free Units: <strong class="js-sum-free-qty text-success">0</strong></span>
+                                                            <span class="ms-2">Govt Subsidy: <strong class="js-sum-govt-amt text-info">Rs. 0</strong></span>
+                                                        </div>
+                                                        <div>
+                                                            <span class="badge fs-6 js-sum-payable-badge bg-success-subtle text-success border border-success-subtle">
+                                                                Payable: Rs. 0 (Free — No Challan/PSID Required)
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
                                         </div>
 
                                     @elseif($field->field_type === 'switch')
@@ -1711,6 +1790,62 @@ body.locale-ur .cnic-input-group > .js-verify-cnic-btn {
 
     initCascadingDropdowns();
 
+    function recalculateMatrixSummaries() {
+        document.querySelectorAll('.checkbox-with-text-group[data-has-matrix="1"]').forEach(function (group) {
+            var summaryBox = group.querySelector('.js-item-matrix-summary');
+            if (!summaryBox) return;
+
+            var anyChecked = false;
+            var paidQty = 0;
+            var freeQty = 0;
+            var govtAmt = 0;
+            var payableAmt = 0;
+
+            group.querySelectorAll('.js-toggle-text-field').forEach(function (cb) {
+                if (!cb.checked) return;
+                anyChecked = true;
+                var input = document.querySelector(cb.dataset.input);
+                if (!input) return;
+
+                var qty = parseFloat(input.value || '0');
+                if (isNaN(qty) || qty < 0) qty = 0;
+
+                var pricingMode = input.dataset.pricingMode || 'free';
+                var unitPrice = parseFloat(input.dataset.unitPrice || '0');
+                var govtPct = parseFloat(input.dataset.govtShare || '0');
+                var farmerPct = parseFloat(input.dataset.farmerShare || '0');
+
+                if (pricingMode === 'paid' && unitPrice > 0 && farmerPct > 0) {
+                    paidQty += qty;
+                    var gross = Math.ceil(unitPrice * qty);
+                    govtAmt += Math.ceil(gross * (govtPct / 100));
+                    payableAmt += Math.ceil(gross * (farmerPct / 100));
+                } else {
+                    freeQty += qty;
+                }
+            });
+
+            if (!anyChecked) {
+                summaryBox.classList.add('d-none');
+                return;
+            }
+
+            summaryBox.classList.remove('d-none');
+            summaryBox.querySelector('.js-sum-paid-qty').textContent = paidQty;
+            summaryBox.querySelector('.js-sum-free-qty').textContent = freeQty;
+            summaryBox.querySelector('.js-sum-govt-amt').textContent = 'Rs. ' + govtAmt.toLocaleString();
+
+            var badge = summaryBox.querySelector('.js-sum-payable-badge');
+            if (payableAmt > 0) {
+                badge.className = 'badge fs-6 js-sum-payable-badge bg-primary-subtle text-primary border border-primary-subtle';
+                badge.textContent = 'Est. Payable (On Approval): Rs. ' + payableAmt.toLocaleString();
+            } else {
+                badge.className = 'badge fs-6 js-sum-payable-badge bg-success-subtle text-success border border-success-subtle';
+                badge.textContent = 'Payable: Rs. 0 (Free Items — No Challan / PSID)';
+            }
+        });
+    }
+
     // Checkbox with conditional text field interaction
     document.querySelectorAll('.js-toggle-text-field').forEach(function (checkbox) {
         function updateState() {
@@ -1727,6 +1862,7 @@ body.locale-ur .cnic-input-group > .js-verify-cnic-btn {
                     input.disabled = true;
                 }
             }
+            recalculateMatrixSummaries();
         }
         checkbox.addEventListener('change', function () {
             updateState();
@@ -1737,6 +1873,12 @@ body.locale-ur .cnic-input-group > .js-verify-cnic-btn {
         });
         updateState();
     });
+
+    document.querySelectorAll('.js-matrix-qty-input').forEach(function (inp) {
+        inp.addEventListener('input', recalculateMatrixSummaries);
+        inp.addEventListener('change', recalculateMatrixSummaries);
+    });
+    recalculateMatrixSummaries();
 
     // Dynamic Seed Bags Requirement Limitation (1 bag per 4 kanals of available land)
     (function initSeedBagsLimitation() {
