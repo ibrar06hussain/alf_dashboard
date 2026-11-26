@@ -644,7 +644,7 @@ class GbpayService
     /**
      * Recalculate unpaid applications & pending PSID bills for a Scheme without touching paid/disbursed bills.
      */
-    public function syncUnpaidApplicationsForScheme(Scheme $scheme): int
+    public function syncUnpaidApplicationsForScheme(Scheme $scheme, bool $approvedAndPendingBillsOnly = false): int
     {
         $scheme->load('challanTemplate');
         $template = $scheme->getChallanTemplate();
@@ -668,6 +668,17 @@ class GbpayService
                     ]);
             })
             ->whereDoesntHave('bills', fn ($bq) => $bq->where('status', 'paid'))
+            ->when($approvedAndPendingBillsOnly, function ($q) {
+                $q->where(function ($sq) {
+                    $sq->whereIn('current_stage', [
+                        Application::STAGE_CHALLAN_ISSUED,
+                        Application::STAGE_APPROVED,
+                        Application::STAGE_ELIGIBLE_BENEFICIARY,
+                        'directorate_approved',
+                    ])->orWhere('status', 'directorate_approved')
+                      ->orWhereHas('bills', fn ($bq) => $bq->where('status', 'pending'));
+                });
+            })
             ->pluck('id');
 
         foreach ($appIds as $appId) {

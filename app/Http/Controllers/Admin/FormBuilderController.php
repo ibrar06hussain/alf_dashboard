@@ -346,9 +346,34 @@ class FormBuilderController extends Controller
             FormDocument::where('form_id', $form->id)->whereNotIn('id', $keptDocIds)->delete();
         });
 
-        $message = $request->boolean('publish')
+        $syncMessage = '';
+        $hasItemizedFields = $form->fields()
+            ->where(fn ($q) => $q->where('field_type', 'checkbox_with_text')->orWhere('is_billable_items_field', true))
+            ->exists();
+
+        if ($hasItemizedFields) {
+            $syncStats = app(\App\Services\SchemeItemSyncService::class)->syncScheme($scheme);
+            $parts = [];
+            if ($syncStats['items_created'] > 0) {
+                $parts[] = "{$syncStats['items_created']} item(s) backfilled";
+            }
+            if ($syncStats['items_updated'] > 0) {
+                $parts[] = "{$syncStats['items_updated']} unpaid item price(s) synced";
+            }
+            if ($syncStats['challans_updated_or_generated'] > 0) {
+                $parts[] = "{$syncStats['challans_updated_or_generated']} unpaid challan(s) regenerated";
+            }
+            if ($syncStats['challans_cancelled_to_eligible'] > 0) {
+                $parts[] = "{$syncStats['challans_cancelled_to_eligible']} free-only challan(s) cleared to Eligible Beneficiary";
+            }
+            if (! empty($parts)) {
+                $syncMessage = ' Sync summary: ' . implode(', ', $parts) . '.';
+            }
+        }
+
+        $message = ($request->boolean('publish')
             ? 'Form saved and published.'
-            : 'Form saved.';
+            : 'Form saved.') . $syncMessage;
 
         return redirect()
             ->route('admin.form-builder.edit', $scheme)
