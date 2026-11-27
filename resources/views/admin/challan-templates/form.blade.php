@@ -12,10 +12,10 @@
     'title' => $title,
     'subtitle' => 'Configure dynamic bank challan deposit layout, government account details, validity rules, and link to schemes.',
     'icon' => 'fa-solid fa-receipt',
-    'actions' => [
+    'actions' => array_filter([
         ['label' => 'Back to Templates', 'url' => route('admin.challan-templates.index'), 'class' => 'btn btn-outline-secondary'],
         $isEdit ? ['label' => 'Preview PDF', 'url' => route('admin.challan-templates.preview', $template), 'class' => 'btn btn-info', 'target' => '_blank'] : null,
-    ],
+    ]),
 ])
 
 <form action="{{ $isEdit ? route('admin.challan-templates.update', $template) : route('admin.challan-templates.store') }}" method="POST">

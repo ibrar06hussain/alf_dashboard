@@ -2,7 +2,7 @@
     $title = $title ?? 'Page';
     $subtitle = $subtitle ?? null;
     $icon = $icon ?? 'fa-solid fa-layer-group';
-    $actions = $actions ?? [];
+    $actions = array_values(array_filter(is_array($actions ?? null) ? $actions : [], fn ($a) => is_array($a) && ! empty($a['url'])));
 @endphp
 <div class="alf-page-hero mb-4">
     <div class="alf-page-hero__main">
@@ -17,7 +17,7 @@
     @if(count($actions))
         <div class="alf-page-hero__actions">
             @foreach($actions as $action)
-                <a href="{{ $action['url'] }}" class="{{ $action['class'] ?? 'btn btn-primary' }}">{{ $action['label'] }}</a>
+                <a href="{{ $action['url'] }}" class="{{ $action['class'] ?? 'btn btn-primary' }}" @if(! empty($action['target'])) target="{{ $action['target'] }}" rel="noopener" @endif>{{ $action['label'] }}</a>
             @endforeach
         </div>
     @endif

@@ -712,4 +712,24 @@ class ChallanTemplateInheritanceAndUnitTest extends TestCase
         $this->assertStringContainsString('7,500', $pdfHtml);
         $this->assertStringNotContainsStringIgnoringCase('Bags', strip_tags($pdfHtml));
     }
+
+    public function test_challan_template_create_and_edit_pages_render_without_null_action_errors(): void
+    {
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.challan-templates.index'))
+            ->assertOk()
+            ->assertSee('Full Farmer Share Template');
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.challan-templates.create'))
+            ->assertOk()
+            ->assertSee('Create New Challan Template')
+            ->assertSee('Back to Templates');
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.challan-templates.edit', $this->templateZeroGovt))
+            ->assertOk()
+            ->assertSee('Edit Challan Template')
+            ->assertSee('Preview PDF');
+    }
 }
